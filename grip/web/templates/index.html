@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}Grip · Tasks{% endblock %}
+{% block body_class %}app-page{% endblock %}
+
+{% block content %}
+<div class="page app-page">
+    <header class="app-header">
+        <div class="brand">
+            <span class="brand-mark">Grip</span>
+            <span class="brand-tag">Clarity for your day</span>
+        </div>
+        <div class="user-area">
+            <span class="user-chip">Signed in as {{ username }}</span>
+            <form class="logout-form" action="/logout" method="post">
+                <button class="ghost-btn" type="submit">Log out</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="todo-shell">
+        <section class="todo-panel">
+            <div class="panel-header">
+                <div>
+                    <p class="eyebrow">Today</p>
+                    <h1>Keep the momentum rolling.</h1>
+                    <p class="panel-subtitle">Capture tasks, mark wins, and stay focused.</p>
+                </div>
+                <div class="spark"></div>
+            </div>
+
+            <div class="add-todo-section">
+                <input 
+                    type="text" 
+                    id="todoInput" 
+                    placeholder="Add a new task..." 
+                    class="todo-input"
+                    autocomplete="off"
+                >
+                <button id="addBtn" class="add-btn">Add task</button>
+            </div>
+
+            <div class="filter-section">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="active">Active</button>
+                <button class="filter-btn" data-filter="completed">Completed</button>
+            </div>
+
+            <div id="statusMessage" class="status-message" role="status" aria-live="polite"></div>
+
+            <ul id="todoList" class="todo-list">
+                <!-- Todo items are injected here -->
+            </ul>
+
+            <div class="todo-footer">
+                <span id="itemCount">0 items</span>
+                <button id="clearCompleted" class="ghost-btn" type="button">Clear completed</button>
+            </div>
+        </section>
+
+        <aside class="todo-aside">
+            <div class="aside-card">
+                <h2>Focus notes</h2>
+                <p>Small steps stack fast. Keep the top three tasks tight and finish with a win.</p>
+                <div class="aside-metrics">
+                    <div>
+                        <span class="metric-label">Rhythm</span>
+                        <span class="metric-value">Daily</span>
+                    </div>
+                    <div>
+                        <span class="metric-label">Mode</span>
+                        <span class="metric-value">Calm</span>
+                    </div>
+                    <div>
+                        <span class="metric-label">Pace</span>
+                        <span class="metric-value">Steady</span>
+                    </div>
+                </div>
+            </div>
+            <div class="aside-card highlight">
+                <h3>Tip</h3>
+                <p>Rename tasks into verbs. “Email Alex” or “Ship the draft” feels finishable.</p>
+            </div>
+        </aside>
+    </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/app.js"></script>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Grip · Sign in{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+
+{% block content %}
+<div class="page auth-page">
+    <div class="auth-shell">
+        <section class="auth-card">
+            <div class="auth-brand">
+                <span class="brand-mark">Grip</span>
+                <span class="brand-tag">Task clarity, built in.</span>
+            </div>
+            <h1>Welcome back</h1>
+            <p class="auth-subtitle">Sign in to see your to-do list and keep moving.</p>
+
+            {% if error_message %}
+            <div class="alert">
+                {{ error_message }}
+            </div>
+            {% endif %}
+
+            <form class="auth-form" action="/login" method="post">
+                <label class="field">
+                    <span>Username</span>
+                    <input name="username" type="text" autocomplete="username" required>
+                </label>
+                <label class="field">
+                    <span>Password</span>
+                    <input name="password" type="password" autocomplete="current-password" required>
+                </label>
+                <button class="primary-btn" type="submit">Sign in</button>
+            </form>
+        </section>
+
+        <section class="auth-aside">
+            <div class="aside-card">
+                <h2>Your day, distilled</h2>
+                <p>Grip keeps your tasks light, visible, and ready for action. Log in to pick up where you left off.</p>
+                <div class="pill-row">
+                    <span class="pill">Fast capture</span>
+                    <span class="pill">Quiet focus</span>
+                    <span class="pill">Simple wins</span>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

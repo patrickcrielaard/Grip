@@ -1,0 +1,30 @@
+[project]
+name = "grip"
+version = "0.1.0"
+description = "A simple to-do application"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.116.2",
+    "jinja2>=3.1.6",
+    "uvicorn>=0.35.0",
+    "supabase>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "python-multipart>=0.0.6",
+    "bcrypt>=4.1.2",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18.1",
+    "ruff>=0.13.0",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+extend-exclude = ["README.md", "*.md"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
