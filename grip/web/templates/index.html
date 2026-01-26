@@ -19,6 +19,19 @@
     </header>
 
     <main class="todo-shell">
+        <aside class="sidebar">
+            <button class="sidebar-toggle" type="button" aria-expanded="true" aria-controls="sidebarNav">
+                <span class="toggle-icon" aria-hidden="true"><<</span>
+                <span class="toggle-label">Collapse</span>
+            </button>
+            <nav id="sidebarNav" class="sidebar-nav" aria-label="Primary">
+                <button class="sidebar-item active" type="button">
+                    <span class="sidebar-dot" aria-hidden="true"></span>
+                    <span class="sidebar-label">Inbox</span>
+                </button>
+            </nav>
+        </aside>
+
         <section class="todo-panel">
             <div class="panel-header">
                 <div>
@@ -57,31 +70,6 @@
                 <button id="clearCompleted" class="ghost-btn" type="button">Clear completed</button>
             </div>
         </section>
-
-        <aside class="todo-aside">
-            <div class="aside-card">
-                <h2>Focus notes</h2>
-                <p>Small steps stack fast. Keep the top three tasks tight and finish with a win.</p>
-                <div class="aside-metrics">
-                    <div>
-                        <span class="metric-label">Rhythm</span>
-                        <span class="metric-value">Daily</span>
-                    </div>
-                    <div>
-                        <span class="metric-label">Mode</span>
-                        <span class="metric-value">Calm</span>
-                    </div>
-                    <div>
-                        <span class="metric-label">Pace</span>
-                        <span class="metric-value">Steady</span>
-                    </div>
-                </div>
-            </div>
-            <div class="aside-card highlight">
-                <h3>Tip</h3>
-                <p>Rename tasks into verbs. “Email Alex” or “Ship the draft” feels finishable.</p>
-            </div>
-        </aside>
     </main>
 </div>
 {% endblock %}

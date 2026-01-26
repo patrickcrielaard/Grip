@@ -239,4 +239,29 @@ class TodoApp {
     }
 }
 
+const setupSidebarToggle = () => {
+    const sidebar = document.querySelector(".sidebar");
+    const shell = document.querySelector(".todo-shell");
+    const toggle = document.querySelector(".sidebar-toggle");
+    if (!sidebar || !shell || !toggle) {
+        return;
+    }
+
+    toggle.addEventListener("click", () => {
+        const collapsed = sidebar.classList.toggle("collapsed");
+        shell.classList.toggle("sidebar-collapsed", collapsed);
+        toggle.setAttribute("aria-expanded", (!collapsed).toString());
+
+        const icon = toggle.querySelector(".toggle-icon");
+        const label = toggle.querySelector(".toggle-label");
+        if (icon) {
+            icon.textContent = collapsed ? ">>" : "<<";
+        }
+        if (label) {
+            label.textContent = collapsed ? "Expand" : "Collapse";
+        }
+    });
+};
+
+setupSidebarToggle();
 const app = new TodoApp();

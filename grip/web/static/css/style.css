@@ -243,8 +243,107 @@ body {
 
 .todo-shell {
     display: grid;
-    grid-template-columns: minmax(320px, 1fr) minmax(220px, 320px);
+    grid-template-columns: minmax(200px, 240px) minmax(320px, 1fr);
     gap: 28px;
+    align-items: start;
+}
+
+.sidebar {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    transition: padding 0.2s ease;
+}
+
+.todo-shell.sidebar-collapsed {
+    grid-template-columns: 72px minmax(320px, 1fr);
+}
+
+.sidebar-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--ink);
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.sidebar-toggle:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 16px rgba(31, 41, 55, 0.12);
+}
+
+.toggle-label {
+    max-width: 120px;
+    overflow: hidden;
+    transition: opacity 0.2s ease, max-width 0.2s ease;
+}
+
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: #fdfbf8;
+    color: var(--muted);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.sidebar-item:hover,
+.sidebar-item.active {
+    background: rgba(15, 118, 110, 0.12);
+    color: var(--accent);
+    border-color: rgba(15, 118, 110, 0.25);
+}
+
+.sidebar-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--accent);
+    flex-shrink: 0;
+}
+
+.sidebar-label {
+    max-width: 140px;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: opacity 0.2s ease, max-width 0.2s ease;
+}
+
+.sidebar.collapsed {
+    padding: 18px 12px;
+}
+
+.sidebar.collapsed .sidebar-label,
+.sidebar.collapsed .toggle-label {
+    opacity: 0;
+    max-width: 0;
+}
+
+.sidebar.collapsed .sidebar-item,
+.sidebar.collapsed .sidebar-toggle {
+    justify-content: center;
 }
 
 .todo-panel {
@@ -474,6 +573,26 @@ body {
 
     .todo-shell {
         grid-template-columns: 1fr;
+    }
+
+    .todo-shell.sidebar-collapsed {
+        grid-template-columns: 1fr;
+    }
+
+    .sidebar {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .sidebar-nav {
+        flex-direction: row;
+    }
+
+    .sidebar.collapsed .sidebar-label,
+    .sidebar.collapsed .toggle-label {
+        opacity: 1;
+        max-width: 200px;
     }
 
     .auth-shell {
