@@ -4,8 +4,11 @@ class TodoApp {
     constructor() {
         this.todos = [];
         this.currentFilter = "all";
+        this.availableLists = ["inbox", "today"];
+        this.currentList = this.availableLists[0];
         this.cacheElements();
         this.bindEvents();
+        this.setActiveList(this.getInitialList());
         this.loadTodos();
     }
 
@@ -16,6 +19,10 @@ class TodoApp {
         this.itemCount = document.getElementById("itemCount");
         this.clearCompletedButton = document.getElementById("clearCompleted");
         this.statusMessage = document.getElementById("statusMessage");
+        this.listButtons = Array.from(
+            document.querySelectorAll(".sidebar-item[data-list]")
+        );
+        this.activeListLabel = document.getElementById("activeListLabel");
     }
 
     bindEvents() {
@@ -37,6 +44,12 @@ class TodoApp {
             });
         });
 
+        this.listButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                this.setActiveList(button.dataset.list);
+            });
+        });
+
         this.clearCompletedButton.addEventListener("click", () =>
             this.clearCompleted()
         );
@@ -49,11 +62,112 @@ class TodoApp {
         });
 
         this.todoList.addEventListener("click", (event) => {
-            if (event.target.classList.contains("delete-btn")) {
-                const id = Number(event.target.dataset.id);
+            const menuButton = event.target.closest(".menu-btn");
+            if (menuButton) {
+                event.stopPropagation();
+                const item = menuButton.closest(".todo-item");
+                if (item) {
+                    this.toggleMenu(item, menuButton);
+                }
+                return;
+            }
+
+            const changeButton = event.target.closest(".change-list-btn");
+            if (changeButton) {
+                event.stopPropagation();
+                const id = Number(changeButton.dataset.id);
+                const targetList = changeButton.dataset.targetList;
+                this.closeAllMenus();
+                if (targetList) {
+                    this.moveTodo(id, targetList);
+                }
+                return;
+            }
+
+            const deleteButton = event.target.closest(".delete-btn");
+            if (deleteButton) {
+                event.stopPropagation();
+                const id = Number(deleteButton.dataset.id);
+                this.closeAllMenus();
                 this.deleteTodo(id);
             }
         });
+
+        document.addEventListener("click", (event) => {
+            if (!event.target.closest(".todo-actions")) {
+                this.closeAllMenus();
+            }
+        });
+
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                this.closeAllMenus();
+            }
+        });
+    }
+
+    getInitialList() {
+        const activeButton = this.listButtons.find((button) =>
+            button.classList.contains("active")
+        );
+        return activeButton?.dataset.list || this.currentList;
+    }
+
+    normalizeListName(listName) {
+        if (!listName) {
+            return null;
+        }
+        const normalized = listName.toString().trim().toLowerCase();
+        if (!this.availableLists.includes(normalized)) {
+            return null;
+        }
+        return normalized;
+    }
+
+    normalizeTodo(todo) {
+        const normalizedList =
+            this.normalizeListName(todo.list) || this.availableLists[0];
+        return { ...todo, list: normalizedList };
+    }
+
+    getListLabel(listName) {
+        const normalized =
+            this.normalizeListName(listName) || this.availableLists[0];
+        const button = this.listButtons.find(
+            (listButton) => listButton.dataset.list === normalized
+        );
+        const label = button?.querySelector(".sidebar-label")?.textContent;
+        if (label) {
+            return label.trim();
+        }
+        return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+    }
+
+    setActiveList(listName) {
+        const normalized =
+            this.normalizeListName(listName) || this.availableLists[0];
+        let targetButton = this.listButtons.find(
+            (button) => button.dataset.list === normalized
+        );
+        if (!targetButton && this.listButtons.length > 0) {
+            targetButton = this.listButtons[0];
+        }
+        if (!targetButton) {
+            this.currentList = normalized;
+            return;
+        }
+        this.listButtons.forEach((button) => {
+            const isActive = button === targetButton;
+            button.classList.toggle("active", isActive);
+            button.setAttribute("aria-pressed", isActive.toString());
+        });
+        this.currentList = targetButton.dataset.list || normalized;
+        if (this.activeListLabel) {
+            this.activeListLabel.textContent = this.getListLabel(
+                this.currentList
+            );
+        }
+        this.renderTodos();
     }
 
     async request(url, options = {}) {
@@ -94,7 +208,9 @@ class TodoApp {
     async loadTodos() {
         try {
             const data = await this.request("/api/todos");
-            this.todos = data.todos || [];
+            this.todos = (data.todos || []).map((todo) =>
+                this.normalizeTodo(todo)
+            );
             this.renderTodos();
         } catch (error) {
             this.setStatus(error.message);
@@ -113,10 +229,10 @@ class TodoApp {
         try {
             const data = await this.request("/api/todos", {
                 method: "POST",
-                body: JSON.stringify({ title }),
+                body: JSON.stringify({ title, list: this.currentList }),
             });
             if (data.todo) {
-                this.todos.unshift(data.todo);
+                this.todos.unshift(this.normalizeTodo(data.todo));
                 this.todoInput.value = "";
                 this.renderTodos();
             }
@@ -161,31 +277,77 @@ class TodoApp {
         }
     }
 
+    async moveTodo(id, targetList) {
+        this.setStatus("");
+        try {
+            const data = await this.request(`/api/todos/${id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ list: targetList }),
+            });
+            if (data.todo) {
+                this.applyTodoUpdate(data.todo);
+                this.renderTodos();
+            }
+        } catch (error) {
+            this.setStatus(error.message);
+        }
+    }
+
     async clearCompleted() {
         this.setStatus("");
         try {
-            await this.request("/api/todos/completed", { method: "DELETE" });
-            this.todos = this.todos.filter((todo) => !todo.completed);
+            const params = new URLSearchParams({ list: this.currentList });
+            await this.request(`/api/todos/completed?${params.toString()}`, {
+                method: "DELETE",
+            });
+            this.todos = this.todos.filter(
+                (todo) => !(todo.completed && todo.list === this.currentList)
+            );
             this.renderTodos();
         } catch (error) {
             this.setStatus(error.message);
         }
     }
 
+    closeAllMenus() {
+        this.todoList.querySelectorAll(".todo-item.menu-open").forEach((item) => {
+            item.classList.remove("menu-open");
+        });
+        this.todoList.querySelectorAll(".menu-btn").forEach((button) => {
+            button.setAttribute("aria-expanded", "false");
+        });
+    }
+
+    toggleMenu(item, button) {
+        const shouldOpen = !item.classList.contains("menu-open");
+        this.closeAllMenus();
+        if (shouldOpen) {
+            item.classList.add("menu-open");
+            button.setAttribute("aria-expanded", "true");
+        }
+    }
+
     applyTodoUpdate(updated) {
-        this.todos = this.todos.map((todo) =>
-            todo.id === updated.id ? updated : todo
-        );
+        this.todos = this.todos.map((todo) => {
+            if (todo.id !== updated.id) {
+                return todo;
+            }
+            const merged = { ...todo, ...updated };
+            return this.normalizeTodo(merged);
+        });
     }
 
     getFilteredTodos() {
+        const listTodos = this.todos.filter(
+            (todo) => todo.list === this.currentList
+        );
         switch (this.currentFilter) {
             case "active":
-                return this.todos.filter((todo) => !todo.completed);
+                return listTodos.filter((todo) => !todo.completed);
             case "completed":
-                return this.todos.filter((todo) => todo.completed);
+                return listTodos.filter((todo) => todo.completed);
             default:
-                return this.todos;
+                return listTodos;
         }
     }
 
@@ -193,8 +355,11 @@ class TodoApp {
         const todos = this.getFilteredTodos();
 
         if (todos.length === 0) {
+            const listLabel = this.getListLabel(this.currentList);
             this.todoList.innerHTML =
-                '<li class="empty-state">No tasks yet. Add one above!</li>';
+                `<li class="empty-state">No tasks in ${this.escapeHtml(
+                    listLabel
+                )} yet. Add one above!</li>`;
             this.updateItemCount();
             return;
         }
@@ -203,6 +368,10 @@ class TodoApp {
             .map((todo, index) => {
                 const checked = todo.completed ? "checked" : "";
                 const completedClass = todo.completed ? "completed" : "";
+                const alternateList =
+                    this.availableLists.find((list) => list !== todo.list) ||
+                    this.availableLists[0];
+                const moveLabel = `Move to ${this.getListLabel(alternateList)}`;
                 return `
             <li class="todo-item ${completedClass}" style="animation-delay: ${
                     index * 30
@@ -216,7 +385,21 @@ class TodoApp {
                 <span class="todo-text ${completedClass}">${this.escapeHtml(
                     todo.title
                 )}</span>
-                <button class="delete-btn" data-id="${todo.id}">Delete</button>
+                <div class="todo-actions">
+                    <button class="menu-btn" data-id="${
+                        todo.id
+                    }" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Task actions">...</button>
+                    <div class="todo-menu" role="menu">
+                        <button class="todo-menu-item change-list-btn" data-id="${
+                            todo.id
+                        }" type="button" data-target-list="${alternateList}" role="menuitem">${this.escapeHtml(
+                            moveLabel
+                        )}</button>
+                        <button class="todo-menu-item delete-btn" data-id="${
+                            todo.id
+                        }" type="button" role="menuitem">Delete task</button>
+                    </div>
+                </div>
             </li>
         `;
             })
@@ -226,7 +409,9 @@ class TodoApp {
     }
 
     updateItemCount() {
-        const activeCount = this.todos.filter((todo) => !todo.completed).length;
+        const activeCount = this.todos.filter(
+            (todo) => !todo.completed && todo.list === this.currentList
+        ).length;
         this.itemCount.textContent = `${activeCount} ${
             activeCount === 1 ? "item" : "items"
         }`;

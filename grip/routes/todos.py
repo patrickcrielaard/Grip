@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Any, Dict
 import logging
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from grip.routes.authentication import COOKIE_USER_ID, COOKIE_USERNAME
 from grip.supabase_service import SupabaseService
@@ -21,18 +21,36 @@ templates = Jinja2Templates(directory="grip/web/templates")
 supabase_service = SupabaseService()
 logger = logging.getLogger("grip.todos")
 
+ALLOWED_LISTS = {"inbox", "today"}
+DEFAULT_LIST = "inbox"
+
 
 class TodoCreate(BaseModel):
     """Payload for creating a todo."""
 
+    model_config = ConfigDict(populate_by_name=True)
     title: str = Field(..., min_length=1, max_length=280)
+    list_name: str = Field(default=DEFAULT_LIST, alias="list")
 
 
 class TodoUpdate(BaseModel):
     """Payload for updating a todo."""
 
+    model_config = ConfigDict(populate_by_name=True)
     title: str | None = Field(default=None, min_length=1, max_length=280)
     completed: bool | None = None
+    list_name: str | None = Field(default=None, alias="list")
+
+
+def _normalize_list_name(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if not normalized:
+        raise HTTPException(status_code=400, detail="List is required")
+    if normalized not in ALLOWED_LISTS:
+        raise HTTPException(status_code=400, detail="List must be Inbox or Today")
+    return normalized
 
 
 def _get_user_from_cookies(request: Request) -> Dict[str, str] | None:
@@ -76,7 +94,8 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
     title = payload.title.strip()
     if not title:
         raise HTTPException(status_code=400, detail="Title is required")
-    todo = supabase_service.create_task(user["id"], title)
+    list_name = _normalize_list_name(payload.list_name) or DEFAULT_LIST
+    todo = supabase_service.create_task(user["id"], title, list_name)
     if not todo:
         logger.error("create_todo failed for user_id=%s", user["id"])
         raise HTTPException(status_code=500, detail="Unable to create task")
@@ -84,10 +103,14 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
 
 
 @router.delete("/api/todos/completed")
-async def clear_completed(request: Request) -> Dict[str, Any]:
+async def clear_completed(
+    request: Request,
+    list_name: str | None = Query(default=None, alias="list"),
+) -> Dict[str, Any]:
     """Clear completed todos."""
     user = _require_user(request)
-    deleted = supabase_service.clear_completed(user["id"])
+    normalized_list = _normalize_list_name(list_name) if list_name is not None else None
+    deleted = supabase_service.clear_completed(user["id"], normalized_list)
     return {"deleted": deleted}
 
 
@@ -105,6 +128,9 @@ async def update_todo(
         updates["title"] = title
     if payload.completed is not None:
         updates["completed"] = payload.completed
+    if payload.list_name is not None:
+        list_name = _normalize_list_name(payload.list_name)
+        updates["list"] = list_name
 
     if not updates:
         raise HTTPException(status_code=400, detail="No changes provided")

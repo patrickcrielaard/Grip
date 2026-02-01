@@ -1,0 +1,1 @@
+# Instructions for the Grip app

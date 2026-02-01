@@ -25,9 +25,13 @@
                 <span class="toggle-label">Collapse</span>
             </button>
             <nav id="sidebarNav" class="sidebar-nav" aria-label="Primary">
-                <button class="sidebar-item active" type="button">
+                <button class="sidebar-item active" type="button" data-list="inbox" aria-pressed="true">
                     <span class="sidebar-dot" aria-hidden="true"></span>
                     <span class="sidebar-label">Inbox</span>
+                </button>
+                <button class="sidebar-item" type="button" data-list="today" aria-pressed="false">
+                    <span class="sidebar-dot" aria-hidden="true"></span>
+                    <span class="sidebar-label">Today</span>
                 </button>
             </nav>
         </aside>
@@ -35,7 +39,7 @@
         <section class="todo-panel">
             <div class="panel-header">
                 <div>
-                    <p class="eyebrow">Today</p>
+                    <p class="eyebrow" id="activeListLabel">Inbox</p>
                     <h1>Keep the momentum rolling.</h1>
                     <p class="panel-subtitle">Capture tasks, mark wins, and stay focused.</p>
                 </div>

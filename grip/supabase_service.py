@@ -75,29 +75,39 @@ class SupabaseService:
         try:
             result = (
                 self.supabase.table("tasks")
-                .select("id, title, completed, created_at")
+                .select("id, title, completed, created_at, list")
                 .eq("user_id", user_id)
                 .order("created_at", desc=True)
                 .execute()
             )
-            return [cast(Dict[str, Any], row) for row in (result.data or [])]
+            rows = [cast(Dict[str, Any], row) for row in (result.data or [])]
+            for row in rows:
+                if not row.get("list"):
+                    row["list"] = "inbox"
+            return rows
         except Exception as exc:
             self.logger.exception("list_tasks failed: %s", exc)
             return []
 
-    def create_task(self, user_id: str, title: str) -> Optional[Dict[str, Any]]:
+    def create_task(
+        self, user_id: str, title: str, list_name: str
+    ) -> Optional[Dict[str, Any]]:
         """Create a new task."""
         try:
             result = (
                 self.supabase.table("tasks")
-                .insert({"user_id": user_id, "title": title})
+                .insert({"user_id": user_id, "title": title, "list": list_name})
                 .execute()
             )
             if not result.data:
                 return None
             if isinstance(result.data, list):
-                return cast(Dict[str, Any], result.data[0])
-            return cast(Dict[str, Any], result.data)
+                row = cast(Dict[str, Any], result.data[0])
+            else:
+                row = cast(Dict[str, Any], result.data)
+            if not row.get("list"):
+                row["list"] = list_name
+            return row
         except Exception as exc:
             self.logger.exception("create_task failed: %s", exc)
             return None
@@ -138,16 +148,18 @@ class SupabaseService:
             self.logger.exception("delete_task failed: %s", exc)
             return False
 
-    def clear_completed(self, user_id: str) -> int:
+    def clear_completed(self, user_id: str, list_name: str | None = None) -> int:
         """Delete all completed tasks for a user."""
         try:
-            result = (
+            query = (
                 self.supabase.table("tasks")
                 .delete()
                 .eq("user_id", user_id)
                 .eq("completed", True)
-                .execute()
             )
+            if list_name:
+                query = query.eq("list", list_name)
+            result = query.execute()
             return len(result.data or [])
         except Exception as exc:
             self.logger.exception("clear_completed failed: %s", exc)
