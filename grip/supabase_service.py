@@ -75,7 +75,7 @@ class SupabaseService:
         try:
             result = (
                 self.supabase.table("tasks")
-                .select("id, title, completed, created_at, list")
+                .select("id, title, completed, created_at, list, area")
                 .eq("user_id", user_id)
                 .order("created_at", desc=True)
                 .execute()
@@ -90,13 +90,20 @@ class SupabaseService:
             return []
 
     def create_task(
-        self, user_id: str, title: str, list_name: str
+        self, user_id: str, title: str, list_name: str, area: str | None
     ) -> Optional[Dict[str, Any]]:
         """Create a new task."""
         try:
             result = (
                 self.supabase.table("tasks")
-                .insert({"user_id": user_id, "title": title, "list": list_name})
+                .insert(
+                    {
+                        "user_id": user_id,
+                        "title": title,
+                        "list": list_name,
+                        "area": area,
+                    }
+                )
                 .execute()
             )
             if not result.data:

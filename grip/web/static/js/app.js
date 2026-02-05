@@ -5,6 +5,7 @@ class TodoApp {
         this.todos = [];
         this.currentFilter = "all";
         this.availableLists = ["inbox", "today"];
+        this.availableAreas = ["personal", "work"];
         this.currentList = this.availableLists[0];
         this.cacheElements();
         this.bindEvents();
@@ -15,6 +16,7 @@ class TodoApp {
     cacheElements() {
         this.todoInput = document.getElementById("todoInput");
         this.addButton = document.getElementById("addBtn");
+        this.areaSelect = document.getElementById("areaSelect");
         this.todoList = document.getElementById("todoList");
         this.itemCount = document.getElementById("itemCount");
         this.clearCompletedButton = document.getElementById("clearCompleted");
@@ -84,6 +86,16 @@ class TodoApp {
                 return;
             }
 
+            const areaButton = event.target.closest(".set-area-btn");
+            if (areaButton) {
+                event.stopPropagation();
+                const id = Number(areaButton.dataset.id);
+                const targetArea = areaButton.dataset.area;
+                this.closeAllMenus();
+                this.setArea(id, targetArea || null);
+                return;
+            }
+
             const deleteButton = event.target.closest(".delete-btn");
             if (deleteButton) {
                 event.stopPropagation();
@@ -124,10 +136,25 @@ class TodoApp {
         return normalized;
     }
 
+    normalizeArea(area) {
+        if (area === null || area === undefined) {
+            return null;
+        }
+        const normalized = area.toString().trim().toLowerCase();
+        if (!normalized) {
+            return null;
+        }
+        if (!this.availableAreas.includes(normalized)) {
+            return null;
+        }
+        return normalized;
+    }
+
     normalizeTodo(todo) {
         const normalizedList =
             this.normalizeListName(todo.list) || this.availableLists[0];
-        return { ...todo, list: normalizedList };
+        const normalizedArea = this.normalizeArea(todo.area);
+        return { ...todo, list: normalizedList, area: normalizedArea };
     }
 
     getListLabel(listName) {
@@ -139,6 +166,14 @@ class TodoApp {
         const label = button?.querySelector(".sidebar-label")?.textContent;
         if (label) {
             return label.trim();
+        }
+        return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+    }
+
+    getAreaLabel(area) {
+        const normalized = this.normalizeArea(area);
+        if (!normalized) {
+            return "";
         }
         return normalized.charAt(0).toUpperCase() + normalized.slice(1);
     }
@@ -222,6 +257,7 @@ class TodoApp {
         if (!title) {
             return;
         }
+        const area = this.normalizeArea(this.areaSelect?.value);
 
         this.addButton.disabled = true;
         this.setStatus("");
@@ -229,11 +265,18 @@ class TodoApp {
         try {
             const data = await this.request("/api/todos", {
                 method: "POST",
-                body: JSON.stringify({ title, list: this.currentList }),
+                body: JSON.stringify({
+                    title,
+                    list: this.currentList,
+                    area,
+                }),
             });
             if (data.todo) {
                 this.todos.unshift(this.normalizeTodo(data.todo));
                 this.todoInput.value = "";
+                if (this.areaSelect) {
+                    this.areaSelect.value = "";
+                }
                 this.renderTodos();
             }
         } catch (error) {
@@ -283,6 +326,22 @@ class TodoApp {
             const data = await this.request(`/api/todos/${id}`, {
                 method: "PATCH",
                 body: JSON.stringify({ list: targetList }),
+            });
+            if (data.todo) {
+                this.applyTodoUpdate(data.todo);
+                this.renderTodos();
+            }
+        } catch (error) {
+            this.setStatus(error.message);
+        }
+    }
+
+    async setArea(id, area) {
+        this.setStatus("");
+        try {
+            const data = await this.request(`/api/todos/${id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ area }),
             });
             if (data.todo) {
                 this.applyTodoUpdate(data.todo);
@@ -372,6 +431,10 @@ class TodoApp {
                     this.availableLists.find((list) => list !== todo.list) ||
                     this.availableLists[0];
                 const moveLabel = `Move to ${this.getListLabel(alternateList)}`;
+                const areaLabel = this.getAreaLabel(todo.area);
+                const areaMarkup = areaLabel
+                    ? `<span class="todo-area">${this.escapeHtml(areaLabel)}</span>`
+                    : "";
                 return `
             <li class="todo-item ${completedClass}" style="animation-delay: ${
                     index * 30
@@ -382,9 +445,12 @@ class TodoApp {
                     data-id="${todo.id}"
                     ${checked}
                 >
-                <span class="todo-text ${completedClass}">${this.escapeHtml(
-                    todo.title
-                )}</span>
+                <div class="todo-content">
+                    <span class="todo-text ${completedClass}">${this.escapeHtml(
+                        todo.title
+                    )}</span>
+                    ${areaMarkup}
+                </div>
                 <div class="todo-actions">
                     <button class="menu-btn" data-id="${
                         todo.id
@@ -395,6 +461,15 @@ class TodoApp {
                         }" type="button" data-target-list="${alternateList}" role="menuitem">${this.escapeHtml(
                             moveLabel
                         )}</button>
+                        <button class="todo-menu-item set-area-btn" data-id="${
+                            todo.id
+                        }" type="button" data-area="personal" role="menuitem">Set area: Personal</button>
+                        <button class="todo-menu-item set-area-btn" data-id="${
+                            todo.id
+                        }" type="button" data-area="work" role="menuitem">Set area: Work</button>
+                        <button class="todo-menu-item set-area-btn" data-id="${
+                            todo.id
+                        }" type="button" data-area="" role="menuitem">Clear area</button>
                         <button class="todo-menu-item delete-btn" data-id="${
                             todo.id
                         }" type="button" role="menuitem">Delete task</button>

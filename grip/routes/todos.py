@@ -23,6 +23,7 @@ logger = logging.getLogger("grip.todos")
 
 ALLOWED_LISTS = {"inbox", "today"}
 DEFAULT_LIST = "inbox"
+ALLOWED_AREAS = {"personal", "work"}
 
 
 class TodoCreate(BaseModel):
@@ -31,6 +32,7 @@ class TodoCreate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     title: str = Field(..., min_length=1, max_length=280)
     list_name: str = Field(default=DEFAULT_LIST, alias="list")
+    area: str | None = None
 
 
 class TodoUpdate(BaseModel):
@@ -40,6 +42,7 @@ class TodoUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=280)
     completed: bool | None = None
     list_name: str | None = Field(default=None, alias="list")
+    area: str | None = None
 
 
 def _normalize_list_name(value: str | None) -> str | None:
@@ -50,6 +53,17 @@ def _normalize_list_name(value: str | None) -> str | None:
         raise HTTPException(status_code=400, detail="List is required")
     if normalized not in ALLOWED_LISTS:
         raise HTTPException(status_code=400, detail="List must be Inbox or Today")
+    return normalized
+
+
+def _normalize_area(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if not normalized:
+        return None
+    if normalized not in ALLOWED_AREAS:
+        raise HTTPException(status_code=400, detail="Area must be Personal or Work")
     return normalized
 
 
@@ -95,7 +109,8 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
     if not title:
         raise HTTPException(status_code=400, detail="Title is required")
     list_name = _normalize_list_name(payload.list_name) or DEFAULT_LIST
-    todo = supabase_service.create_task(user["id"], title, list_name)
+    area = _normalize_area(payload.area)
+    todo = supabase_service.create_task(user["id"], title, list_name, area)
     if not todo:
         logger.error("create_todo failed for user_id=%s", user["id"])
         raise HTTPException(status_code=500, detail="Unable to create task")
@@ -131,6 +146,8 @@ async def update_todo(
     if payload.list_name is not None:
         list_name = _normalize_list_name(payload.list_name)
         updates["list"] = list_name
+    if "area" in payload.model_fields_set:
+        updates["area"] = _normalize_area(payload.area)
 
     if not updates:
         raise HTTPException(status_code=400, detail="No changes provided")

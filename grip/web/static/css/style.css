@@ -406,6 +406,24 @@ body {
     transition: border 0.2s ease, box-shadow 0.2s ease;
 }
 
+.area-select {
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    font-size: 0.95rem;
+    font-family: var(--font-body);
+    background: #fff;
+    color: var(--ink);
+    min-width: 140px;
+    transition: border 0.2s ease, box-shadow 0.2s ease;
+}
+
+.area-select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+}
+
 .todo-input:focus {
     outline: none;
     border-color: var(--accent);
@@ -485,6 +503,21 @@ body {
 .todo-text.completed {
     text-decoration: line-through;
     color: var(--muted);
+}
+
+.todo-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.todo-area {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    font-weight: 600;
 }
 
 .todo-actions {
