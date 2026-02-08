@@ -11,6 +11,8 @@ from supabase import Client, create_client
 
 from grip.configuration import settings
 
+TASK_PRIORITIES = {"not_set", "low", "medium", "high"}
+
 
 class SupabaseService:
     """Service for accessing Grip data via Supabase."""
@@ -21,6 +23,22 @@ class SupabaseService:
             settings.supabase_url, settings.supabase_service_role_key
         )
         self.logger = logging.getLogger("grip.supabase")
+
+    def _normalize_task_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        """Backfill task defaults for nullable/legacy columns."""
+        if not row.get("list"):
+            row["list"] = "inbox"
+
+        priority = row.get("priority")
+        if not isinstance(priority, str):
+            row["priority"] = "not_set"
+            return row
+
+        normalized_priority = priority.strip().lower().replace(" ", "_")
+        if normalized_priority not in TASK_PRIORITIES:
+            normalized_priority = "not_set"
+        row["priority"] = normalized_priority
+        return row
 
     def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
         """Return a single user record by username."""
@@ -75,22 +93,26 @@ class SupabaseService:
         try:
             result = (
                 self.supabase.table("tasks")
-                .select("id, title, completed, created_at, list, area")
+                .select("id, title, completed, created_at, list, area, priority")
                 .eq("user_id", user_id)
                 .order("created_at", desc=True)
                 .execute()
             )
             rows = [cast(Dict[str, Any], row) for row in (result.data or [])]
             for row in rows:
-                if not row.get("list"):
-                    row["list"] = "inbox"
+                self._normalize_task_row(row)
             return rows
         except Exception as exc:
             self.logger.exception("list_tasks failed: %s", exc)
             return []
 
     def create_task(
-        self, user_id: str, title: str, list_name: str, area: str | None
+        self,
+        user_id: str,
+        title: str,
+        list_name: str,
+        area: str | None,
+        priority: str,
     ) -> Optional[Dict[str, Any]]:
         """Create a new task."""
         try:
@@ -102,6 +124,7 @@ class SupabaseService:
                         "title": title,
                         "list": list_name,
                         "area": area,
+                        "priority": priority,
                     }
                 )
                 .execute()
@@ -112,9 +135,7 @@ class SupabaseService:
                 row = cast(Dict[str, Any], result.data[0])
             else:
                 row = cast(Dict[str, Any], result.data)
-            if not row.get("list"):
-                row["list"] = list_name
-            return row
+            return self._normalize_task_row(row)
         except Exception as exc:
             self.logger.exception("create_task failed: %s", exc)
             return None
@@ -134,8 +155,10 @@ class SupabaseService:
             if not result.data:
                 return None
             if isinstance(result.data, list):
-                return cast(Dict[str, Any], result.data[0])
-            return cast(Dict[str, Any], result.data)
+                row = cast(Dict[str, Any], result.data[0])
+            else:
+                row = cast(Dict[str, Any], result.data)
+            return self._normalize_task_row(row)
         except Exception as exc:
             self.logger.exception("update_task failed: %s", exc)
             return None

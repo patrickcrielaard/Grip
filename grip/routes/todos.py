@@ -24,6 +24,8 @@ logger = logging.getLogger("grip.todos")
 ALLOWED_LISTS = {"inbox", "today"}
 DEFAULT_LIST = "inbox"
 ALLOWED_AREAS = {"personal", "work"}
+ALLOWED_PRIORITIES = {"not_set", "low", "medium", "high"}
+DEFAULT_PRIORITY = "not_set"
 
 
 class TodoCreate(BaseModel):
@@ -33,6 +35,7 @@ class TodoCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=280)
     list_name: str = Field(default=DEFAULT_LIST, alias="list")
     area: str | None = None
+    priority: str | None = DEFAULT_PRIORITY
 
 
 class TodoUpdate(BaseModel):
@@ -43,6 +46,7 @@ class TodoUpdate(BaseModel):
     completed: bool | None = None
     list_name: str | None = Field(default=None, alias="list")
     area: str | None = None
+    priority: str | None = None
 
 
 def _normalize_list_name(value: str | None) -> str | None:
@@ -64,6 +68,20 @@ def _normalize_area(value: str | None) -> str | None:
         return None
     if normalized not in ALLOWED_AREAS:
         raise HTTPException(status_code=400, detail="Area must be Personal or Work")
+    return normalized
+
+
+def _normalize_priority(value: str | None) -> str:
+    if value is None:
+        return DEFAULT_PRIORITY
+    normalized = value.strip().lower().replace(" ", "_")
+    if not normalized:
+        return DEFAULT_PRIORITY
+    if normalized not in ALLOWED_PRIORITIES:
+        raise HTTPException(
+            status_code=400,
+            detail="Priority must be Not set, Low, Medium, or High",
+        )
     return normalized
 
 
@@ -110,7 +128,8 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Title is required")
     list_name = _normalize_list_name(payload.list_name) or DEFAULT_LIST
     area = _normalize_area(payload.area)
-    todo = supabase_service.create_task(user["id"], title, list_name, area)
+    priority = _normalize_priority(payload.priority)
+    todo = supabase_service.create_task(user["id"], title, list_name, area, priority)
     if not todo:
         logger.error("create_todo failed for user_id=%s", user["id"])
         raise HTTPException(status_code=500, detail="Unable to create task")
@@ -148,6 +167,8 @@ async def update_todo(
         updates["list"] = list_name
     if "area" in payload.model_fields_set:
         updates["area"] = _normalize_area(payload.area)
+    if "priority" in payload.model_fields_set:
+        updates["priority"] = _normalize_priority(payload.priority)
 
     if not updates:
         raise HTTPException(status_code=400, detail="No changes provided")
