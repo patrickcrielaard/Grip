@@ -3,33 +3,40 @@
 class TodoApp {
     constructor() {
         this.todos = [];
-        this.currentFilter = "all";
+        this.currentView = { type: "list", value: "inbox" };
         this.availableLists = ["inbox", "today"];
         this.availableAreas = ["personal", "work"];
         this.availablePriorities = ["not_set", "low", "medium", "high"];
-        this.currentList = this.availableLists[0];
+        this.addTaskVisible = false;
         this.cacheElements();
         this.bindEvents();
-        this.setActiveList(this.getInitialList());
         this.loadTodos();
     }
 
     cacheElements() {
         this.todoInput = document.getElementById("todoInput");
         this.addButton = document.getElementById("addBtn");
+        this.addTaskToggle = document.getElementById("addTaskToggle");
+        this.addTaskRow = document.getElementById("addTaskRow");
         this.areaSelect = document.getElementById("areaSelect");
         this.prioritySelect = document.getElementById("prioritySelect");
         this.todoList = document.getElementById("todoList");
         this.itemCount = document.getElementById("itemCount");
         this.clearCompletedButton = document.getElementById("clearCompleted");
         this.statusMessage = document.getElementById("statusMessage");
-        this.listButtons = Array.from(
-            document.querySelectorAll(".sidebar-item[data-list]")
-        );
         this.activeListLabel = document.getElementById("activeListLabel");
+        this.sidebarItems = Array.from(
+            document.querySelectorAll(".sidebar-item")
+        );
     }
 
     bindEvents() {
+        // Add task toggle
+        this.addTaskToggle.addEventListener("click", () =>
+            this.toggleAddTask()
+        );
+
+        // Add task submit
         this.addButton.addEventListener("click", () => this.addTodo());
         this.todoInput.addEventListener("keypress", (event) => {
             if (event.key === "Enter") {
@@ -37,27 +44,34 @@ class TodoApp {
             }
         });
 
-        document.querySelectorAll(".filter-btn").forEach((button) => {
-            button.addEventListener("click", (event) => {
-                document
-                    .querySelectorAll(".filter-btn")
-                    .forEach((btn) => btn.classList.remove("active"));
-                event.target.classList.add("active");
-                this.currentFilter = event.target.dataset.filter;
-                this.renderTodos();
+        // Sidebar navigation
+        this.sidebarItems.forEach((item) => {
+            item.addEventListener("click", () => {
+                if (item.dataset.list) {
+                    this.setView({
+                        type: "list",
+                        value: item.dataset.list,
+                    });
+                } else if (item.dataset.view) {
+                    this.setView({
+                        type: "view",
+                        value: item.dataset.view,
+                    });
+                } else if (item.dataset.areaFilter) {
+                    this.setView({
+                        type: "area",
+                        value: item.dataset.areaFilter,
+                    });
+                }
             });
         });
 
-        this.listButtons.forEach((button) => {
-            button.addEventListener("click", () => {
-                this.setActiveList(button.dataset.list);
-            });
-        });
-
+        // Clear completed
         this.clearCompletedButton.addEventListener("click", () =>
             this.clearCompleted()
         );
 
+        // Task list event delegation
         this.todoList.addEventListener("change", (event) => {
             if (event.target.classList.contains("todo-checkbox")) {
                 const id = Number(event.target.dataset.id);
@@ -117,25 +131,84 @@ class TodoApp {
             }
         });
 
+        // Close menus on outside click
         document.addEventListener("click", (event) => {
             if (!event.target.closest(".todo-actions")) {
                 this.closeAllMenus();
             }
         });
 
+        // Escape to close menus and hide add-task row
         document.addEventListener("keydown", (event) => {
             if (event.key === "Escape") {
                 this.closeAllMenus();
+                this.hideAddTask();
             }
         });
     }
 
-    getInitialList() {
-        const activeButton = this.listButtons.find((button) =>
-            button.classList.contains("active")
-        );
-        return activeButton?.dataset.list || this.currentList;
+    // --- Add task toggle ---
+
+    toggleAddTask() {
+        this.addTaskVisible = !this.addTaskVisible;
+        this.addTaskRow.hidden = !this.addTaskVisible;
+        if (this.addTaskVisible) {
+            this.todoInput.focus();
+        }
     }
+
+    hideAddTask() {
+        this.addTaskVisible = false;
+        this.addTaskRow.hidden = true;
+    }
+
+    // --- View management ---
+
+    setView(view) {
+        this.currentView = view;
+
+        // Update sidebar active state
+        this.sidebarItems.forEach((item) => {
+            let isActive = false;
+            if (view.type === "list" && item.dataset.list === view.value)
+                isActive = true;
+            if (view.type === "view" && item.dataset.view === view.value)
+                isActive = true;
+            if (
+                view.type === "area" &&
+                item.dataset.areaFilter === view.value
+            )
+                isActive = true;
+            item.classList.toggle("active", isActive);
+            item.setAttribute("aria-pressed", isActive.toString());
+        });
+
+        // Update header title
+        this.activeListLabel.textContent = this.getViewLabel();
+        this.renderTodos();
+    }
+
+    getViewLabel() {
+        switch (this.currentView.type) {
+            case "list":
+                return this.currentView.value === "inbox"
+                    ? "Inbox"
+                    : "Today";
+            case "view":
+                return this.currentView.value === "all"
+                    ? "All Tasks"
+                    : "Completed";
+            case "area":
+                return (
+                    this.currentView.value.charAt(0).toUpperCase() +
+                    this.currentView.value.slice(1)
+                );
+            default:
+                return "Inbox";
+        }
+    }
+
+    // --- Normalization ---
 
     normalizeListName(listName) {
         if (!listName) {
@@ -196,14 +269,7 @@ class TodoApp {
     getListLabel(listName) {
         const normalized =
             this.normalizeListName(listName) || this.availableLists[0];
-        const button = this.listButtons.find(
-            (listButton) => listButton.dataset.list === normalized
-        );
-        const label = button?.querySelector(".sidebar-label")?.textContent;
-        if (label) {
-            return label.trim();
-        }
-        return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+        return normalized === "inbox" ? "Inbox" : "Today";
     }
 
     getAreaLabel(area) {
@@ -228,32 +294,7 @@ class TodoApp {
         }
     }
 
-    setActiveList(listName) {
-        const normalized =
-            this.normalizeListName(listName) || this.availableLists[0];
-        let targetButton = this.listButtons.find(
-            (button) => button.dataset.list === normalized
-        );
-        if (!targetButton && this.listButtons.length > 0) {
-            targetButton = this.listButtons[0];
-        }
-        if (!targetButton) {
-            this.currentList = normalized;
-            return;
-        }
-        this.listButtons.forEach((button) => {
-            const isActive = button === targetButton;
-            button.classList.toggle("active", isActive);
-            button.setAttribute("aria-pressed", isActive.toString());
-        });
-        this.currentList = targetButton.dataset.list || normalized;
-        if (this.activeListLabel) {
-            this.activeListLabel.textContent = this.getListLabel(
-                this.currentList
-            );
-        }
-        this.renderTodos();
-    }
+    // --- API ---
 
     async request(url, options = {}) {
         const response = await fetch(url, {
@@ -310,6 +351,12 @@ class TodoApp {
         const area = this.normalizeArea(this.areaSelect?.value);
         const priority = this.normalizePriority(this.prioritySelect?.value);
 
+        // Determine target list from current view
+        let targetList = "inbox";
+        if (this.currentView.type === "list") {
+            targetList = this.currentView.value;
+        }
+
         this.addButton.disabled = true;
         this.setStatus("");
 
@@ -318,7 +365,7 @@ class TodoApp {
                 method: "POST",
                 body: JSON.stringify({
                     title,
-                    list: this.currentList,
+                    list: targetList,
                     area,
                     priority,
                 }),
@@ -333,6 +380,7 @@ class TodoApp {
                     this.prioritySelect.value = "not_set";
                 }
                 this.renderTodos();
+                this.todoInput.focus();
             }
         } catch (error) {
             this.setStatus(error.message);
@@ -427,23 +475,40 @@ class TodoApp {
     async clearCompleted() {
         this.setStatus("");
         try {
-            const params = new URLSearchParams({ list: this.currentList });
-            await this.request(`/api/todos/completed?${params.toString()}`, {
-                method: "DELETE",
-            });
-            this.todos = this.todos.filter(
-                (todo) => !(todo.completed && todo.list === this.currentList)
-            );
+            let url = "/api/todos/completed";
+            if (this.currentView.type === "list") {
+                const params = new URLSearchParams({
+                    list: this.currentView.value,
+                });
+                url += `?${params.toString()}`;
+            }
+            await this.request(url, { method: "DELETE" });
+
+            if (this.currentView.type === "list") {
+                this.todos = this.todos.filter(
+                    (todo) =>
+                        !(
+                            todo.completed &&
+                            todo.list === this.currentView.value
+                        )
+                );
+            } else {
+                this.todos = this.todos.filter((todo) => !todo.completed);
+            }
             this.renderTodos();
         } catch (error) {
             this.setStatus(error.message);
         }
     }
 
+    // --- Menu management ---
+
     closeAllMenus() {
-        this.todoList.querySelectorAll(".todo-item.menu-open").forEach((item) => {
-            item.classList.remove("menu-open");
-        });
+        this.todoList
+            .querySelectorAll(".todo-item.menu-open")
+            .forEach((item) => {
+                item.classList.remove("menu-open");
+            });
         this.todoList.querySelectorAll(".menu-btn").forEach((button) => {
             button.setAttribute("aria-expanded", "false");
         });
@@ -468,30 +533,42 @@ class TodoApp {
         });
     }
 
+    // --- Filtering ---
+
     getFilteredTodos() {
-        const listTodos = this.todos.filter(
-            (todo) => todo.list === this.currentList
-        );
-        switch (this.currentFilter) {
-            case "active":
-                return listTodos.filter((todo) => !todo.completed);
-            case "completed":
-                return listTodos.filter((todo) => todo.completed);
+        const view = this.currentView;
+        switch (view.type) {
+            case "list":
+                return this.todos.filter(
+                    (todo) => todo.list === view.value && !todo.completed
+                );
+            case "view":
+                if (view.value === "all") {
+                    return this.todos.filter((todo) => !todo.completed);
+                }
+                if (view.value === "completed") {
+                    return this.todos.filter((todo) => todo.completed);
+                }
+                return this.todos;
+            case "area":
+                return this.todos.filter(
+                    (todo) => todo.area === view.value && !todo.completed
+                );
             default:
-                return listTodos;
+                return this.todos;
         }
     }
+
+    // --- Rendering ---
 
     renderTodos() {
         const todos = this.getFilteredTodos();
 
         if (todos.length === 0) {
-            const listLabel = this.getListLabel(this.currentList);
-            this.todoList.innerHTML =
-                `<li class="empty-state">No tasks in ${this.escapeHtml(
-                    listLabel
-                )} yet. Add one above!</li>`;
+            const label = this.getViewLabel();
+            this.todoList.innerHTML = `<li class="empty-state">No tasks in ${this.escapeHtml(label)} yet.</li>`;
             this.updateItemCount();
+            this.updateSidebarCounts();
             return;
         }
 
@@ -499,89 +576,104 @@ class TodoApp {
             .map((todo, index) => {
                 const checked = todo.completed ? "checked" : "";
                 const completedClass = todo.completed ? "completed" : "";
+                const normalizedPriority = this.normalizePriority(
+                    todo.priority
+                );
+                const priorityClass = `priority-${normalizedPriority}`;
+
                 const alternateList =
                     this.availableLists.find((list) => list !== todo.list) ||
                     this.availableLists[0];
                 const moveLabel = `Move to ${this.getListLabel(alternateList)}`;
+
                 const areaLabel = this.getAreaLabel(todo.area);
                 const areaMarkup = areaLabel
-                    ? `<span class="todo-meta-chip todo-area">${this.escapeHtml(
-                          areaLabel
-                      )}</span>`
+                    ? `<span class="todo-meta-chip todo-area">${this.escapeHtml(areaLabel)}</span>`
                     : "";
-                const normalizedPriority = this.normalizePriority(todo.priority);
-                const priorityLabel = this.getPriorityLabel(normalizedPriority);
-                const priorityMarkup = `<span class="todo-meta-chip todo-priority priority-${normalizedPriority}">${this.escapeHtml(
-                    priorityLabel
-                )}</span>`;
-                const metadataMarkup = `<div class="todo-meta">${areaMarkup}${priorityMarkup}</div>`;
+
+                const priorityLabel =
+                    this.getPriorityLabel(normalizedPriority);
+                const priorityMarkup = `<span class="todo-meta-chip todo-priority ${priorityClass}">${this.escapeHtml(priorityLabel)}</span>`;
+
+                const listLabel =
+                    this.currentView.type !== "list"
+                        ? `<span class="todo-meta-chip">${this.escapeHtml(this.getListLabel(todo.list))}</span>`
+                        : "";
+
+                const hasMeta =
+                    areaLabel ||
+                    normalizedPriority !== "not_set" ||
+                    listLabel;
+                const metadataMarkup = hasMeta
+                    ? `<div class="todo-meta">${listLabel}${areaMarkup}${priorityMarkup}</div>`
+                    : "";
+
                 return `
-            <li class="todo-item ${completedClass}" style="animation-delay: ${
-                    index * 30
-                }ms">
-                <input 
-                    type="checkbox" 
-                    class="todo-checkbox" 
-                    data-id="${todo.id}"
-                    ${checked}
-                >
-                <div class="todo-content">
-                    <span class="todo-text ${completedClass}">${this.escapeHtml(
-                        todo.title
-                    )}</span>
-                    ${metadataMarkup}
-                </div>
-                <div class="todo-actions">
-                    <button class="menu-btn" data-id="${
-                        todo.id
-                    }" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Task actions">...</button>
-                    <div class="todo-menu" role="menu">
-                        <button class="todo-menu-item change-list-btn" data-id="${
-                            todo.id
-                        }" type="button" data-target-list="${alternateList}" role="menuitem">${this.escapeHtml(
-                            moveLabel
-                        )}</button>
-                        <button class="todo-menu-item set-area-btn" data-id="${
-                            todo.id
-                        }" type="button" data-area="personal" role="menuitem">Set area: Personal</button>
-                        <button class="todo-menu-item set-area-btn" data-id="${
-                            todo.id
-                        }" type="button" data-area="work" role="menuitem">Set area: Work</button>
-                        <button class="todo-menu-item set-area-btn" data-id="${
-                            todo.id
-                        }" type="button" data-area="" role="menuitem">Clear area</button>
-                        <button class="todo-menu-item set-priority-btn" data-id="${
-                            todo.id
-                        }" type="button" data-priority="high" role="menuitem">Set priority: High</button>
-                        <button class="todo-menu-item set-priority-btn" data-id="${
-                            todo.id
-                        }" type="button" data-priority="medium" role="menuitem">Set priority: Medium</button>
-                        <button class="todo-menu-item set-priority-btn" data-id="${
-                            todo.id
-                        }" type="button" data-priority="low" role="menuitem">Set priority: Low</button>
-                        <button class="todo-menu-item set-priority-btn" data-id="${
-                            todo.id
-                        }" type="button" data-priority="not_set" role="menuitem">Set priority: Not set</button>
-                        <button class="todo-menu-item delete-btn" data-id="${
-                            todo.id
-                        }" type="button" role="menuitem">Delete task</button>
+                <li class="todo-item ${completedClass} ${priorityClass}" style="animation-delay: ${index * 25}ms">
+                    <input type="checkbox" class="todo-checkbox" data-id="${todo.id}" ${checked}>
+                    <div class="todo-content">
+                        <span class="todo-text ${completedClass}">${this.escapeHtml(todo.title)}</span>
+                        ${metadataMarkup}
                     </div>
-                </div>
-            </li>
-        `;
+                    <div class="todo-actions">
+                        <button class="menu-btn" data-id="${todo.id}" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Task actions">...</button>
+                        <div class="todo-menu" role="menu">
+                            <button class="todo-menu-item change-list-btn" data-id="${todo.id}" type="button" data-target-list="${alternateList}" role="menuitem">${this.escapeHtml(moveLabel)}</button>
+                            <button class="todo-menu-item set-area-btn" data-id="${todo.id}" type="button" data-area="personal" role="menuitem">Area: Personal</button>
+                            <button class="todo-menu-item set-area-btn" data-id="${todo.id}" type="button" data-area="work" role="menuitem">Area: Work</button>
+                            <button class="todo-menu-item set-area-btn" data-id="${todo.id}" type="button" data-area="" role="menuitem">Clear area</button>
+                            <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="high" role="menuitem">Priority: High</button>
+                            <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="medium" role="menuitem">Priority: Medium</button>
+                            <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="low" role="menuitem">Priority: Low</button>
+                            <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="not_set" role="menuitem">Clear priority</button>
+                            <button class="todo-menu-item delete-btn" data-id="${todo.id}" type="button" role="menuitem">Delete</button>
+                        </div>
+                    </div>
+                </li>`;
             })
             .join("");
 
         this.updateItemCount();
+        this.updateSidebarCounts();
     }
 
     updateItemCount() {
-        const activeCount = this.todos.filter(
-            (todo) => !todo.completed && todo.list === this.currentList
-        ).length;
-        this.itemCount.textContent = `${activeCount} ${
-            activeCount === 1 ? "item" : "items"
-        }`;
+        const filtered = this.getFilteredTodos();
+        const count = filtered.length;
+        this.itemCount.textContent = `${count} ${count === 1 ? "task" : "tasks"}`;
+    }
+
+    updateSidebarCounts() {
+        const activeTodos = this.todos.filter((t) => !t.completed);
+        const completedTodos = this.todos.filter((t) => t.completed);
+
+        // List counts
+        document.querySelectorAll("[data-count-list]").forEach((el) => {
+            const list = el.dataset.countList;
+            const count = activeTodos.filter((t) => t.list === list).length;
+            el.textContent = count > 0 ? String(count) : "";
+        });
+
+        // View counts
+        document.querySelectorAll("[data-count-view]").forEach((el) => {
+            const view = el.dataset.countView;
+            if (view === "all") {
+                el.textContent =
+                    activeTodos.length > 0 ? String(activeTodos.length) : "";
+            } else if (view === "completed") {
+                el.textContent =
+                    completedTodos.length > 0
+                        ? String(completedTodos.length)
+                        : "";
+            }
+        });
+
+        // Area counts
+        document.querySelectorAll("[data-count-area]").forEach((el) => {
+            const area = el.dataset.countArea;
+            const count = activeTodos.filter((t) => t.area === area).length;
+            el.textContent = count > 0 ? String(count) : "";
+        });
     }
 
     escapeHtml(text) {
@@ -591,29 +683,4 @@ class TodoApp {
     }
 }
 
-const setupSidebarToggle = () => {
-    const sidebar = document.querySelector(".sidebar");
-    const shell = document.querySelector(".todo-shell");
-    const toggle = document.querySelector(".sidebar-toggle");
-    if (!sidebar || !shell || !toggle) {
-        return;
-    }
-
-    toggle.addEventListener("click", () => {
-        const collapsed = sidebar.classList.toggle("collapsed");
-        shell.classList.toggle("sidebar-collapsed", collapsed);
-        toggle.setAttribute("aria-expanded", (!collapsed).toString());
-
-        const icon = toggle.querySelector(".toggle-icon");
-        const label = toggle.querySelector(".toggle-label");
-        if (icon) {
-            icon.textContent = collapsed ? ">>" : "<<";
-        }
-        if (label) {
-            label.textContent = collapsed ? "Expand" : "Collapse";
-        }
-    });
-};
-
-setupSidebarToggle();
 const app = new TodoApp();
