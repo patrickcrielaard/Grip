@@ -70,8 +70,14 @@
         </div>
 
         <div class="sidebar-section">
-            <span class="sidebar-section-label">Areas</span>
-            <nav class="sidebar-nav" aria-label="Areas">
+            <button class="sidebar-section-label sidebar-section-toggle" type="button"
+                    aria-expanded="true" data-toggle-section="areaNav">
+                Areas
+                <svg class="collapse-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+            </button>
+            <nav class="sidebar-nav" id="areaNav" aria-label="Areas">
                 <button class="sidebar-item" type="button" data-area-filter="personal" aria-pressed="false">
                     <span class="sidebar-dot dot-personal"></span>
                     <span class="sidebar-label">Personal</span>
@@ -92,14 +98,6 @@
                 <h1 class="content-title" id="activeListLabel">Inbox</h1>
                 <span class="content-task-count" id="itemCount">0 tasks</span>
             </div>
-            <div class="content-header-actions">
-                <button class="header-action-btn" id="addTaskToggle" type="button" aria-label="Add task">
-                    <svg viewBox="0 0 24 24">
-                        <line x1="12" y1="5" x2="12" y2="19"/>
-                        <line x1="5" y1="12" x2="19" y2="12"/>
-                    </svg>
-                </button>
-            </div>
         </div>
 
         <div class="add-task-row" id="addTaskRow" hidden>
@@ -118,6 +116,24 @@
                 </select>
                 <button id="addBtn" class="add-task-submit" type="button">Add</button>
             </div>
+            <div class="add-task-input-group add-task-dates">
+                <label class="add-task-date-label">
+                    <span>Start</span>
+                    <input type="date" id="startDateInput" class="add-task-date" aria-label="Start date">
+                </label>
+                <label class="add-task-date-label">
+                    <span>Planned</span>
+                    <input type="date" id="plannedDateInput" class="add-task-date" aria-label="Planned date">
+                </label>
+                <label class="add-task-date-label">
+                    <span>Deadline</span>
+                    <input type="date" id="deadlineInput" class="add-task-date" aria-label="Deadline">
+                </label>
+                <label class="add-task-date-label">
+                    <span>Duration</span>
+                    <input type="number" id="durationInput" class="add-task-date add-task-duration" aria-label="Duration in minutes" placeholder="min" min="1">
+                </label>
+            </div>
         </div>
 
         <div id="statusMessage" class="status-message" role="status" aria-live="polite"></div>
@@ -130,9 +146,133 @@
             <button id="clearCompleted" class="footer-action" type="button">Clear completed</button>
         </div>
     </main>
+
+    <!-- Floating action button -->
+    <button class="fab-add-btn" id="addTaskToggle" type="button" aria-label="Add task">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+    </button>
+
+    <!-- Task detail modal -->
+    <div class="task-modal-overlay" id="taskModal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitleInput">
+        <div class="task-modal">
+            <div class="task-modal-body">
+                <div class="task-modal-left">
+                    <div class="modal-left-actions">
+                        <button class="modal-close-btn" id="modalCloseBtn" aria-label="Close">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                        <button class="modal-delete-btn" id="modalDeleteBtn" aria-label="Delete task">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                                <path d="M10 11v6M14 11v6"/>
+                                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="modal-title-row">
+                        <input type="checkbox" class="todo-checkbox modal-checkbox" id="modalCheckbox">
+                        <input type="text" class="modal-title-input" id="modalTitleInput" placeholder="Task name">
+                    </div>
+                </div>
+                <div class="task-modal-right">
+                    <div class="modal-field">
+                        <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
+                            <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+                        </svg>
+                        <div class="modal-field-body">
+                            <span class="modal-field-label">List</span>
+                            <select id="modal-list" class="modal-field-input">
+                                <option value="inbox">Inbox</option>
+                                <option value="today">Today</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-field">
+                        <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                            <line x1="16" y1="2" x2="16" y2="6"/>
+                            <line x1="8" y1="2" x2="8" y2="6"/>
+                            <line x1="3" y1="10" x2="21" y2="10"/>
+                        </svg>
+                        <div class="modal-field-body">
+                            <span class="modal-field-label">Planned</span>
+                            <input type="date" id="modal-planned-date" class="modal-field-input">
+                        </div>
+                    </div>
+                    <div class="modal-field">
+                        <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                        <div class="modal-field-body">
+                            <span class="modal-field-label">Start date</span>
+                            <input type="date" id="modal-start-date" class="modal-field-input">
+                        </div>
+                    </div>
+                    <div class="modal-field">
+                        <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M5 22h14M5 2h14M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22M17 2v4.172a2 2 0 0 1-.586 1.414L12 12 7.586 7.586A2 2 0 0 1 7 6.172V2"/>
+                        </svg>
+                        <div class="modal-field-body">
+                            <span class="modal-field-label">Duration</span>
+                            <input type="number" id="modal-duration" class="modal-field-input" min="1" placeholder="min">
+                        </div>
+                    </div>
+                    <div class="modal-field">
+                        <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                            <line x1="4" y1="22" x2="4" y2="15"/>
+                        </svg>
+                        <div class="modal-field-body">
+                            <span class="modal-field-label">Deadline</span>
+                            <input type="date" id="modal-deadline" class="modal-field-input">
+                        </div>
+                    </div>
+                    <div class="modal-field">
+                        <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="8" x2="12" y2="12"/>
+                            <line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                        <div class="modal-field-body">
+                            <span class="modal-field-label">Priority</span>
+                            <select id="modal-priority" class="modal-field-input">
+                                <option value="not_set">No priority</option>
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-field">
+                        <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                            <line x1="7" y1="7" x2="7.01" y2="7"/>
+                        </svg>
+                        <div class="modal-field-body">
+                            <span class="modal-field-label">Area</span>
+                            <select id="modal-area" class="modal-field-input">
+                                <option value="">No area</option>
+                                <option value="personal">Personal</option>
+                                <option value="work">Work</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=2"></script>
+<script src="/static/js/app.js?v=5"></script>
 {% endblock %}

@@ -93,7 +93,9 @@ class SupabaseService:
         try:
             result = (
                 self.supabase.table("tasks")
-                .select("id, title, completed, created_at, list, area, priority")
+                .select(
+                    "id, title, completed, created_at, list, area, priority, deadline, planned_date, start_date, duration"
+                )
                 .eq("user_id", user_id)
                 .order("created_at", desc=True)
                 .execute()
@@ -113,22 +115,29 @@ class SupabaseService:
         list_name: str,
         area: str | None,
         priority: str,
+        deadline: str | None = None,
+        planned_date: str | None = None,
+        start_date: str | None = None,
+        duration: int | None = None,
     ) -> Optional[Dict[str, Any]]:
         """Create a new task."""
         try:
-            result = (
-                self.supabase.table("tasks")
-                .insert(
-                    {
-                        "user_id": user_id,
-                        "title": title,
-                        "list": list_name,
-                        "area": area,
-                        "priority": priority,
-                    }
-                )
-                .execute()
-            )
+            payload: Dict[str, Any] = {
+                "user_id": user_id,
+                "title": title,
+                "list": list_name,
+                "area": area,
+                "priority": priority,
+            }
+            if deadline is not None:
+                payload["deadline"] = deadline
+            if planned_date is not None:
+                payload["planned_date"] = planned_date
+            if start_date is not None:
+                payload["start_date"] = start_date
+            if duration is not None:
+                payload["duration"] = duration
+            result = self.supabase.table("tasks").insert(payload).execute()
             if not result.data:
                 return None
             if isinstance(result.data, list):

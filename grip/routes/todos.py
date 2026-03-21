@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 import logging
+import re
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -26,6 +27,7 @@ DEFAULT_LIST = "inbox"
 ALLOWED_AREAS = {"personal", "work"}
 ALLOWED_PRIORITIES = {"not_set", "low", "medium", "high"}
 DEFAULT_PRIORITY = "not_set"
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 class TodoCreate(BaseModel):
@@ -36,6 +38,10 @@ class TodoCreate(BaseModel):
     list_name: str = Field(default=DEFAULT_LIST, alias="list")
     area: str | None = None
     priority: str | None = DEFAULT_PRIORITY
+    deadline: str | None = None
+    planned_date: str | None = None
+    start_date: str | None = None
+    duration: int | None = None
 
 
 class TodoUpdate(BaseModel):
@@ -47,6 +53,10 @@ class TodoUpdate(BaseModel):
     list_name: str | None = Field(default=None, alias="list")
     area: str | None = None
     priority: str | None = None
+    deadline: str | None = None
+    planned_date: str | None = None
+    start_date: str | None = None
+    duration: int | None = None
 
 
 def _normalize_list_name(value: str | None) -> str | None:
@@ -83,6 +93,26 @@ def _normalize_priority(value: str | None) -> str:
             detail="Priority must be Not set, Low, Medium, or High",
         )
     return normalized
+
+
+def _normalize_date(value: str | None, field: str) -> str | None:
+    if value is None or value == "":
+        return None
+    if not _DATE_RE.match(value):
+        raise HTTPException(
+            status_code=400, detail=f"{field} must be a date in YYYY-MM-DD format"
+        )
+    return value
+
+
+def _normalize_duration(value: int | None) -> int | None:
+    if value is None:
+        return None
+    if value < 1:
+        raise HTTPException(
+            status_code=400, detail="Duration must be at least 1 minute"
+        )
+    return value
 
 
 def _get_user_from_cookies(request: Request) -> Dict[str, str] | None:
@@ -129,7 +159,21 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
     list_name = _normalize_list_name(payload.list_name) or DEFAULT_LIST
     area = _normalize_area(payload.area)
     priority = _normalize_priority(payload.priority)
-    todo = supabase_service.create_task(user["id"], title, list_name, area, priority)
+    deadline = _normalize_date(payload.deadline, "Deadline")
+    planned_date = _normalize_date(payload.planned_date, "Planned date")
+    start_date = _normalize_date(payload.start_date, "Start date")
+    duration = _normalize_duration(payload.duration)
+    todo = supabase_service.create_task(
+        user["id"],
+        title,
+        list_name,
+        area,
+        priority,
+        deadline=deadline,
+        planned_date=planned_date,
+        start_date=start_date,
+        duration=duration,
+    )
     if not todo:
         logger.error("create_todo failed for user_id=%s", user["id"])
         raise HTTPException(status_code=500, detail="Unable to create task")
@@ -169,6 +213,14 @@ async def update_todo(
         updates["area"] = _normalize_area(payload.area)
     if "priority" in payload.model_fields_set:
         updates["priority"] = _normalize_priority(payload.priority)
+    if "deadline" in payload.model_fields_set:
+        updates["deadline"] = _normalize_date(payload.deadline, "Deadline")
+    if "planned_date" in payload.model_fields_set:
+        updates["planned_date"] = _normalize_date(payload.planned_date, "Planned date")
+    if "start_date" in payload.model_fields_set:
+        updates["start_date"] = _normalize_date(payload.start_date, "Start date")
+    if "duration" in payload.model_fields_set:
+        updates["duration"] = _normalize_duration(payload.duration)
 
     if not updates:
         raise HTTPException(status_code=400, detail="No changes provided")
