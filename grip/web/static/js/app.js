@@ -314,16 +314,13 @@ class TodoApp {
             case "list":
                 return this.currentView.value === "inbox"
                     ? "Inbox"
-                    : "Today";
+                    : "Vandaag";
             case "view":
                 return this.currentView.value === "all"
-                    ? "All Tasks"
-                    : "Completed";
+                    ? "Alle taken"
+                    : "Voltooid";
             case "area":
-                return (
-                    this.currentView.value.charAt(0).toUpperCase() +
-                    this.currentView.value.slice(1)
-                );
+                return this.getAreaLabel(this.currentView.value);
             default:
                 return "Inbox";
         }
@@ -390,7 +387,7 @@ class TodoApp {
     getListLabel(listName) {
         const normalized =
             this.normalizeListName(listName) || this.availableLists[0];
-        return normalized === "inbox" ? "Inbox" : "Today";
+        return normalized === "inbox" ? "Inbox" : "Vandaag";
     }
 
     getAreaLabel(area) {
@@ -398,20 +395,21 @@ class TodoApp {
         if (!normalized) {
             return "";
         }
-        return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+        const labels = { personal: "Persoonlijk", work: "Werk" };
+        return labels[normalized] || (normalized.charAt(0).toUpperCase() + normalized.slice(1));
     }
 
     getPriorityLabel(priority) {
         const normalized = this.normalizePriority(priority);
         switch (normalized) {
             case "low":
-                return "Low";
+                return "Laag";
             case "medium":
-                return "Medium";
+                return "Gemiddeld";
             case "high":
-                return "High";
+                return "Hoog";
             default:
-                return "Not set";
+                return "Niet ingesteld";
         }
     }
 
@@ -838,7 +836,7 @@ class TodoApp {
 
         if (todos.length === 0) {
             const label = this.getViewLabel();
-            this.todoList.innerHTML = `<li class="empty-state">No tasks in ${this.escapeHtml(label)} yet.</li>`;
+            this.todoList.innerHTML = `<li class="empty-state">Geen taken in ${this.escapeHtml(label)}.</li>`;
             this.updateItemCount();
             this.updateSidebarCounts();
             return;
@@ -856,7 +854,7 @@ class TodoApp {
                 const alternateList =
                     this.availableLists.find((list) => list !== todo.list) ||
                     this.availableLists[0];
-                const moveLabel = `Move to ${this.getListLabel(alternateList)}`;
+                const moveLabel = `Verplaats naar ${this.getListLabel(alternateList)}`;
 
                 const areaLabel = this.getAreaLabel(todo.area);
                 const areaMarkup = areaLabel
@@ -876,10 +874,10 @@ class TodoApp {
                     ? `<span class="todo-meta-chip todo-start-date">Start: ${this.escapeHtml(todo.start_date)}</span>`
                     : "";
                 const plannedDateMarkup = todo.planned_date
-                    ? `<span class="todo-meta-chip todo-planned-date">Plan: ${this.escapeHtml(todo.planned_date)}</span>`
+                    ? `<span class="todo-meta-chip todo-planned-date">Gepland: ${this.escapeHtml(todo.planned_date)}</span>`
                     : "";
                 const deadlineMarkup = todo.deadline
-                    ? `<span class="todo-meta-chip todo-deadline">Due: ${this.escapeHtml(todo.deadline)}</span>`
+                    ? `<span class="todo-meta-chip todo-deadline">Deadline: ${this.escapeHtml(todo.deadline)}</span>`
                     : "";
                 const durationMarkup = todo.duration
                     ? `<span class="todo-meta-chip todo-duration">${this.escapeHtml(String(todo.duration))}m</span>`
@@ -908,19 +906,19 @@ class TodoApp {
                         <button class="menu-btn" data-id="${todo.id}" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Task actions">...</button>
                         <div class="todo-menu" role="menu">
                             <button class="todo-menu-item change-list-btn" data-id="${todo.id}" type="button" data-target-list="${alternateList}" role="menuitem">${this.escapeHtml(moveLabel)}</button>
-                            <button class="todo-menu-item set-area-btn" data-id="${todo.id}" type="button" data-area="personal" role="menuitem">Area: Personal</button>
-                            <button class="todo-menu-item set-area-btn" data-id="${todo.id}" type="button" data-area="work" role="menuitem">Area: Work</button>
-                            <button class="todo-menu-item set-area-btn" data-id="${todo.id}" type="button" data-area="" role="menuitem">Clear area</button>
-                            <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="high" role="menuitem">Priority: High</button>
-                            <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="medium" role="menuitem">Priority: Medium</button>
-                            <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="low" role="menuitem">Priority: Low</button>
-                            <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="not_set" role="menuitem">Clear priority</button>
+                            <button class="todo-menu-item set-area-btn" data-id="${todo.id}" type="button" data-area="personal" role="menuitem">Gebied: Persoonlijk</button>
+                            <button class="todo-menu-item set-area-btn" data-id="${todo.id}" type="button" data-area="work" role="menuitem">Gebied: Werk</button>
+                            <button class="todo-menu-item set-area-btn" data-id="${todo.id}" type="button" data-area="" role="menuitem">Gebied wissen</button>
+                            <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="high" role="menuitem">Prioriteit: Hoog</button>
+                            <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="medium" role="menuitem">Prioriteit: Gemiddeld</button>
+                            <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="low" role="menuitem">Prioriteit: Laag</button>
+                            <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="not_set" role="menuitem">Prioriteit wissen</button>
                             <label class="todo-menu-item todo-menu-date-item" role="menuitem">
-                                <span>Start date</span>
+                                <span>Startdatum</span>
                                 <input type="date" class="set-date-input" data-id="${todo.id}" data-field="start_date" value="${todo.start_date || ''}">
                             </label>
                             <label class="todo-menu-item todo-menu-date-item" role="menuitem">
-                                <span>Planned date</span>
+                                <span>Geplande datum</span>
                                 <input type="date" class="set-date-input" data-id="${todo.id}" data-field="planned_date" value="${todo.planned_date || ''}">
                             </label>
                             <label class="todo-menu-item todo-menu-date-item" role="menuitem">
@@ -928,10 +926,10 @@ class TodoApp {
                                 <input type="date" class="set-date-input" data-id="${todo.id}" data-field="deadline" value="${todo.deadline || ''}">
                             </label>
                             <label class="todo-menu-item todo-menu-date-item" role="menuitem">
-                                <span>Duration (min)</span>
+                                <span>Duur (min)</span>
                                 <input type="number" class="set-duration-input" data-id="${todo.id}" value="${todo.duration || ''}" min="1" placeholder="—">
                             </label>
-                            <button class="todo-menu-item delete-btn" data-id="${todo.id}" type="button" role="menuitem">Delete</button>
+                            <button class="todo-menu-item delete-btn" data-id="${todo.id}" type="button" role="menuitem">Verwijderen</button>
                         </div>
                     </div>
                 </li>`;
@@ -945,7 +943,7 @@ class TodoApp {
     updateItemCount() {
         const filtered = this.getFilteredTodos();
         const count = filtered.length;
-        this.itemCount.textContent = `${count} ${count === 1 ? "task" : "tasks"}`;
+        this.itemCount.textContent = `${count} ${count === 1 ? "taak" : "taken"}`;
     }
 
     updateSidebarCounts() {

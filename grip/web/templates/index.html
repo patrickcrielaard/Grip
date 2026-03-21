@@ -10,7 +10,7 @@
             <div class="profile-avatar">{{ username[0] | upper }}</div>
             <span class="profile-name">{{ username }}</span>
             <form class="logout-form" action="/logout" method="post">
-                <button class="sidebar-icon-btn" type="submit" aria-label="Log out">
+                <button class="sidebar-icon-btn" type="submit" aria-label="Uitloggen">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
                         <polyline points="16 17 21 12 16 7"/>
@@ -21,7 +21,7 @@
         </div>
 
         <div class="sidebar-section">
-            <span class="sidebar-section-label">To Do</span>
+            <span class="sidebar-section-label">Te doen</span>
             <nav class="sidebar-nav" aria-label="Primary">
                 <button class="sidebar-item active" type="button" data-list="inbox" aria-pressed="true">
                     <svg class="sidebar-icon" viewBox="0 0 24 24">
@@ -43,7 +43,7 @@
                         <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
                         <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
                     </svg>
-                    <span class="sidebar-label">Today</span>
+                    <span class="sidebar-label">Vandaag</span>
                     <span class="sidebar-count" data-count-list="today"></span>
                 </button>
                 <button class="sidebar-item" type="button" data-view="all" aria-pressed="false">
@@ -55,7 +55,7 @@
                         <line x1="3" y1="12" x2="3.01" y2="12"/>
                         <line x1="3" y1="18" x2="3.01" y2="18"/>
                     </svg>
-                    <span class="sidebar-label">All Tasks</span>
+                    <span class="sidebar-label">Alle taken</span>
                     <span class="sidebar-count" data-count-view="all"></span>
                 </button>
                 <button class="sidebar-item" type="button" data-view="completed" aria-pressed="false">
@@ -63,7 +63,7 @@
                         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
                         <polyline points="22 4 12 14.01 9 11.01"/>
                     </svg>
-                    <span class="sidebar-label">Completed</span>
+                    <span class="sidebar-label">Voltooid</span>
                     <span class="sidebar-count" data-count-view="completed"></span>
                 </button>
             </nav>
@@ -72,7 +72,7 @@
         <div class="sidebar-section">
             <button class="sidebar-section-label sidebar-section-toggle" type="button"
                     aria-expanded="true" data-toggle-section="areaNav">
-                Areas
+                Gebieden
                 <svg class="collapse-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="6 9 12 15 18 9"/>
                 </svg>
@@ -80,12 +80,12 @@
             <nav class="sidebar-nav" id="areaNav" aria-label="Areas">
                 <button class="sidebar-item" type="button" data-area-filter="personal" aria-pressed="false">
                     <span class="sidebar-dot dot-personal"></span>
-                    <span class="sidebar-label">Personal</span>
+                    <span class="sidebar-label">Persoonlijk</span>
                     <span class="sidebar-count" data-count-area="personal"></span>
                 </button>
                 <button class="sidebar-item" type="button" data-area-filter="work" aria-pressed="false">
                     <span class="sidebar-dot dot-work"></span>
-                    <span class="sidebar-label">Work</span>
+                    <span class="sidebar-label">Werk</span>
                     <span class="sidebar-count" data-count-area="work"></span>
                 </button>
             </nav>
@@ -102,19 +102,19 @@
 
         <div class="add-task-row" id="addTaskRow" hidden>
             <div class="add-task-input-group">
-                <input type="text" id="todoInput" placeholder="New task..." class="add-task-input" autocomplete="off">
+                <input type="text" id="todoInput" placeholder="Nieuwe taak..." class="add-task-input" autocomplete="off">
                 <select id="areaSelect" class="add-task-select" aria-label="Task area">
-                    <option value="">No area</option>
-                    <option value="personal">Personal</option>
-                    <option value="work">Work</option>
+                    <option value="">Geen gebied</option>
+                    <option value="personal">Persoonlijk</option>
+                    <option value="work">Werk</option>
                 </select>
                 <select id="prioritySelect" class="add-task-select" aria-label="Task priority">
-                    <option value="not_set">No priority</option>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
+                    <option value="not_set">Geen prioriteit</option>
+                    <option value="low">Laag</option>
+                    <option value="medium">Gemiddeld</option>
+                    <option value="high">Hoog</option>
                 </select>
-                <button id="addBtn" class="add-task-submit" type="button">Add</button>
+                <button id="addBtn" class="add-task-submit" type="button">Toevoegen</button>
             </div>
             <div class="add-task-input-group add-task-dates">
                 <label class="add-task-date-label">
@@ -122,7 +122,7 @@
                     <input type="date" id="startDateInput" class="add-task-date" aria-label="Start date">
                 </label>
                 <label class="add-task-date-label">
-                    <span>Planned</span>
+                    <span>Gepland</span>
                     <input type="date" id="plannedDateInput" class="add-task-date" aria-label="Planned date">
                 </label>
                 <label class="add-task-date-label">
@@ -130,7 +130,7 @@
                     <input type="date" id="deadlineInput" class="add-task-date" aria-label="Deadline">
                 </label>
                 <label class="add-task-date-label">
-                    <span>Duration</span>
+                    <span>Duur</span>
                     <input type="number" id="durationInput" class="add-task-date add-task-duration" aria-label="Duration in minutes" placeholder="min" min="1">
                 </label>
             </div>
@@ -143,12 +143,12 @@
         </ul>
 
         <div class="content-footer">
-            <button id="clearCompleted" class="footer-action" type="button">Clear completed</button>
+            <button id="clearCompleted" class="footer-action" type="button">Voltooide wissen</button>
         </div>
     </main>
 
     <!-- Floating action button -->
-    <button class="fab-add-btn" id="addTaskToggle" type="button" aria-label="Add task">
+    <button class="fab-add-btn" id="addTaskToggle" type="button" aria-label="Taak toevoegen">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"/>
             <line x1="5" y1="12" x2="19" y2="12"/>
@@ -161,13 +161,13 @@
             <div class="task-modal-body">
                 <div class="task-modal-left">
                     <div class="modal-left-actions">
-                        <button class="modal-close-btn" id="modalCloseBtn" aria-label="Close">
+                        <button class="modal-close-btn" id="modalCloseBtn" aria-label="Sluiten">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <line x1="18" y1="6" x2="6" y2="18"/>
                                 <line x1="6" y1="6" x2="18" y2="18"/>
                             </svg>
                         </button>
-                        <button class="modal-delete-btn" id="modalDeleteBtn" aria-label="Delete task">
+                        <button class="modal-delete-btn" id="modalDeleteBtn" aria-label="Taak verwijderen">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="3 6 5 6 21 6"/>
                                 <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
@@ -178,7 +178,7 @@
                     </div>
                     <div class="modal-title-row">
                         <input type="checkbox" class="todo-checkbox modal-checkbox" id="modalCheckbox">
-                        <input type="text" class="modal-title-input" id="modalTitleInput" placeholder="Task name">
+                        <input type="text" class="modal-title-input" id="modalTitleInput" placeholder="Taaknaam">
                     </div>
                 </div>
                 <div class="task-modal-right">
@@ -188,10 +188,10 @@
                             <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
                         </svg>
                         <div class="modal-field-body">
-                            <span class="modal-field-label">List</span>
+                            <span class="modal-field-label">Lijst</span>
                             <select id="modal-list" class="modal-field-input">
                                 <option value="inbox">Inbox</option>
-                                <option value="today">Today</option>
+                                <option value="today">Vandaag</option>
                             </select>
                         </div>
                     </div>
@@ -203,7 +203,7 @@
                             <line x1="3" y1="10" x2="21" y2="10"/>
                         </svg>
                         <div class="modal-field-body">
-                            <span class="modal-field-label">Planned</span>
+                            <span class="modal-field-label">Gepland</span>
                             <input type="date" id="modal-planned-date" class="modal-field-input">
                         </div>
                     </div>
@@ -213,7 +213,7 @@
                             <polyline points="12 6 12 12 16 14"/>
                         </svg>
                         <div class="modal-field-body">
-                            <span class="modal-field-label">Start date</span>
+                            <span class="modal-field-label">Startdatum</span>
                             <input type="date" id="modal-start-date" class="modal-field-input">
                         </div>
                     </div>
@@ -222,7 +222,7 @@
                             <path d="M5 22h14M5 2h14M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22M17 2v4.172a2 2 0 0 1-.586 1.414L12 12 7.586 7.586A2 2 0 0 1 7 6.172V2"/>
                         </svg>
                         <div class="modal-field-body">
-                            <span class="modal-field-label">Duration</span>
+                            <span class="modal-field-label">Duur</span>
                             <input type="number" id="modal-duration" class="modal-field-input" min="1" placeholder="min">
                         </div>
                     </div>
@@ -243,12 +243,12 @@
                             <line x1="12" y1="16" x2="12.01" y2="16"/>
                         </svg>
                         <div class="modal-field-body">
-                            <span class="modal-field-label">Priority</span>
+                            <span class="modal-field-label">Prioriteit</span>
                             <select id="modal-priority" class="modal-field-input">
-                                <option value="not_set">No priority</option>
-                                <option value="low">Low</option>
-                                <option value="medium">Medium</option>
-                                <option value="high">High</option>
+                                <option value="not_set">Geen prioriteit</option>
+                                <option value="low">Laag</option>
+                                <option value="medium">Gemiddeld</option>
+                                <option value="high">Hoog</option>
                             </select>
                         </div>
                     </div>
@@ -258,11 +258,11 @@
                             <line x1="7" y1="7" x2="7.01" y2="7"/>
                         </svg>
                         <div class="modal-field-body">
-                            <span class="modal-field-label">Area</span>
+                            <span class="modal-field-label">Gebied</span>
                             <select id="modal-area" class="modal-field-input">
-                                <option value="">No area</option>
-                                <option value="personal">Personal</option>
-                                <option value="work">Work</option>
+                                <option value="">Geen gebied</option>
+                                <option value="personal">Persoonlijk</option>
+                                <option value="work">Werk</option>
                             </select>
                         </div>
                     </div>
@@ -274,5 +274,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=5"></script>
+<script src="/static/js/app.js?v=6"></script>
 {% endblock %}

@@ -142,11 +142,9 @@ body.app-page {
     display: block;
     padding: 0 12px;
     margin-bottom: 4px;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--ink-tertiary);
+    color: var(--ink);
 }
 
 /* When sidebar-section-label is also a toggle button, reset block display */
@@ -947,11 +945,9 @@ input.modal-field-input {
     background: transparent;
     padding: 0 12px;
     margin-bottom: 4px;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--ink-tertiary);
+    color: var(--ink);
     cursor: pointer;
     font-family: var(--font-body);
     transition: color 0.15s ease;
