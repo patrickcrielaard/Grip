@@ -175,9 +175,6 @@
             <!-- Todo items injected by JS -->
         </ul>
 
-        <div class="content-footer">
-            <button id="clearCompleted" class="footer-action" type="button">Voltooide wissen</button>
-        </div>
     </main>
 
     <!-- Floating action button -->
@@ -215,6 +212,22 @@
                     </div>
                 </div>
                 <div class="task-modal-right">
+                    <div class="modal-field is-set">
+                        <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polygon points="10 8 16 12 10 16 10 8"/>
+                        </svg>
+                        <div class="modal-field-body">
+                            <span class="modal-field-label">Status</span>
+                            <select id="modal-state" class="modal-field-input">
+                                <option value="to_do">Te doen</option>
+                                <option value="in_progress">Bezig</option>
+                                <option value="done">Afgerond</option>
+                                <option value="waiting">Wachten op</option>
+                                <option value="someday">Ooit | Misschien</option>
+                            </select>
+                        </div>
+                    </div>
                     <div class="modal-field">
                         <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
@@ -361,5 +374,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=7"></script>
+<script src="/static/js/app.js?v=8"></script>
 {% endblock %}

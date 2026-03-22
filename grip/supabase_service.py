@@ -28,6 +28,8 @@ class SupabaseService:
         """Backfill task defaults for nullable/legacy columns."""
         if not row.get("list"):
             row["list"] = "inbox"
+        if not row.get("state"):
+            row["state"] = "to_do"
 
         priority = row.get("priority")
         if not isinstance(priority, str):
@@ -94,7 +96,7 @@ class SupabaseService:
             result = (
                 self.supabase.table("tasks")
                 .select(
-                    "id, title, completed, created_at, list, area, priority, deadline, planned_date, start_date, duration, recurrence_interval, recurrence_unit, recurrence_end"
+                    "id, title, completed, created_at, list, area, priority, deadline, planned_date, start_date, duration, recurrence_interval, recurrence_unit, recurrence_end, state"
                 )
                 .eq("user_id", user_id)
                 .order("created_at", desc=True)
@@ -114,7 +116,7 @@ class SupabaseService:
             result = (
                 self.supabase.table("tasks")
                 .select(
-                    "id, title, completed, created_at, list, area, priority, deadline, planned_date, start_date, duration, recurrence_interval, recurrence_unit, recurrence_end"
+                    "id, title, completed, created_at, list, area, priority, deadline, planned_date, start_date, duration, recurrence_interval, recurrence_unit, recurrence_end, state"
                 )
                 .eq("id", task_id)
                 .eq("user_id", user_id)
@@ -142,6 +144,7 @@ class SupabaseService:
         recurrence_interval: int | None = None,
         recurrence_unit: str | None = None,
         recurrence_end: str | None = None,
+        state: str | None = None,
     ) -> Optional[Dict[str, Any]]:
         """Create a new task."""
         try:
@@ -151,6 +154,7 @@ class SupabaseService:
                 "list": list_name,
                 "area": area,
                 "priority": priority,
+                "state": state or "to_do",
             }
             if deadline is not None:
                 payload["deadline"] = deadline

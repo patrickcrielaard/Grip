@@ -43,6 +43,7 @@ class TodoApp {
         this.modalDeleteBtn = document.getElementById("modalDeleteBtn");
         this.modalCheckbox = document.getElementById("modalCheckbox");
         this.modalTitleInput = document.getElementById("modalTitleInput");
+        this.modalState = document.getElementById("modal-state");
         this.modalList = document.getElementById("modal-list");
         this.modalPlannedDate = document.getElementById("modal-planned-date");
         this.modalStartDate = document.getElementById("modal-start-date");
@@ -240,6 +241,7 @@ class TodoApp {
         // Modal field auto-save on change + immediate visual state sync
         // (date fields are handled by the custom date picker, not change events)
         [
+            { el: this.modalState,    field: "state" },
             { el: this.modalList,     field: "list" },
             { el: this.modalDuration, field: "duration" },
             { el: this.modalPriority, field: "priority" },
@@ -489,6 +491,7 @@ class TodoApp {
             list: normalizedList,
             area: normalizedArea,
             priority: normalizedPriority,
+            state: todo.state || "to_do",
         };
     }
 
@@ -505,6 +508,17 @@ class TodoApp {
         }
         const labels = { personal: "Persoonlijk", work: "Werk" };
         return labels[normalized] || (normalized.charAt(0).toUpperCase() + normalized.slice(1));
+    }
+
+    getStateLabel(state) {
+        const labels = {
+            to_do: "Te doen",
+            in_progress: "Bezig",
+            done: "Afgerond",
+            waiting: "Wachten op",
+            someday: "Ooit | Misschien",
+        };
+        return labels[state] || "Te doen";
     }
 
     getPriorityLabel(priority) {
@@ -852,6 +866,7 @@ class TodoApp {
     populateModal(todo) {
         this.modalCheckbox.checked = todo.completed;
         this.modalTitleInput.value = todo.title;
+        if (this.modalState) this.modalState.value = todo.state || "to_do";
         this.modalList.value = todo.list || "inbox";
         this._setModalDateField(this.modalPlannedDate, todo.planned_date || "");
         this._setModalDateField(this.modalStartDate, todo.start_date || "");
@@ -870,6 +885,7 @@ class TodoApp {
 
     _syncModalFieldStates() {
         [
+            { el: this.modalState,       isSet: () => true },
             { el: this.modalList,        isSet: () => true },
             { el: this.modalPlannedDate, isSet: () => !!this.modalPlannedDate.dataset.date },
             { el: this.modalStartDate,   isSet: () => !!this.modalStartDate.dataset.date },
@@ -1014,9 +1030,9 @@ class TodoApp {
                     ? `<span class="todo-meta-chip todo-area">${this.escapeHtml(areaLabel)}</span>`
                     : "";
 
-                const priorityLabel =
-                    this.getPriorityLabel(normalizedPriority);
-                const priorityMarkup = `<span class="todo-meta-chip todo-priority ${priorityClass}">${this.escapeHtml(priorityLabel)}</span>`;
+                const stateMarkup = todo.state && todo.state !== "to_do"
+                    ? `<span class="todo-meta-chip todo-state-${todo.state}">${this.escapeHtml(this.getStateLabel(todo.state))}</span>`
+                    : "";
 
                 const listLabel =
                     this.currentView.type !== "list"
@@ -1042,15 +1058,15 @@ class TodoApp {
 
                 const hasMeta =
                     areaLabel ||
-                    normalizedPriority !== "not_set" ||
                     listLabel ||
                     todo.start_date ||
                     todo.planned_date ||
                     todo.deadline ||
                     todo.duration ||
-                    todo.recurrence_interval;
+                    todo.recurrence_interval ||
+                    (todo.state && todo.state !== "to_do");
                 const metadataMarkup = hasMeta
-                    ? `<div class="todo-meta">${listLabel}${startDateMarkup}${plannedDateMarkup}${deadlineMarkup}${durationMarkup}${areaMarkup}${priorityMarkup}${recurrenceMarkup}</div>`
+                    ? `<div class="todo-meta">${listLabel}${stateMarkup}${startDateMarkup}${plannedDateMarkup}${deadlineMarkup}${durationMarkup}${areaMarkup}${recurrenceMarkup}</div>`
                     : "";
 
                 return `

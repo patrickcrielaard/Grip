@@ -29,6 +29,8 @@ DEFAULT_LIST = "inbox"
 ALLOWED_AREAS = {"personal", "work"}
 ALLOWED_PRIORITIES = {"not_set", "low", "medium", "high"}
 DEFAULT_PRIORITY = "not_set"
+ALLOWED_STATES = {"to_do", "in_progress", "done", "waiting", "someday"}
+DEFAULT_STATE = "to_do"
 ALLOWED_RECURRENCE_UNITS = {"day", "week", "month"}
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -48,6 +50,7 @@ class TodoCreate(BaseModel):
     recurrence_interval: int | None = None
     recurrence_unit: str | None = None
     recurrence_end: str | None = None
+    state: str | None = None
 
 
 class TodoUpdate(BaseModel):
@@ -66,6 +69,7 @@ class TodoUpdate(BaseModel):
     recurrence_interval: int | None = None
     recurrence_unit: str | None = None
     recurrence_end: str | None = None
+    state: str | None = None
 
 
 def _normalize_list_name(value: str | None) -> str | None:
@@ -100,6 +104,20 @@ def _normalize_priority(value: str | None) -> str:
         raise HTTPException(
             status_code=400,
             detail="Priority must be Not set, Low, Medium, or High",
+        )
+    return normalized
+
+
+def _normalize_state(value: str | None) -> str:
+    if value is None:
+        return DEFAULT_STATE
+    normalized = value.strip().lower()
+    if not normalized:
+        return DEFAULT_STATE
+    if normalized not in ALLOWED_STATES:
+        raise HTTPException(
+            status_code=400,
+            detail="State must be to_do, in_progress, done, waiting, or someday",
         )
     return normalized
 
@@ -213,6 +231,7 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
         payload.recurrence_interval, payload.recurrence_unit
     )
     recurrence_end = _normalize_date(payload.recurrence_end, "Recurrence end")
+    state = _normalize_state(payload.state)
     todo = supabase_service.create_task(
         user["id"],
         title,
@@ -226,6 +245,7 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
         recurrence_interval=recurrence_interval,
         recurrence_unit=recurrence_unit,
         recurrence_end=recurrence_end,
+        state=state,
     )
     if not todo:
         logger.error("create_todo failed for user_id=%s", user["id"])
@@ -295,6 +315,14 @@ async def update_todo(
         updates["recurrence_end"] = _normalize_date(
             payload.recurrence_end, "Recurrence end"
         )
+    if "state" in payload.model_fields_set:
+        updates["state"] = _normalize_state(payload.state)
+
+    # Bidirectional state ↔ completed sync
+    if "state" in updates and "completed" not in updates:
+        updates["completed"] = updates["state"] == "done"
+    if "completed" in updates and "state" not in updates:
+        updates["state"] = "done" if updates["completed"] else "to_do"
 
     if not updates:
         raise HTTPException(status_code=400, detail="No changes provided")

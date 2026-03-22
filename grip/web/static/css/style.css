@@ -52,7 +52,7 @@ body {
 
 /* ===== App Layout (full-screen) ===== */
 body.app-page {
-    background: var(--content-bg);
+    background: var(--sidebar-bg);
     display: block;
     padding: 0;
 }
@@ -66,7 +66,6 @@ body.app-page {
 /* ===== Sidebar ===== */
 .sidebar {
     background: var(--sidebar-bg);
-    border-right: 1px solid var(--border);
     padding: 16px 12px;
     display: flex;
     flex-direction: column;
@@ -227,18 +226,28 @@ button.sidebar-section-label {
 
 /* ===== Main Content ===== */
 .main-content {
-    padding: 32px 40px;
-    max-width: 800px;
+    background: var(--content-bg);
+    border-radius: 17px;
+    box-shadow: -12px 0 28px rgba(0, 0, 0, 0.18), 0 4px 20px rgba(0, 0, 0, 0.08);
+    margin: 10px 10px 10px 0;
+    overflow: hidden;
+    padding: 18px 40px 32px 24px;
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    min-height: calc(100vh - 40px);
 }
 
 .content-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-bottom: 20px;
+    padding-bottom: 16px;
+    padding-left: 24px;
+    padding-right: 40px;
+    margin-left: -24px;
+    margin-right: -40px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
 }
 
 .content-header-left {
@@ -249,7 +258,7 @@ button.sidebar-section-label {
 
 .content-title {
     font-family: var(--font-display);
-    font-size: 1.75rem;
+    font-size: 1.5rem;
     font-weight: 700;
     color: var(--ink);
 }
@@ -449,30 +458,15 @@ button.sidebar-section-label {
     opacity: 0.5;
 }
 
-/* Priority left border */
-.todo-item.priority-high {
-    border-left: 3px solid var(--priority-high);
-    padding-left: 9px;
-}
 
-.todo-item.priority-medium {
-    border-left: 3px solid var(--priority-medium);
-    padding-left: 9px;
-}
-
-.todo-item.priority-low {
-    border-left: 3px solid var(--priority-low);
-    padding-left: 9px;
-}
-
-/* ===== Custom Circular Checkbox ===== */
+/* ===== Custom Checkbox ===== */
 .todo-checkbox {
     appearance: none;
     -webkit-appearance: none;
-    width: 20px;
-    height: 20px;
+    width: 17px;
+    height: 17px;
     border: 2px solid var(--border);
-    border-radius: 50%;
+    border-radius: 4px;
     cursor: pointer;
     flex-shrink: 0;
     margin-top: 2px;
@@ -492,10 +486,10 @@ button.sidebar-section-label {
 .todo-checkbox:checked::after {
     content: "";
     position: absolute;
-    top: 3px;
-    left: 6px;
+    top: 2px;
+    left: 4px;
     width: 4px;
-    height: 8px;
+    height: 7px;
     border: solid #fff;
     border-width: 0 2px 2px 0;
     transform: rotate(45deg);
@@ -574,6 +568,11 @@ button.sidebar-section-label {
 .todo-meta-chip.todo-priority.priority-not_set {
     display: none;
 }
+
+.todo-meta-chip.todo-state-in_progress { color: #007aff; }
+.todo-meta-chip.todo-state-waiting     { color: #ff9500; }
+.todo-meta-chip.todo-state-someday     { color: #8e8e93; }
+.todo-meta-chip.todo-state-done        { color: #34c759; }
 
 .todo-meta-chip.todo-deadline {
     color: var(--priority-high);
