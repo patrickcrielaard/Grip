@@ -423,9 +423,10 @@ class TodoApp {
                     ? "Inbox"
                     : "Vandaag";
             case "view":
-                return this.currentView.value === "all"
-                    ? "Alle taken"
-                    : "Voltooid";
+                if (this.currentView.value === "all") return "Alle taken";
+                if (this.currentView.value === "week") return "Deze week";
+                if (this.currentView.value === "next-week") return "Volgende week";
+                return "Voltooid";
             case "area":
                 return this.getAreaLabel(this.currentView.value);
             default:
@@ -827,6 +828,17 @@ class TodoApp {
         return new Date().toISOString().split("T")[0];
     }
 
+    getWeekRange(offset = 0) {
+        const now = new Date();
+        const daysFromMonday = (now.getDay() + 6) % 7; // Mon=0 … Sun=6
+        const start = new Date(now);
+        start.setDate(now.getDate() - daysFromMonday + offset * 7);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        const fmt = (d) => d.toISOString().split("T")[0];
+        return { start: fmt(start), end: fmt(end) };
+    }
+
     // --- Modal ---
 
     openModal(id) {
@@ -946,6 +958,16 @@ class TodoApp {
             case "view":
                 if (view.value === "all") {
                     return this.todos.filter((todo) => !todo.completed);
+                }
+                if (view.value === "week" || view.value === "next-week") {
+                    const offset = view.value === "next-week" ? 1 : 0;
+                    const { start, end } = this.getWeekRange(offset);
+                    return this.todos.filter(
+                        (t) =>
+                            !t.completed &&
+                            ((t.planned_date && t.planned_date >= start && t.planned_date <= end) ||
+                             (t.deadline && t.deadline >= start && t.deadline <= end))
+                    );
                 }
                 if (view.value === "completed") {
                     return this.todos.filter((todo) => todo.completed);
@@ -1105,6 +1127,15 @@ class TodoApp {
             if (view === "all") {
                 el.textContent =
                     activeTodos.length > 0 ? String(activeTodos.length) : "";
+            } else if (view === "week" || view === "next-week") {
+                const offset = view === "next-week" ? 1 : 0;
+                const { start, end } = this.getWeekRange(offset);
+                const count = activeTodos.filter(
+                    (t) =>
+                        (t.planned_date && t.planned_date >= start && t.planned_date <= end) ||
+                        (t.deadline && t.deadline >= start && t.deadline <= end)
+                ).length;
+                el.textContent = count > 0 ? String(count) : "";
             } else if (view === "completed") {
                 el.textContent =
                     completedTodos.length > 0
