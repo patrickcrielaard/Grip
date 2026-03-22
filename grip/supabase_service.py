@@ -94,7 +94,7 @@ class SupabaseService:
             result = (
                 self.supabase.table("tasks")
                 .select(
-                    "id, title, completed, created_at, list, area, priority, deadline, planned_date, start_date, duration"
+                    "id, title, completed, created_at, list, area, priority, deadline, planned_date, start_date, duration, recurrence_interval, recurrence_unit, recurrence_end"
                 )
                 .eq("user_id", user_id)
                 .order("created_at", desc=True)
@@ -108,6 +108,26 @@ class SupabaseService:
             self.logger.exception("list_tasks failed: %s", exc)
             return []
 
+    def get_task(self, user_id: str, task_id: int) -> Optional[Dict[str, Any]]:
+        """Return a single task by id for a user."""
+        try:
+            result = (
+                self.supabase.table("tasks")
+                .select(
+                    "id, title, completed, created_at, list, area, priority, deadline, planned_date, start_date, duration, recurrence_interval, recurrence_unit, recurrence_end"
+                )
+                .eq("id", task_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if not result.data:
+                return None
+            row = cast(Dict[str, Any], result.data[0])
+            return self._normalize_task_row(row)
+        except Exception as exc:
+            self.logger.exception("get_task failed: %s", exc)
+            return None
+
     def create_task(
         self,
         user_id: str,
@@ -119,6 +139,9 @@ class SupabaseService:
         planned_date: str | None = None,
         start_date: str | None = None,
         duration: int | None = None,
+        recurrence_interval: int | None = None,
+        recurrence_unit: str | None = None,
+        recurrence_end: str | None = None,
     ) -> Optional[Dict[str, Any]]:
         """Create a new task."""
         try:
@@ -137,6 +160,12 @@ class SupabaseService:
                 payload["start_date"] = start_date
             if duration is not None:
                 payload["duration"] = duration
+            if recurrence_interval is not None:
+                payload["recurrence_interval"] = recurrence_interval
+            if recurrence_unit is not None:
+                payload["recurrence_unit"] = recurrence_unit
+            if recurrence_end is not None:
+                payload["recurrence_end"] = recurrence_end
             result = self.supabase.table("tasks").insert(payload).execute()
             if not result.data:
                 return None

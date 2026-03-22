@@ -9,20 +9,17 @@
         <div class="sidebar-profile">
             <div class="profile-avatar">{{ username[0] | upper }}</div>
             <span class="profile-name">{{ username }}</span>
-            <form class="logout-form" action="/logout" method="post">
-                <button class="sidebar-icon-btn" type="submit" aria-label="Uitloggen">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                        <polyline points="16 17 21 12 16 7"/>
-                        <line x1="21" y1="12" x2="9" y2="12"/>
-                    </svg>
-                </button>
-            </form>
         </div>
 
         <div class="sidebar-section">
-            <span class="sidebar-section-label">Te doen</span>
-            <nav class="sidebar-nav" aria-label="Primary">
+            <button class="sidebar-section-label sidebar-section-toggle" type="button"
+                    aria-expanded="true" data-toggle-section="todoNav">
+                Te doen
+                <svg class="collapse-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+            </button>
+            <nav class="sidebar-nav" id="todoNav" aria-label="Primary">
                 <button class="sidebar-item active" type="button" data-list="inbox" aria-pressed="true">
                     <svg class="sidebar-icon" viewBox="0 0 24 24">
                         <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
@@ -90,6 +87,10 @@
                 </button>
             </nav>
         </div>
+
+        <form class="sidebar-logout-form" action="/logout" method="post">
+            <button class="sidebar-logout-btn" type="submit">uitloggen</button>
+        </form>
     </aside>
 
     <main class="main-content">
@@ -133,6 +134,18 @@
                     <span>Duur</span>
                     <input type="number" id="durationInput" class="add-task-date add-task-duration" aria-label="Duration in minutes" placeholder="min" min="1">
                 </label>
+            </div>
+            <div class="add-task-input-group add-task-recurrence">
+                <label class="add-task-date-label"><span>Herhalen</span></label>
+                <select id="recurrenceUnit" class="add-task-select" aria-label="Recurrence unit">
+                    <option value="">Niet</option>
+                    <option value="day">dag(en)</option>
+                    <option value="week">week/weken</option>
+                    <option value="month">maand(en)</option>
+                </select>
+                <input type="number" id="recurrenceInterval" class="add-task-recurrence-interval" placeholder="1" min="1" value="1" aria-label="Recurrence interval" hidden>
+                <label class="add-task-date-label" id="recurrenceEndLabel" hidden><span>Tot</span></label>
+                <input type="date" id="recurrenceEnd" class="add-task-date" aria-label="Recurrence end date" hidden>
             </div>
         </div>
 
@@ -204,7 +217,7 @@
                         </svg>
                         <div class="modal-field-body">
                             <span class="modal-field-label">Gepland</span>
-                            <input type="date" id="modal-planned-date" class="modal-field-input">
+                            <input type="text" id="modal-planned-date" class="modal-field-input modal-date-btn" data-date="" readonly>
                         </div>
                     </div>
                     <div class="modal-field">
@@ -214,7 +227,7 @@
                         </svg>
                         <div class="modal-field-body">
                             <span class="modal-field-label">Startdatum</span>
-                            <input type="date" id="modal-start-date" class="modal-field-input">
+                            <input type="text" id="modal-start-date" class="modal-field-input modal-date-btn" data-date="" readonly>
                         </div>
                     </div>
                     <div class="modal-field">
@@ -233,7 +246,7 @@
                         </svg>
                         <div class="modal-field-body">
                             <span class="modal-field-label">Deadline</span>
-                            <input type="date" id="modal-deadline" class="modal-field-input">
+                            <input type="text" id="modal-deadline" class="modal-field-input modal-date-btn" data-date="" readonly>
                         </div>
                     </div>
                     <div class="modal-field">
@@ -266,13 +279,67 @@
                             </select>
                         </div>
                     </div>
+                    <div class="modal-field is-set" id="modal-recurrence-field">
+                        <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="17 1 21 5 17 9"/>
+                            <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+                            <polyline points="7 23 3 19 7 15"/>
+                            <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+                        </svg>
+                        <div class="modal-field-body modal-recurrence-body">
+                            <span class="modal-field-label">Herhalen</span>
+                            <div class="modal-recurrence-inputs">
+                                <select id="modal-recurrence-unit" class="modal-field-input">
+                                    <option value="">Niet</option>
+                                    <option value="day">dag(en)</option>
+                                    <option value="week">week/weken</option>
+                                    <option value="month">maand(en)</option>
+                                </select>
+                                <input type="number" id="modal-recurrence-interval" class="modal-field-input modal-recurrence-interval" min="1" placeholder="1" hidden>
+                                <input type="date" id="modal-recurrence-end" class="modal-field-input" aria-label="Recurrence end date" hidden>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+<!-- Custom date picker (singleton, shared across modal date fields) -->
+<div class="date-picker" id="datePicker" hidden>
+    <div class="dp-manual-row">
+        <svg class="dp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        <input type="text" id="dpTextInput" class="dp-text-input" placeholder="DD-MM-JJJJ" autocomplete="off" maxlength="10">
+    </div>
+    <div class="dp-quick">
+        <button type="button" class="dp-quick-btn" data-days="0">
+            <svg class="dp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span>Vandaag</span>
+        </button>
+        <button type="button" class="dp-quick-btn" data-days="1">
+            <svg class="dp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span>Morgen</span>
+        </button>
+        <button type="button" class="dp-quick-btn" data-days="7">
+            <svg class="dp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span>Volgende week</span>
+        </button>
+    </div>
+    <div class="dp-cal">
+        <div class="dp-cal-header">
+            <button type="button" id="dpPrev" class="dp-nav-btn" aria-label="Vorige maand">&#8249;</button>
+            <span id="dpMonthLabel" class="dp-month-label"></span>
+            <button type="button" id="dpTodayBtn" class="dp-nav-btn dp-today-nav" title="Naar vandaag">&#9675;</button>
+            <button type="button" id="dpNext" class="dp-nav-btn" aria-label="Volgende maand">&#8250;</button>
+        </div>
+        <div id="dpGrid" class="dp-cal-grid"></div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=6"></script>
+<script src="/static/js/app.js?v=7"></script>
 {% endblock %}

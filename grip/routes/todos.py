@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from typing import Any, Dict
+import calendar
 import logging
 import re
+from datetime import date, timedelta
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -27,6 +29,7 @@ DEFAULT_LIST = "inbox"
 ALLOWED_AREAS = {"personal", "work"}
 ALLOWED_PRIORITIES = {"not_set", "low", "medium", "high"}
 DEFAULT_PRIORITY = "not_set"
+ALLOWED_RECURRENCE_UNITS = {"day", "week", "month"}
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
@@ -42,6 +45,9 @@ class TodoCreate(BaseModel):
     planned_date: str | None = None
     start_date: str | None = None
     duration: int | None = None
+    recurrence_interval: int | None = None
+    recurrence_unit: str | None = None
+    recurrence_end: str | None = None
 
 
 class TodoUpdate(BaseModel):
@@ -57,6 +63,9 @@ class TodoUpdate(BaseModel):
     planned_date: str | None = None
     start_date: str | None = None
     duration: int | None = None
+    recurrence_interval: int | None = None
+    recurrence_unit: str | None = None
+    recurrence_end: str | None = None
 
 
 def _normalize_list_name(value: str | None) -> str | None:
@@ -115,6 +124,43 @@ def _normalize_duration(value: int | None) -> int | None:
     return value
 
 
+def _normalize_recurrence(
+    interval: int | None, unit: str | None
+) -> tuple[int | None, str | None]:
+    if interval is None and unit is None:
+        return None, None
+    if interval is None or unit is None:
+        raise HTTPException(
+            status_code=400,
+            detail="recurrence_interval and recurrence_unit must be set together",
+        )
+    if interval < 1:
+        raise HTTPException(
+            status_code=400, detail="recurrence_interval must be at least 1"
+        )
+    normalized_unit = unit.strip().lower()
+    if normalized_unit not in ALLOWED_RECURRENCE_UNITS:
+        raise HTTPException(
+            status_code=400, detail="recurrence_unit must be day, week, or month"
+        )
+    return interval, normalized_unit
+
+
+def _advance_planned_date(date_str: str, interval: int, unit: str) -> str:
+    d = date.fromisoformat(date_str)
+    if unit == "day":
+        d = d + timedelta(days=interval)
+    elif unit == "week":
+        d = d + timedelta(weeks=interval)
+    elif unit == "month":
+        month = d.month - 1 + interval
+        year = d.year + month // 12
+        month = month % 12 + 1
+        day = min(d.day, calendar.monthrange(year, month)[1])
+        d = date(year, month, day)
+    return d.isoformat()
+
+
 def _get_user_from_cookies(request: Request) -> Dict[str, str] | None:
     user_id = request.cookies.get(COOKIE_USER_ID)
     username = request.cookies.get(COOKIE_USERNAME)
@@ -163,6 +209,10 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
     planned_date = _normalize_date(payload.planned_date, "Planned date")
     start_date = _normalize_date(payload.start_date, "Start date")
     duration = _normalize_duration(payload.duration)
+    recurrence_interval, recurrence_unit = _normalize_recurrence(
+        payload.recurrence_interval, payload.recurrence_unit
+    )
+    recurrence_end = _normalize_date(payload.recurrence_end, "Recurrence end")
     todo = supabase_service.create_task(
         user["id"],
         title,
@@ -173,6 +223,9 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
         planned_date=planned_date,
         start_date=start_date,
         duration=duration,
+        recurrence_interval=recurrence_interval,
+        recurrence_unit=recurrence_unit,
+        recurrence_end=recurrence_end,
     )
     if not todo:
         logger.error("create_todo failed for user_id=%s", user["id"])
@@ -221,9 +274,62 @@ async def update_todo(
         updates["start_date"] = _normalize_date(payload.start_date, "Start date")
     if "duration" in payload.model_fields_set:
         updates["duration"] = _normalize_duration(payload.duration)
+    if (
+        "recurrence_interval" in payload.model_fields_set
+        or "recurrence_unit" in payload.model_fields_set
+    ):
+        ri = (
+            payload.recurrence_interval
+            if "recurrence_interval" in payload.model_fields_set
+            else None
+        )
+        ru = (
+            payload.recurrence_unit
+            if "recurrence_unit" in payload.model_fields_set
+            else None
+        )
+        norm_ri, norm_ru = _normalize_recurrence(ri, ru)
+        updates["recurrence_interval"] = norm_ri
+        updates["recurrence_unit"] = norm_ru
+    if "recurrence_end" in payload.model_fields_set:
+        updates["recurrence_end"] = _normalize_date(
+            payload.recurrence_end, "Recurrence end"
+        )
 
     if not updates:
         raise HTTPException(status_code=400, detail="No changes provided")
+
+    # When marking complete, check if a new recurring occurrence should be spawned
+    spawned_todo = None
+    if updates.get("completed") is True:
+        current = supabase_service.get_task(user["id"], todo_id)
+        if (
+            current
+            and current.get("recurrence_interval")
+            and current.get("recurrence_unit")
+            and current.get("planned_date")
+        ):
+            next_date = _advance_planned_date(
+                current["planned_date"],
+                current["recurrence_interval"],
+                current["recurrence_unit"],
+            )
+            recurrence_end = current.get("recurrence_end")
+            if not recurrence_end or next_date <= recurrence_end:
+                spawned_todo = supabase_service.create_task(
+                    user["id"],
+                    current["title"],
+                    current.get("list", "inbox"),
+                    current.get("area"),
+                    current.get("priority", "not_set"),
+                    deadline=current.get("deadline"),
+                    planned_date=next_date,
+                    start_date=current.get("start_date"),
+                    duration=current.get("duration"),
+                    recurrence_interval=current["recurrence_interval"],
+                    recurrence_unit=current["recurrence_unit"],
+                    recurrence_end=recurrence_end,
+                )
 
     todo = supabase_service.update_task(user["id"], todo_id, updates)
     if not todo:
@@ -231,7 +337,10 @@ async def update_todo(
             "update_todo failed for user_id=%s task_id=%s", user["id"], todo_id
         )
         raise HTTPException(status_code=404, detail="Todo not found")
-    return {"todo": todo}
+    result: Dict[str, Any] = {"todo": todo}
+    if spawned_todo:
+        result["spawned_todo"] = spawned_todo
+    return result
 
 
 @router.delete("/api/todos/{todo_id}")

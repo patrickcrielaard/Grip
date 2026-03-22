@@ -5,7 +5,7 @@
 
     /* Layout */
     --sidebar-width: 260px;
-    --sidebar-bg: #f5f5f7;
+    --sidebar-bg: #f5f5f5;
     --content-bg: #ffffff;
 
     /* Text */
@@ -142,7 +142,7 @@ body.app-page {
     display: block;
     padding: 0 12px;
     margin-bottom: 4px;
-    font-size: 0.75rem;
+    font-size: 0.83rem;
     font-weight: 700;
     color: var(--ink);
 }
@@ -155,20 +155,20 @@ button.sidebar-section-label {
 .sidebar-nav {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 4px;
 }
 
 .sidebar-item {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 7px 12px;
+    padding: 9px 12px;
     border-radius: var(--radius-sm);
     border: none;
     background: transparent;
     color: var(--ink-secondary);
-    font-size: 0.9rem;
-    font-weight: 500;
+    font-size: 0.82rem;
+    font-weight: 300;
     font-family: var(--font-body);
     cursor: pointer;
     transition: background 0.15s ease, color 0.15s ease;
@@ -396,6 +396,15 @@ button.sidebar-section-label {
     width: 90px;
 }
 
+.add-task-recurrence {
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.add-task-recurrence-interval {
+    width: 64px;
+}
+
 /* ===== Status Message ===== */
 .status-message {
     min-height: 0;
@@ -580,6 +589,18 @@ button.sidebar-section-label {
 
 .todo-meta-chip.todo-duration {
     color: var(--ink-tertiary);
+}
+
+.todo-meta-chip.chip-recurrence {
+    display: inline-flex;
+    align-items: center;
+    color: var(--accent);
+    background: rgba(0, 122, 255, 0.08);
+    padding: 2px 5px;
+}
+
+.chip-recurrence svg {
+    display: block;
 }
 
 /* ===== Task Actions / Context Menu ===== */
@@ -866,6 +887,24 @@ button.sidebar-section-label {
     color: var(--ink-tertiary);
 }
 
+/* Recurrence modal field: always-visible inline inputs */
+.modal-recurrence-body {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.modal-recurrence-inputs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.modal-recurrence-interval {
+    width: 64px;
+}
+
 /* Field body: flex container for label + input */
 .modal-field-body {
     position: relative;
@@ -945,16 +984,15 @@ input.modal-field-input {
     background: transparent;
     padding: 0 12px;
     margin-bottom: 4px;
-    font-size: 0.75rem;
+    font-size: 0.83rem;
     font-weight: 700;
     color: var(--ink);
     cursor: pointer;
     font-family: var(--font-body);
-    transition: color 0.15s ease;
 }
 
 .sidebar-section-toggle:hover {
-    color: var(--ink-secondary);
+    color: var(--ink);
 }
 
 .collapse-chevron {
@@ -970,6 +1008,203 @@ input.modal-field-input {
 
 .sidebar-nav.collapsed {
     display: none;
+}
+
+.sidebar-logout-form {
+    margin-top: auto;
+    padding: 8px 12px 4px;
+}
+
+.sidebar-logout-btn {
+    border: none;
+    background: transparent;
+    color: #ff3b30;
+    font-size: 0.82rem;
+    font-weight: 300;
+    font-family: var(--font-body);
+    cursor: pointer;
+    padding: 6px 0;
+    text-align: left;
+}
+
+.sidebar-logout-btn:hover {
+    opacity: 0.75;
+}
+
+/* ===== Custom Date Picker ===== */
+.date-picker {
+    position: fixed;
+    z-index: 9999;
+    width: 280px;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+    user-select: none;
+}
+
+.dp-manual-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.dp-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: var(--ink-tertiary);
+}
+
+.dp-text-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    color: var(--ink);
+    background: transparent;
+}
+
+.dp-text-input::placeholder {
+    color: var(--ink-tertiary);
+}
+
+.dp-quick {
+    border-bottom: 1px solid var(--border-light);
+    padding: 4px 0;
+}
+
+.dp-quick-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 14px;
+    border: none;
+    background: transparent;
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    color: var(--ink);
+    cursor: pointer;
+    text-align: left;
+}
+
+.dp-quick-btn:hover {
+    background: var(--hover-bg);
+}
+
+.dp-quick-btn .dp-icon {
+    color: var(--ink-secondary);
+}
+
+.dp-cal {
+    padding: 10px 12px 12px;
+}
+
+.dp-cal-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.dp-month-label {
+    flex: 1;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.dp-nav-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 1.1rem;
+    color: var(--ink-secondary);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.dp-nav-btn:hover {
+    background: var(--hover-bg);
+    color: var(--ink);
+}
+
+.dp-today-nav {
+    font-size: 0.95rem;
+}
+
+.dp-dow-row {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    margin-bottom: 4px;
+}
+
+.dp-dow {
+    text-align: center;
+    font-size: 0.72rem;
+    color: var(--ink-tertiary);
+    padding: 2px 0;
+}
+
+.dp-day-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+}
+
+.dp-day {
+    aspect-ratio: 1;
+    border: none;
+    background: transparent;
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    color: var(--ink);
+    cursor: pointer;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    width: 100%;
+}
+
+.dp-day:hover:not(:disabled) {
+    background: var(--hover-bg);
+}
+
+.dp-day.dp-today {
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.dp-day.dp-selected {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+}
+
+.dp-day.dp-selected.dp-today {
+    background: var(--accent);
+    color: #fff;
+}
+
+.dp-day.dp-day-other {
+    color: var(--ink-tertiary);
+    cursor: default;
+}
+
+/* Date display in modal fields */
+.modal-date-btn {
+    cursor: pointer;
 }
 
 /* ===== Footer ===== */
