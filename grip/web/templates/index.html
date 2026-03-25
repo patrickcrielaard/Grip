@@ -4,6 +4,7 @@
 {% block body_class %}app-page{% endblock %}
 
 {% block content %}
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
 <div class="app-layout">
     <aside class="sidebar">
         <div class="sidebar-profile">
@@ -116,6 +117,13 @@
     <main class="main-content">
         <div class="content-header">
             <div class="content-header-left">
+                <button class="mobile-menu-btn" id="mobileMenuBtn" type="button" aria-label="Menu openen">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="6" x2="21" y2="6"/>
+                        <line x1="3" y1="12" x2="21" y2="12"/>
+                        <line x1="3" y1="18" x2="21" y2="18"/>
+                    </svg>
+                </button>
                 <h1 class="content-title" id="activeListLabel">Inbox</h1>
                 <span class="content-task-count" id="itemCount">0 tasks</span>
             </div>

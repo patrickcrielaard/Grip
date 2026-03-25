@@ -54,6 +54,10 @@ class TodoApp {
         this.modalRecurrenceUnit = document.getElementById("modal-recurrence-unit");
         this.modalRecurrenceInterval = document.getElementById("modal-recurrence-interval");
         this.modalRecurrenceEnd = document.getElementById("modal-recurrence-end");
+        // Mobile sidebar
+        this.sidebar = document.querySelector(".sidebar");
+        this.sidebarOverlay = document.getElementById("sidebarOverlay");
+        this.mobileMenuBtn = document.getElementById("mobileMenuBtn");
         // Date picker
         this.datePicker = document.getElementById("datePicker");
         this.dpTextInput = document.getElementById("dpTextInput");
@@ -101,13 +105,16 @@ class TodoApp {
                         value: item.dataset.areaFilter,
                     });
                 }
+                if (window.innerWidth <= 768) this.closeMobileSidebar();
             });
         });
 
         // Clear completed
-        this.clearCompletedButton.addEventListener("click", () =>
-            this.clearCompleted()
-        );
+        if (this.clearCompletedButton) {
+            this.clearCompletedButton.addEventListener("click", () =>
+                this.clearCompleted()
+            );
+        }
 
         // Task list event delegation
         this.todoList.addEventListener("change", (event) => {
@@ -375,6 +382,15 @@ class TodoApp {
                 nav.classList.toggle("collapsed", expanded);
             });
         });
+
+        // Mobile sidebar toggle & swipe
+        if (this.mobileMenuBtn) {
+            this.mobileMenuBtn.addEventListener("click", () => this.openMobileSidebar());
+        }
+        if (this.sidebarOverlay) {
+            this.sidebarOverlay.addEventListener("click", () => this.closeMobileSidebar());
+        }
+        this._initSwipeGesture();
     }
 
     // --- Add task toggle ---
@@ -390,6 +406,44 @@ class TodoApp {
     hideAddTask() {
         this.addTaskVisible = false;
         this.addTaskRow.hidden = true;
+    }
+
+    // --- Mobile sidebar ---
+
+    openMobileSidebar() {
+        this.sidebar.classList.add("mobile-open");
+        this.sidebarOverlay.classList.add("visible");
+        document.body.style.overflow = "hidden";
+    }
+
+    closeMobileSidebar() {
+        this.sidebar.classList.remove("mobile-open");
+        this.sidebarOverlay.classList.remove("visible");
+        document.body.style.overflow = "";
+    }
+
+    _initSwipeGesture() {
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        document.addEventListener("touchstart", (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        }, { passive: true });
+
+        document.addEventListener("touchend", (e) => {
+            const dx = e.changedTouches[0].clientX - touchStartX;
+            const dy = Math.abs(e.changedTouches[0].clientY - touchStartY);
+
+            // Swipe right from left edge to open
+            if (touchStartX < 30 && dx > 50 && dy < 100) {
+                this.openMobileSidebar();
+            }
+            // Swipe left to close
+            if (this.sidebar.classList.contains("mobile-open") && dx < -50 && dy < 100) {
+                this.closeMobileSidebar();
+            }
+        }, { passive: true });
     }
 
     // --- View management ---
