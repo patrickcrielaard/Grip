@@ -4,46 +4,30 @@
 {% block body_class %}auth-page{% endblock %}
 
 {% block content %}
-<div class="page auth-page">
-    <div class="auth-shell">
-        <section class="auth-card">
-            <div class="auth-brand">
-                <span class="brand-mark">Grip</span>
-                <span class="brand-tag">Taakhelderheid, ingebouwd.</span>
-            </div>
-            <h1>Welkom terug</h1>
-            <p class="auth-subtitle">Log in om je takenlijst te bekijken en verder te gaan.</p>
-
-            {% if error_message %}
-            <div class="alert">
-                {{ error_message }}
-            </div>
-            {% endif %}
-
-            <form class="auth-form" action="/login" method="post">
-                <label class="field">
-                    <span>Gebruikersnaam</span>
-                    <input name="username" type="text" autocomplete="username" required>
-                </label>
-                <label class="field">
-                    <span>Wachtwoord</span>
-                    <input name="password" type="password" autocomplete="current-password" required>
-                </label>
-                <button class="primary-btn" type="submit">Inloggen</button>
-            </form>
-        </section>
-
-        <section class="auth-aside">
-            <div class="aside-card">
-                <h2>Jouw dag, overzichtelijk</h2>
-                <p>Grip houdt je taken licht, overzichtelijk en klaar voor actie. Log in om verder te gaan waar je gebleven was.</p>
-                <div class="pill-row">
-                    <span class="pill">Snel vastleggen</span>
-                    <span class="pill">Rustige focus</span>
-                    <span class="pill">Kleine overwinningen</span>
-                </div>
-            </div>
-        </section>
+<section class="auth-card">
+    <div class="auth-brand">
+        <span class="brand-mark">Grip</span>
+        <span class="brand-tag">Taakhelderheid, ingebouwd.</span>
     </div>
-</div>
+    <h1>Welkom terug</h1>
+    <p class="auth-subtitle">Log in om je takenlijst te bekijken en verder te gaan.</p>
+
+    {% if error_message %}
+    <div class="alert">
+        {{ error_message }}
+    </div>
+    {% endif %}
+
+    <form class="auth-form" action="/login" method="post">
+        <label class="field">
+            <span>Gebruikersnaam</span>
+            <input name="username" type="text" autocomplete="username" required>
+        </label>
+        <label class="field">
+            <span>Wachtwoord</span>
+            <input name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <button class="primary-btn" type="submit">Inloggen</button>
+    </form>
+</section>
 {% endblock %}
