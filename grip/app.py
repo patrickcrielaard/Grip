@@ -23,7 +23,7 @@ logger = logging.getLogger("grip")
 BASE_DIR = Path(__file__).parent
 
 # ── MCP HTTP setup ──────────────────────────────────────────────────────────
-from grip.mcp_server import mcp as _grip_mcp, oauth_provider  # noqa: E402
+from grip.mcp_server import _mcp_url, mcp as _grip_mcp, oauth_provider  # noqa: E402
 
 _mcp_sub_app = _grip_mcp.streamable_http_app()  # initialises session manager lazily
 
@@ -54,6 +54,18 @@ app.mount("/mcp", _mcp_sub_app)
 async def health_check() -> dict[str, str]:
     """Health check endpoint."""
     return {"status": "ok"}
+
+
+# FastMCP creates /.well-known/oauth-protected-resource/mcp inside the /mcp sub-app,
+# but RFC 9728 requires it at the root domain. Claude Desktop requests it here.
+@app.get("/.well-known/oauth-protected-resource/mcp")
+async def mcp_protected_resource_metadata() -> dict[str, Any]:
+    """OAuth 2.0 Protected Resource Metadata (RFC 9728) for the MCP endpoint."""
+    return {
+        "resource": _mcp_url,
+        "authorization_servers": [_mcp_url],
+        "scopes_supported": ["todos"],
+    }
 
 
 @app.get("/mcp-login", response_class=HTMLResponse)
