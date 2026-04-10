@@ -2,13 +2,24 @@
 
 from __future__ import annotations
 
-import contextvars
 import os
+import secrets
+import time
 from typing import Any
 
 from fastapi import HTTPException
+from mcp.server.auth.middleware.auth_context import get_access_token
+from mcp.server.auth.provider import (
+    AccessToken,
+    AuthorizationCode,
+    AuthorizationParams,
+    RefreshToken,
+    TokenError,
+)
+from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
+from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 
 from grip.routes.todos import (
     DEFAULT_LIST,
@@ -25,31 +36,176 @@ from grip.routes.todos import (
 )
 from grip.supabase_service import supabase_service
 
-# Per-request user ID (set by HTTP auth middleware; falls back to env var for stdio)
-_user_id_ctx: contextvars.ContextVar[str] = contextvars.ContextVar("grip_user_id")
+
+# ── User ID resolution ──────────────────────────────────────────────────────
 
 
 def _user_id() -> str:
-    """Return the current user ID from request context (HTTP) or env var (stdio)."""
-    try:
-        return _user_id_ctx.get()
-    except LookupError:
-        env_id = os.environ.get("GRIP_MCP_USER_ID")
-        if env_id:
-            return env_id
-        raise RuntimeError(
-            "No user ID in context. Set GRIP_MCP_USER_ID for stdio mode."
-        )
+    """Return the current user ID.
+
+    HTTP mode: reads from FastMCP OAuth auth context (client_id stores user UUID).
+    stdio mode: reads from GRIP_MCP_USER_ID env var.
+    """
+    token = get_access_token()
+    if token:
+        return token.client_id  # load_access_token stores user UUID here
+    env_id = os.environ.get("GRIP_MCP_USER_ID")
+    if env_id:
+        return env_id
+    raise RuntimeError("No user ID in context. Set GRIP_MCP_USER_ID for stdio mode.")
 
 
-# streamable_http_path="/" — FastAPI strips the /mcp mount prefix, so the sub-app
-# must route at "/" rather than the default "/mcp".
-# transport_security — disable localhost-only DNS rebinding protection for Railway HTTPS.
+# ── OAuth provider ──────────────────────────────────────────────────────────
+
+
+class GripOAuthProvider:
+    """OAuth 2.0 authorization server backed by the Grip user database.
+
+    Uses in-memory storage for clients and auth codes (both are short-lived).
+    Access tokens are the per-user mcp_token stored in Supabase.
+    """
+
+    def __init__(self, app_base_url: str) -> None:
+        self._app_base_url = app_base_url.rstrip("/")
+        self._clients: dict[str, OAuthClientInformationFull] = {}
+        # code -> (AuthorizationCode, user_id)
+        self._auth_codes: dict[str, tuple[AuthorizationCode, str]] = {}
+        # nonce -> pending OAuth params (before user logs in)
+        self._pending: dict[str, dict[str, Any]] = {}
+
+    async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
+        return self._clients.get(client_id)
+
+    async def register_client(self, client_info: OAuthClientInformationFull) -> None:
+        if client_info.client_id:
+            self._clients[client_info.client_id] = client_info
+
+    async def authorize(
+        self, client: OAuthClientInformationFull, params: AuthorizationParams
+    ) -> str:
+        """Redirect to the Grip login page using a one-time nonce to pass OAuth params."""
+        nonce = secrets.token_urlsafe(32)
+        self._pending[nonce] = {
+            "client_id": client.client_id,
+            "redirect_uri": str(params.redirect_uri),
+            "redirect_uri_provided_explicitly": params.redirect_uri_provided_explicitly,
+            "state": params.state,
+            "code_challenge": params.code_challenge,
+            "scopes": params.scopes or [],
+            "resource": params.resource,
+            "expires_at": time.time() + 600,  # 10-minute window
+        }
+        return f"{self._app_base_url}/mcp-login?nonce={nonce}"
+
+    async def load_authorization_code(
+        self, client: OAuthClientInformationFull, authorization_code: str
+    ) -> AuthorizationCode | None:
+        entry = self._auth_codes.get(authorization_code)
+        if entry and entry[0].expires_at > time.time():
+            return entry[0]
+        return None
+
+    async def exchange_authorization_code(
+        self, client: OAuthClientInformationFull, authorization_code: AuthorizationCode
+    ) -> OAuthToken:
+        entry = self._auth_codes.pop(authorization_code.code, None)
+        if not entry:
+            raise TokenError(error="invalid_grant", error_description="Code not found")
+        _, user_id = entry
+        mcp_token = supabase_service.get_mcp_token(user_id)
+        if not mcp_token:
+            raise TokenError(
+                error="invalid_grant", error_description="User token not found"
+            )
+        return OAuthToken(access_token=mcp_token)
+
+    async def load_refresh_token(
+        self, client: OAuthClientInformationFull, refresh_token: str
+    ) -> RefreshToken | None:
+        return None  # no refresh tokens issued
+
+    async def exchange_refresh_token(
+        self,
+        client: OAuthClientInformationFull,
+        refresh_token: RefreshToken,
+        scopes: list[str],
+    ) -> OAuthToken:
+        raise TokenError(error="unsupported_grant_type")
+
+    async def load_access_token(self, token: str) -> AccessToken | None:
+        user = supabase_service.get_user_by_mcp_token(token)
+        if not user:
+            return None
+        # Store user UUID in client_id so _user_id() can read it without a second DB lookup
+        return AccessToken(token=token, client_id=user["id"], scopes=["todos"])
+
+    async def revoke_token(self, token: AccessToken | RefreshToken) -> None:
+        pass  # mcp_tokens are permanent; revocation could be added later
+
+    # ── helpers for the login page handler ──
+
+    def get_pending(self, nonce: str) -> dict[str, Any] | None:
+        """Peek at a pending auth session; returns None if expired or unknown."""
+        p = self._pending.get(nonce)
+        if p is None:
+            return None
+        if p["expires_at"] < time.time():
+            self._pending.pop(nonce, None)
+            return None
+        return p
+
+    def pop_pending(self, nonce: str) -> dict[str, Any] | None:
+        """Pop and return a pending auth session; returns None if expired or unknown."""
+        p = self._pending.pop(nonce, None)
+        if p and p["expires_at"] < time.time():
+            return None
+        return p
+
+    def store_auth_code(
+        self, code: str, auth_code: AuthorizationCode, user_id: str
+    ) -> None:
+        self._auth_codes[code] = (auth_code, user_id)
+
+
+# ── App base URL ─────────────────────────────────────────────────────────────
+
+
+def _get_app_base_url() -> str:
+    """Derive the public app URL from Railway env vars or APP_BASE_URL."""
+    domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+    if domain:
+        return f"https://{domain}"
+    return os.environ.get("APP_BASE_URL", "http://localhost:8000")
+
+
+_app_base_url = _get_app_base_url()
+_mcp_url = f"{_app_base_url}/mcp"
+
+oauth_provider = GripOAuthProvider(app_base_url=_app_base_url)
+
+# streamable_http_path="/" — FastAPI strips the /mcp mount prefix before handing
+# off to the sub-app, so the sub-app must route at "/" not "/mcp".
+# transport_security disabled — FastMCP auto-enables localhost-only DNS rebinding
+# protection by default; that blocks Railway/public HTTPS requests.
 mcp = FastMCP(
     "Grip",
     streamable_http_path="/",
     transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+    auth_server_provider=oauth_provider,
+    auth=AuthSettings(
+        issuer_url=_mcp_url,  # type: ignore[arg-type]  # Pydantic coerces str -> AnyHttpUrl
+        resource_server_url=_mcp_url,  # type: ignore[arg-type]
+        client_registration_options=ClientRegistrationOptions(
+            enabled=True,
+            valid_scopes=["todos"],
+            default_scopes=["todos"],
+        ),
+        required_scopes=["todos"],
+    ),
 )
+
+
+# ── Helper ───────────────────────────────────────────────────────────────────
 
 
 def _v(fn: Any, *args: Any, **kwargs: Any) -> Any:
@@ -58,6 +214,9 @@ def _v(fn: Any, *args: Any, **kwargs: Any) -> Any:
         return fn(*args, **kwargs)
     except HTTPException as e:
         raise ValueError(e.detail) from e
+
+
+# ── MCP tools ────────────────────────────────────────────────────────────────
 
 
 @mcp.tool()

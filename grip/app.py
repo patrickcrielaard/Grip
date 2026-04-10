@@ -1,14 +1,17 @@
 """FastAPI application setup for Grip."""
 
+import secrets
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 import logging
-from typing import Any
+from typing import Any, AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.responses import Response as StarletteResponse
-from starlette.types import ASGIApp, Receive, Scope, Send
+from fastapi.templating import Jinja2Templates
+from mcp.server.auth.provider import AuthorizationCode
 
 from grip.routes.authentication import router as auth_router
 from grip.routes.todos import router as todo_router
@@ -20,44 +23,15 @@ logger = logging.getLogger("grip")
 BASE_DIR = Path(__file__).parent
 
 # ── MCP HTTP setup ──────────────────────────────────────────────────────────
-from grip.mcp_server import mcp as _grip_mcp, _user_id_ctx  # noqa: E402
+from grip.mcp_server import mcp as _grip_mcp, oauth_provider  # noqa: E402
 
 _mcp_sub_app = _grip_mcp.streamable_http_app()  # initialises session manager lazily
 
-
-class _BearerAuthMiddleware:
-    """ASGI wrapper: verify bearer token → inject user ID into ContextVar."""
-
-    def __init__(self, app: ASGIApp) -> None:
-        self.app = app
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] in ("http", "websocket"):
-            headers = dict(scope.get("headers", []))
-            auth = headers.get(b"authorization", b"").decode()
-            if not auth.startswith("Bearer "):
-                await StarletteResponse("Unauthorized", status_code=401)(
-                    scope, receive, send
-                )
-                return
-            token = auth[7:]
-            user = supabase_service.get_user_by_mcp_token(token)
-            if not user:
-                await StarletteResponse("Unauthorized", status_code=401)(
-                    scope, receive, send
-                )
-                return
-            ctx_token = _user_id_ctx.set(user["id"])
-            try:
-                await self.app(scope, receive, send)
-            finally:
-                _user_id_ctx.reset(ctx_token)
-            return
-        await self.app(scope, receive, send)
+_templates = Jinja2Templates(directory=str(BASE_DIR / "web" / "templates"))
 
 
 @asynccontextmanager
-async def _lifespan(app: FastAPI) -> Any:
+async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     async with _grip_mcp.session_manager.run():
         yield
 
@@ -73,10 +47,75 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 app.include_router(auth_router)
 app.include_router(todo_router)
 
-app.mount("/mcp", _BearerAuthMiddleware(_mcp_sub_app))
+app.mount("/mcp", _mcp_sub_app)
 
 
 @app.get("/health")
 async def health_check() -> dict[str, str]:
     """Health check endpoint."""
     return {"status": "ok"}
+
+
+@app.get("/mcp-login", response_class=HTMLResponse)
+async def mcp_login_get(request: Request, nonce: str) -> HTMLResponse:
+    """Show OAuth login form for MCP clients (e.g. Claude Desktop)."""
+    pending = oauth_provider.get_pending(nonce)
+    if not pending:
+        return HTMLResponse(
+            "Invalid or expired authorization request.", status_code=400
+        )
+    return _templates.TemplateResponse(
+        "mcp_login.html",
+        {"request": request, "nonce": nonce, "error_message": None},
+    )
+
+
+@app.post("/mcp-login")
+async def mcp_login_post(
+    request: Request,
+    nonce: str = Form(...),
+    username: str = Form(...),
+    password: str = Form(...),
+) -> Any:
+    """Process OAuth login form and redirect back to the MCP client."""
+    pending = oauth_provider.get_pending(nonce)
+    if not pending:
+        return HTMLResponse(
+            "Invalid or expired authorization request.", status_code=400
+        )
+
+    user = supabase_service.verify_user(username, password)
+    if not user:
+        return _templates.TemplateResponse(
+            "mcp_login.html",
+            {
+                "request": request,
+                "nonce": nonce,
+                "error_message": "Invalid username or password.",
+            },
+            status_code=401,
+        )
+
+    # Consume the pending session and issue an authorization code
+    oauth_provider.pop_pending(nonce)
+    code = secrets.token_urlsafe(32)
+    auth_code = AuthorizationCode(
+        code=code,
+        scopes=pending["scopes"],
+        expires_at=time.time() + 600,
+        client_id=pending["client_id"],
+        code_challenge=pending["code_challenge"],
+        redirect_uri=pending["redirect_uri"],
+        redirect_uri_provided_explicitly=pending["redirect_uri_provided_explicitly"],
+        resource=pending.get("resource"),
+    )
+    oauth_provider.store_auth_code(code, auth_code, user["id"])
+
+    # Redirect back to the MCP client (e.g. Claude Desktop callback)
+    redirect_uri: str = pending["redirect_uri"]
+    sep = "&" if "?" in redirect_uri else "?"
+    redirect_url = f"{redirect_uri}{sep}code={code}"
+    if pending.get("state"):
+        redirect_url += f"&state={pending['state']}"
+
+    return RedirectResponse(redirect_url, status_code=302)

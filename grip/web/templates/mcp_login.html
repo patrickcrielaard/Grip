@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Grip · Connect Claude{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+
+{% block content %}
+<section class="auth-card">
+    <div class="auth-brand">
+        <span class="brand-mark">Grip</span>
+        <span class="brand-tag">Taakhelderheid, ingebouwd.</span>
+    </div>
+    <h1>Connect Claude</h1>
+    <p class="auth-subtitle">Log in to authorize Claude to access your todos.</p>
+
+    {% if error_message %}
+    <div class="alert">
+        {{ error_message }}
+    </div>
+    {% endif %}
+
+    <form class="auth-form" action="/mcp-login" method="post">
+        <input type="hidden" name="nonce" value="{{ nonce }}">
+        <label class="field">
+            <span>Gebruikersnaam</span>
+            <input name="username" type="text" autocomplete="username" required>
+        </label>
+        <label class="field">
+            <span>Wachtwoord</span>
+            <input name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <button class="primary-btn" type="submit">Authorize</button>
+    </form>
+</section>
+{% endblock %}
