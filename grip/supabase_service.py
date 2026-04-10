@@ -58,6 +58,40 @@ class SupabaseService:
             self.logger.exception("get_user_by_username failed: %s", exc)
             return None
 
+    def get_mcp_token(self, user_id: str) -> Optional[str]:
+        """Return the mcp_token for a user, or None."""
+        try:
+            result = (
+                self.supabase.table("app_users")
+                .select("mcp_token")
+                .eq("id", user_id)
+                .execute()
+            )
+            if result.data and isinstance(result.data, list):
+                row = cast(Dict[str, Any], result.data[0])
+                token = row.get("mcp_token")
+                return str(token) if token else None
+            return None
+        except Exception as exc:
+            self.logger.exception("get_mcp_token failed: %s", exc)
+            return None
+
+    def get_user_by_mcp_token(self, token: str) -> Optional[Dict[str, Any]]:
+        """Return user record matching mcp_token, or None."""
+        try:
+            result = (
+                self.supabase.table("app_users")
+                .select("id, username")
+                .eq("mcp_token", token)
+                .execute()
+            )
+            if result.data:
+                return cast(Dict[str, Any], result.data[0])
+            return None
+        except Exception as exc:
+            self.logger.exception("get_user_by_mcp_token failed: %s", exc)
+            return None
+
     def verify_user(self, username: str, password: str) -> Optional[Dict[str, Any]]:
         """Validate username/password credentials."""
         user = self.get_user_by_username(username)
@@ -236,3 +270,6 @@ class SupabaseService:
         except Exception as exc:
             self.logger.exception("clear_completed failed: %s", exc)
             return 0
+
+
+supabase_service = SupabaseService()

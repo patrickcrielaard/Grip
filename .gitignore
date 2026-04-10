@@ -27,6 +27,9 @@ Thumbs.db
 dist/
 build/
 
+# Local Claude Code MCP config (stdio, not for deployment)
+.mcp.json
+
 
 
 

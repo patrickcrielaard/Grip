@@ -7,14 +7,12 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from grip.configuration import settings
-from grip.supabase_service import SupabaseService
+from grip.supabase_service import supabase_service
 
 
 router = APIRouter()
 
 templates = Jinja2Templates(directory="grip/web/templates")
-
-supabase_service = SupabaseService()
 
 COOKIE_USER_ID = "grip_user_id"
 COOKIE_USERNAME = "grip_username"

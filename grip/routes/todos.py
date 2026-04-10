@@ -14,14 +14,12 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field
 
 from grip.routes.authentication import COOKIE_USER_ID, COOKIE_USERNAME
-from grip.supabase_service import SupabaseService
+from grip.supabase_service import supabase_service
 
 
 router = APIRouter()
 
 templates = Jinja2Templates(directory="grip/web/templates")
-
-supabase_service = SupabaseService()
 logger = logging.getLogger("grip.todos")
 
 ALLOWED_LISTS = {"inbox", "today"}
@@ -369,6 +367,16 @@ async def update_todo(
     if spawned_todo:
         result["spawned_todo"] = spawned_todo
     return result
+
+
+@router.get("/api/mcp-token")
+async def get_mcp_token(request: Request) -> Dict[str, Any]:
+    """Return the MCP bearer token for the current user."""
+    user = _require_user(request)
+    token = supabase_service.get_mcp_token(user["id"])
+    if not token:
+        raise HTTPException(status_code=500, detail="MCP token not found")
+    return {"token": token}
 
 
 @router.delete("/api/todos/{todo_id}")
