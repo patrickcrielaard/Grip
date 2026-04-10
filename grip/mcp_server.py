@@ -16,10 +16,18 @@ from mcp.server.auth.provider import (
     RefreshToken,
     TokenError,
 )
-from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
+from mcp.server.auth.routes import build_metadata
+from mcp.server.auth.settings import (
+    AuthSettings,
+    ClientRegistrationOptions,
+    RevocationOptions,
+)
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
+from pydantic import AnyHttpUrl
+from starlette.requests import Request as StarletteRequest
+from starlette.responses import JSONResponse as StarletteJSONResponse
 
 from grip.routes.todos import (
     DEFAULT_LIST,
@@ -203,6 +211,30 @@ mcp = FastMCP(
         required_scopes=["todos"],
     ),
 )
+
+# Build metadata once; exported so app.py can serve it at the RFC 8414 canonical
+# discovery paths (/.well-known/oauth-authorization-server/mcp etc.) that Claude
+# Desktop looks for at the root domain — FastMCP only registers these inside the
+# sub-app, which Starlette mounts under /mcp, so they end up at the wrong URLs.
+_oauth_metadata = build_metadata(
+    issuer_url=AnyHttpUrl(_mcp_url),
+    service_documentation_url=None,
+    client_registration_options=ClientRegistrationOptions(
+        enabled=True,
+        valid_scopes=["todos"],
+        default_scopes=["todos"],
+    ),
+    revocation_options=RevocationOptions(),
+)
+
+
+# Claude Desktop also probes /mcp/.well-known/openid-configuration (OIDC discovery).
+# This custom route lives inside the sub-app, so it becomes reachable at that path.
+@mcp.custom_route("/.well-known/openid-configuration", methods=["GET"])  # type: ignore[untyped-decorator]
+async def _oidc_discovery(request: StarletteRequest) -> StarletteJSONResponse:
+    return StarletteJSONResponse(
+        _oauth_metadata.model_dump(mode="json", exclude_none=True)
+    )
 
 
 # ── Helper ───────────────────────────────────────────────────────────────────

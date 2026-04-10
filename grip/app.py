@@ -23,7 +23,7 @@ logger = logging.getLogger("grip")
 BASE_DIR = Path(__file__).parent
 
 # ── MCP HTTP setup ──────────────────────────────────────────────────────────
-from grip.mcp_server import _mcp_url, mcp as _grip_mcp, oauth_provider  # noqa: E402
+from grip.mcp_server import _mcp_url, _oauth_metadata, mcp as _grip_mcp, oauth_provider  # noqa: E402
 
 _mcp_sub_app = _grip_mcp.streamable_http_app()  # initialises session manager lazily
 
@@ -56,16 +56,37 @@ async def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
-# FastMCP creates /.well-known/oauth-protected-resource/mcp inside the /mcp sub-app,
-# but RFC 9728 requires it at the root domain. Claude Desktop requests it here.
+_as_metadata_dict: dict[str, Any] = _oauth_metadata.model_dump(
+    mode="json", exclude_none=True
+)
+
+
+# The OAuth discovery endpoints below must live at the root domain, not under /mcp.
+# FastMCP registers them inside the sub-app, but RFC 8414 and RFC 9728 require them
+# at /.well-known/…/<path> where <path> is the issuer's path component ("/mcp").
+# Claude Desktop tries all three paths below before giving up.
+
+
 @app.get("/.well-known/oauth-protected-resource/mcp")
 async def mcp_protected_resource_metadata() -> dict[str, Any]:
-    """OAuth 2.0 Protected Resource Metadata (RFC 9728) for the MCP endpoint."""
+    """RFC 9728 Protected Resource Metadata — tells clients the AS is at /mcp."""
     return {
         "resource": _mcp_url,
         "authorization_servers": [_mcp_url],
         "scopes_supported": ["todos"],
     }
+
+
+@app.get("/.well-known/oauth-authorization-server/mcp")
+async def mcp_as_metadata() -> dict[str, Any]:
+    """RFC 8414 AS Metadata at the canonical root path for issuer https://…/mcp."""
+    return _as_metadata_dict
+
+
+@app.get("/.well-known/openid-configuration/mcp")
+async def mcp_oidc_discovery() -> dict[str, Any]:
+    """OIDC-style discovery fallback at the canonical root path."""
+    return _as_metadata_dict
 
 
 @app.get("/mcp-login", response_class=HTMLResponse)
