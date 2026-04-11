@@ -1156,6 +1156,11 @@ class TodoApp {
                         (t) => !t.completed && (t.list === "today" || t.planned_date === today)
                     );
                 }
+                if (view.value === "inbox") {
+                    return this.todos.filter(
+                        (todo) => todo.list === "inbox" && !todo.completed && !todo.area && !todo.project_id
+                    );
+                }
                 return this.todos.filter(
                     (todo) => todo.list === view.value && !todo.completed
                 );
@@ -1244,9 +1249,16 @@ class TodoApp {
                 const plannedDateMarkup = todo.planned_date
                     ? `<span class="todo-meta-chip todo-planned-date">Gepland: ${this.escapeHtml(todo.planned_date)}</span>`
                     : "";
-                const deadlineMarkup = todo.deadline
-                    ? `<span class="todo-meta-chip todo-deadline">Deadline: ${this.escapeHtml(todo.deadline)}</span>`
-                    : "";
+                let deadlineMarkup = "";
+                if (todo.deadline) {
+                    const todayDate = this.getToday();
+                    if (todo.deadline < todayDate) {
+                        const daysDiff = Math.round((Date.parse(todayDate) - Date.parse(todo.deadline)) / 86400000);
+                        deadlineMarkup = `<span class="todo-meta-chip todo-deadline">${daysDiff}d geleden</span>`;
+                    } else {
+                        deadlineMarkup = `<span class="todo-meta-chip todo-deadline">${this.escapeHtml(todo.deadline)}</span>`;
+                    }
+                }
                 const durationMarkup = todo.duration
                     ? `<span class="todo-meta-chip todo-duration">${this.escapeHtml(String(todo.duration))}m</span>`
                     : "";
@@ -1333,6 +1345,8 @@ class TodoApp {
                     ? activeTodos.filter(
                           (t) => t.list === "today" || t.planned_date === todayStr
                       ).length
+                    : list === "inbox"
+                    ? activeTodos.filter((t) => t.list === "inbox" && !t.area && !t.project_id).length
                     : activeTodos.filter((t) => t.list === list).length;
             el.textContent = count > 0 ? String(count) : "";
         });

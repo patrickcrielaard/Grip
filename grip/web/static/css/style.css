@@ -444,7 +444,6 @@ button.sidebar-section-label {
     align-items: flex-start;
     gap: 12px;
     padding: 12px 8px;
-    border-bottom: 1px solid var(--border-light);
     animation: floatIn 0.25s ease forwards;
     opacity: 0;
     transition: background 0.15s ease;
@@ -518,7 +517,7 @@ button.sidebar-section-label {
 }
 
 .todo-text {
-    font-size: 0.95rem;
+    font-size: 0.875rem;
     color: var(--ink);
     line-height: 1.4;
 }
@@ -535,8 +534,8 @@ button.sidebar-section-label {
 }
 
 .todo-meta-chip {
-    font-size: 0.75rem;
-    color: var(--ink-tertiary);
+    font-size: 0.6875rem;
+    color: var(--ink-secondary);
     font-weight: 500;
 }
 
@@ -579,7 +578,7 @@ button.sidebar-section-label {
 }
 
 .todo-meta-chip.todo-planned-date {
-    color: var(--accent);
+    color: var(--ink-secondary);
 }
 
 .todo-meta-chip.todo-start-date {
@@ -593,8 +592,8 @@ button.sidebar-section-label {
 .todo-meta-chip.chip-recurrence {
     display: inline-flex;
     align-items: center;
-    color: var(--accent);
-    background: rgba(0, 122, 255, 0.08);
+    color: var(--ink-secondary);
+    background: var(--hover-bg);
     padding: 2px 5px;
 }
 

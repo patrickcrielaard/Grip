@@ -88,28 +88,6 @@
         </div>
 
         <div class="sidebar-section">
-            <button class="sidebar-section-label sidebar-section-toggle" type="button"
-                    aria-expanded="true" data-toggle-section="areaNav">
-                Gebieden
-                <svg class="collapse-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"/>
-                </svg>
-            </button>
-            <nav class="sidebar-nav" id="areaNav" aria-label="Areas">
-                <button class="sidebar-item" type="button" data-area-filter="personal" aria-pressed="false">
-                    <span class="sidebar-dot dot-personal"></span>
-                    <span class="sidebar-label">Persoonlijk</span>
-                    <span class="sidebar-count" data-count-area="personal"></span>
-                </button>
-                <button class="sidebar-item" type="button" data-area-filter="work" aria-pressed="false">
-                    <span class="sidebar-dot dot-work"></span>
-                    <span class="sidebar-label">Werk</span>
-                    <span class="sidebar-count" data-count-area="work"></span>
-                </button>
-            </nav>
-        </div>
-
-        <div class="sidebar-section">
             <div class="sidebar-section-header">
                 <button class="sidebar-section-label sidebar-section-toggle" type="button"
                         aria-expanded="true" data-toggle-section="projectNav">
@@ -131,6 +109,28 @@
             <div id="newProjectForm" class="sidebar-add-project-form" hidden>
                 <input type="text" id="newProjectInput" class="sidebar-add-project-input" placeholder="Projectnaam..." maxlength="280" autocomplete="off">
             </div>
+        </div>
+
+        <div class="sidebar-section">
+            <button class="sidebar-section-label sidebar-section-toggle" type="button"
+                    aria-expanded="true" data-toggle-section="areaNav">
+                Gebieden
+                <svg class="collapse-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+            </button>
+            <nav class="sidebar-nav" id="areaNav" aria-label="Areas">
+                <button class="sidebar-item" type="button" data-area-filter="personal" aria-pressed="false">
+                    <span class="sidebar-dot dot-personal"></span>
+                    <span class="sidebar-label">Persoonlijk</span>
+                    <span class="sidebar-count" data-count-area="personal"></span>
+                </button>
+                <button class="sidebar-item" type="button" data-area-filter="work" aria-pressed="false">
+                    <span class="sidebar-dot dot-work"></span>
+                    <span class="sidebar-label">Werk</span>
+                    <span class="sidebar-count" data-count-area="work"></span>
+                </button>
+            </nav>
         </div>
 
         <form class="sidebar-logout-form" action="/logout" method="post">
