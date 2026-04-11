@@ -13,12 +13,10 @@ class Settings:
         self.supabase_url: str = os.getenv(
             "SUPABASE_URL", "https://your-project.supabase.co"
         )
-        self.supabase_anon_key: str = os.getenv("SUPABASE_ANON_KEY", "your-anon-key")
         self.supabase_service_role_key: str = os.getenv(
             "SUPABASE_SERVICE_ROLE_KEY", "your-service-role-key"
         )
 
-        self.app_name: str = os.getenv("APP_NAME", "Grip")
         self.app_env: str = os.getenv("APP_ENV", "development")
 
         self._validate_config()
@@ -33,16 +31,10 @@ class Settings:
         if self.is_production:
             placeholder_values = [
                 "your-project.supabase.co",
-                "your-anon-key",
                 "your-service-role-key",
             ]
             if any(
-                value
-                in [
-                    self.supabase_url,
-                    self.supabase_anon_key,
-                    self.supabase_service_role_key,
-                ]
+                value in [self.supabase_url, self.supabase_service_role_key]
                 for value in placeholder_values
             ):
                 raise ValueError(
@@ -53,8 +45,6 @@ class Settings:
                 "your-project.supabase.co"
             ):
                 print("Warning: SUPABASE_URL not set, using default placeholder")
-            if not self.supabase_anon_key or self.supabase_anon_key == "your-anon-key":
-                print("Warning: SUPABASE_ANON_KEY not set, using default placeholder")
             if (
                 not self.supabase_service_role_key
                 or self.supabase_service_role_key == "your-service-role-key"
@@ -70,10 +60,6 @@ class Settings:
     @property
     def is_production(self) -> bool:
         return self.app_env.lower() == "production"
-
-    @property
-    def is_testing(self) -> bool:
-        return self.app_env.lower() == "testing"
 
 
 settings = Settings()

@@ -109,8 +109,37 @@
             </nav>
         </div>
 
+        <div class="sidebar-section">
+            <div class="sidebar-section-header">
+                <button class="sidebar-section-label sidebar-section-toggle" type="button"
+                        aria-expanded="true" data-toggle-section="projectNav">
+                    Projecten
+                    <svg class="collapse-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </button>
+                <button class="sidebar-section-add-btn" id="addProjectBtn" type="button" title="Nieuw project" aria-label="Nieuw project">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                </button>
+            </div>
+            <nav class="sidebar-nav" id="projectNav" aria-label="Projecten">
+                <!-- rendered by JS -->
+            </nav>
+            <div id="newProjectForm" class="sidebar-add-project-form" hidden>
+                <input type="text" id="newProjectInput" class="sidebar-add-project-input" placeholder="Projectnaam..." maxlength="280" autocomplete="off">
+            </div>
+        </div>
+
         <form class="sidebar-logout-form" action="/logout" method="post">
-            <button class="sidebar-logout-btn" type="submit">Uitloggen</button>
+            <button class="sidebar-logout-btn" type="submit">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                </svg>
+                <span>Uitloggen</span>
+            </button>
         </form>
     </aside>
 
@@ -142,6 +171,9 @@
                     <option value="low">Laag</option>
                     <option value="medium">Gemiddeld</option>
                     <option value="high">Hoog</option>
+                </select>
+                <select id="projectSelect" class="add-task-select" aria-label="Task project">
+                    <option value="">Geen project</option>
                 </select>
                 <button id="addBtn" class="add-task-submit" type="button">Toevoegen</button>
             </div>
@@ -320,6 +352,17 @@
                             </select>
                         </div>
                     </div>
+                    <div class="modal-field" id="modal-project-field">
+                        <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <div class="modal-field-body">
+                            <span class="modal-field-label">Project</span>
+                            <select id="modal-project" class="modal-field-input">
+                                <option value="">Geen project</option>
+                            </select>
+                        </div>
+                    </div>
                     <div class="modal-field is-set" id="modal-recurrence-field">
                         <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="17 1 21 5 17 9"/>
@@ -382,5 +425,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=8"></script>
+<script src="/static/js/app.js?v=9"></script>
 {% endblock %}

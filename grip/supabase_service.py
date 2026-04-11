@@ -13,6 +13,13 @@ from grip.configuration import settings
 
 TASK_PRIORITIES = {"not_set", "low", "medium", "high"}
 
+TASK_SELECT_COLUMNS = (
+    "id, title, completed, created_at, list, area, priority, deadline, "
+    "planned_date, start_date, duration, recurrence_interval, recurrence_unit, "
+    "recurrence_end, state, project_id"
+)
+PROJECT_SELECT_COLUMNS = "id, name, start_date, end_date, created_at"
+
 
 class SupabaseService:
     """Service for accessing Grip data via Supabase."""
@@ -129,9 +136,7 @@ class SupabaseService:
         try:
             result = (
                 self.supabase.table("tasks")
-                .select(
-                    "id, title, completed, created_at, list, area, priority, deadline, planned_date, start_date, duration, recurrence_interval, recurrence_unit, recurrence_end, state"
-                )
+                .select(TASK_SELECT_COLUMNS)
                 .eq("user_id", user_id)
                 .order("created_at", desc=True)
                 .execute()
@@ -149,9 +154,7 @@ class SupabaseService:
         try:
             result = (
                 self.supabase.table("tasks")
-                .select(
-                    "id, title, completed, created_at, list, area, priority, deadline, planned_date, start_date, duration, recurrence_interval, recurrence_unit, recurrence_end, state"
-                )
+                .select(TASK_SELECT_COLUMNS)
                 .eq("id", task_id)
                 .eq("user_id", user_id)
                 .execute()
@@ -179,6 +182,7 @@ class SupabaseService:
         recurrence_unit: str | None = None,
         recurrence_end: str | None = None,
         state: str | None = None,
+        project_id: int | None = None,
     ) -> Optional[Dict[str, Any]]:
         """Create a new task."""
         try:
@@ -204,6 +208,8 @@ class SupabaseService:
                 payload["recurrence_unit"] = recurrence_unit
             if recurrence_end is not None:
                 payload["recurrence_end"] = recurrence_end
+            if project_id is not None:
+                payload["project_id"] = project_id
             result = self.supabase.table("tasks").insert(payload).execute()
             if not result.data:
                 return None
@@ -270,6 +276,77 @@ class SupabaseService:
         except Exception as exc:
             self.logger.exception("clear_completed failed: %s", exc)
             return 0
+
+    def list_projects(self, user_id: str) -> List[Dict[str, Any]]:
+        """Return all projects for a user."""
+        try:
+            result = (
+                self.supabase.table("projects")
+                .select(PROJECT_SELECT_COLUMNS)
+                .eq("user_id", user_id)
+                .order("created_at", desc=True)
+                .execute()
+            )
+            return [cast(Dict[str, Any], row) for row in (result.data or [])]
+        except Exception as exc:
+            self.logger.exception("list_projects failed: %s", exc)
+            return []
+
+    def get_project(self, user_id: str, project_id: int) -> Optional[Dict[str, Any]]:
+        """Return a single project by id for a user."""
+        try:
+            result = (
+                self.supabase.table("projects")
+                .select(PROJECT_SELECT_COLUMNS)
+                .eq("id", project_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if not result.data:
+                return None
+            return cast(Dict[str, Any], result.data[0])
+        except Exception as exc:
+            self.logger.exception("get_project failed: %s", exc)
+            return None
+
+    def create_project(
+        self,
+        user_id: str,
+        name: str,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Create a new project."""
+        try:
+            payload: Dict[str, Any] = {"user_id": user_id, "name": name}
+            if start_date is not None:
+                payload["start_date"] = start_date
+            if end_date is not None:
+                payload["end_date"] = end_date
+            result = self.supabase.table("projects").insert(payload).execute()
+            if not result.data:
+                return None
+            if isinstance(result.data, list):
+                return cast(Dict[str, Any], result.data[0])
+            return cast(Dict[str, Any], result.data)
+        except Exception as exc:
+            self.logger.exception("create_project failed: %s", exc)
+            return None
+
+    def delete_project(self, user_id: str, project_id: int) -> bool:
+        """Delete a project for a user."""
+        try:
+            result = (
+                self.supabase.table("projects")
+                .delete()
+                .eq("id", project_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            return bool(result.data)
+        except Exception as exc:
+            self.logger.exception("delete_project failed: %s", exc)
+            return False
 
 
 supabase_service = SupabaseService()

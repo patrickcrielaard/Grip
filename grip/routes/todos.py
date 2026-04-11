@@ -49,6 +49,7 @@ class TodoCreate(BaseModel):
     recurrence_unit: str | None = None
     recurrence_end: str | None = None
     state: str | None = None
+    project_id: int | None = None
 
 
 class TodoUpdate(BaseModel):
@@ -68,6 +69,7 @@ class TodoUpdate(BaseModel):
     recurrence_unit: str | None = None
     recurrence_end: str | None = None
     state: str | None = None
+    project_id: int | None = None
 
 
 def _normalize_list_name(value: str | None) -> str | None:
@@ -162,6 +164,16 @@ def _normalize_recurrence(
     return interval, normalized_unit
 
 
+def _validate_project_id(user_id: str, project_id: int | None) -> int | None:
+    """Validate that project_id refers to an existing project owned by the user."""
+    if project_id is None:
+        return None
+    project = supabase_service.get_project(user_id, project_id)
+    if not project:
+        raise HTTPException(status_code=400, detail=f"Project {project_id} not found")
+    return project_id
+
+
 def _advance_planned_date(date_str: str, interval: int, unit: str) -> str:
     d = date.fromisoformat(date_str)
     if unit == "day":
@@ -230,6 +242,7 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
     )
     recurrence_end = _normalize_date(payload.recurrence_end, "Recurrence end")
     state = _normalize_state(payload.state)
+    project_id = _validate_project_id(user["id"], payload.project_id)
     todo = supabase_service.create_task(
         user["id"],
         title,
@@ -244,6 +257,7 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
         recurrence_unit=recurrence_unit,
         recurrence_end=recurrence_end,
         state=state,
+        project_id=project_id,
     )
     if not todo:
         logger.error("create_todo failed for user_id=%s", user["id"])
@@ -315,6 +329,10 @@ async def update_todo(
         )
     if "state" in payload.model_fields_set:
         updates["state"] = _normalize_state(payload.state)
+    if "project_id" in payload.model_fields_set:
+        if payload.project_id is not None:
+            _validate_project_id(user["id"], payload.project_id)
+        updates["project_id"] = payload.project_id
 
     # Bidirectional state ↔ completed sync
     if "state" in updates and "completed" not in updates:
@@ -355,6 +373,7 @@ async def update_todo(
                     recurrence_interval=current["recurrence_interval"],
                     recurrence_unit=current["recurrence_unit"],
                     recurrence_end=recurrence_end,
+                    project_id=current.get("project_id"),
                 )
 
     todo = supabase_service.update_task(user["id"], todo_id, updates)

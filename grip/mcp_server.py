@@ -41,6 +41,7 @@ from grip.routes.todos import (
     _normalize_priority,
     _normalize_recurrence,
     _normalize_state,
+    _validate_project_id,
 )
 from grip.supabase_service import supabase_service
 
@@ -280,6 +281,7 @@ def create_todo(
     recurrence_unit: str | None = None,
     recurrence_end: str | None = None,
     state: str = DEFAULT_STATE,
+    project_id: int | None = None,
 ) -> dict[str, Any]:
     """
     Create a new todo.
@@ -290,10 +292,13 @@ def create_todo(
     duration: minutes as an integer
     recurrence_interval + recurrence_unit must be set together; unit: "day" | "week" | "month"
     state: "to_do" (default) | "in_progress" | "done" | "waiting" | "someday"
+    project_id: optional project id to assign the todo to
     """
     title = title.strip()
     if not title:
         raise ValueError("title is required")
+    if project_id is not None:
+        _v(_validate_project_id, _user_id(), project_id)
     ri, ru = _v(_normalize_recurrence, recurrence_interval, recurrence_unit)
     todo = supabase_service.create_task(
         _user_id(),
@@ -309,6 +314,7 @@ def create_todo(
         recurrence_unit=ru,
         recurrence_end=_v(_normalize_date, recurrence_end, "recurrence_end"),
         state=_v(_normalize_state, state),
+        project_id=project_id,
     )
     if todo is None:
         raise RuntimeError("create_todo failed")
@@ -331,11 +337,13 @@ def update_todo(
     recurrence_unit: str | None = None,
     recurrence_end: str | None = None,
     state: str | None = None,
+    project_id: int | None = None,
 ) -> dict[str, Any]:
     """
     Update one or more fields on an existing todo.
     Only supplied fields are changed.
     Setting state="done" auto-sets completed=true and vice versa.
+    project_id: set to assign to a project, or 0 to remove from project.
     """
     updates: dict[str, Any] = {}
     if title is not None:
@@ -369,6 +377,12 @@ def update_todo(
         )
     if state is not None:
         updates["state"] = _v(_normalize_state, state)
+    if project_id is not None:
+        if project_id <= 0:
+            updates["project_id"] = None
+        else:
+            _v(_validate_project_id, _user_id(), project_id)
+            updates["project_id"] = project_id
 
     # Bidirectional state <-> completed sync
     if "state" in updates and "completed" not in updates:
@@ -409,6 +423,7 @@ def update_todo(
                     recurrence_interval=current["recurrence_interval"],
                     recurrence_unit=current["recurrence_unit"],
                     recurrence_end=rec_end,
+                    project_id=current.get("project_id"),
                 )
 
     result = supabase_service.update_task(_user_id(), todo_id, updates)
@@ -437,6 +452,46 @@ def clear_completed(list: str | None = None) -> dict[str, Any]:
     list_name = _v(_normalize_list_name, list) if list is not None else None
     count = supabase_service.clear_completed(_user_id(), list_name)
     return {"deleted": count}
+
+
+@mcp.tool()
+def list_projects() -> list[dict[str, Any]]:
+    """Return all projects for the configured user, newest first."""
+    return supabase_service.list_projects(_user_id())
+
+
+@mcp.tool()
+def create_project(
+    name: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> dict[str, Any]:
+    """
+    Create a new project.
+    name: 1-280 characters.
+    start_date / end_date: optional YYYY-MM-DD strings. If both provided, start_date must be <= end_date.
+    """
+    name = name.strip()
+    if not name:
+        raise ValueError("name is required")
+    if len(name) > 280:
+        raise ValueError("name must be 280 characters or fewer")
+    sd = _v(_normalize_date, start_date, "start_date")
+    ed = _v(_normalize_date, end_date, "end_date")
+    if sd and ed and sd > ed:
+        raise ValueError("start_date must be on or before end_date")
+    project = supabase_service.create_project(_user_id(), name, sd, ed)
+    if project is None:
+        raise RuntimeError("create_project failed")
+    return project
+
+
+@mcp.tool()
+def delete_project(project_id: int) -> dict[str, Any]:
+    """Permanently delete a project by id. Tasks in the project are kept but their project_id is cleared."""
+    if not supabase_service.delete_project(_user_id(), project_id):
+        raise RuntimeError(f"Project {project_id} not found")
+    return {"deleted": True}
 
 
 if __name__ == "__main__":

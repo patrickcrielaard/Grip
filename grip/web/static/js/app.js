@@ -3,6 +3,7 @@
 class TodoApp {
     constructor() {
         this.todos = [];
+        this.projects = [];
         this.currentView = { type: "list", value: "inbox" };
         this.availableLists = ["inbox", "today"];
         this.availableAreas = ["personal", "work"];
@@ -12,6 +13,7 @@ class TodoApp {
         this.cacheElements();
         this.bindEvents();
         this.loadTodos();
+        this.loadProjects();
     }
 
     cacheElements() {
@@ -58,6 +60,13 @@ class TodoApp {
         this.sidebar = document.querySelector(".sidebar");
         this.sidebarOverlay = document.getElementById("sidebarOverlay");
         this.mobileMenuBtn = document.getElementById("mobileMenuBtn");
+        // Projects
+        this.projectSelect = document.getElementById("projectSelect");
+        this.modalProject = document.getElementById("modal-project");
+        this.projectNav = document.getElementById("projectNav");
+        this.addProjectBtn = document.getElementById("addProjectBtn");
+        this.newProjectForm = document.getElementById("newProjectForm");
+        this.newProjectInput = document.getElementById("newProjectInput");
         // Date picker
         this.datePicker = document.getElementById("datePicker");
         this.dpTextInput = document.getElementById("dpTextInput");
@@ -253,6 +262,7 @@ class TodoApp {
             { el: this.modalDuration, field: "duration" },
             { el: this.modalPriority, field: "priority" },
             { el: this.modalArea,     field: "area" },
+            { el: this.modalProject,  field: "project" },
         ].forEach(({ el, field }) => {
             if (!el) return;
             el.addEventListener("change", () => {
@@ -371,6 +381,43 @@ class TodoApp {
             });
         }
 
+        // Project sidebar navigation (event delegation for dynamic items)
+        if (this.projectNav) {
+            this.projectNav.addEventListener("click", (e) => {
+                const item = e.target.closest("[data-project-filter]");
+                if (item) {
+                    this.setView({ type: "project", value: Number(item.dataset.projectFilter) });
+                    if (window.innerWidth <= 768) this.closeMobileSidebar();
+                }
+            });
+        }
+
+        // Add project button / inline form
+        if (this.addProjectBtn) {
+            this.addProjectBtn.addEventListener("click", () => {
+                this.newProjectForm.hidden = false;
+                this.newProjectInput.focus();
+            });
+        }
+        if (this.newProjectInput) {
+            this.newProjectInput.addEventListener("keydown", (e) => {
+                if (e.key === "Enter") {
+                    this.createProject(this.newProjectInput.value.trim());
+                } else if (e.key === "Escape") {
+                    this.newProjectForm.hidden = true;
+                    this.newProjectInput.value = "";
+                }
+            });
+            this.newProjectInput.addEventListener("blur", () => {
+                const name = this.newProjectInput.value.trim();
+                if (!this.newProjectForm.hidden && name) {
+                    this.createProject(name);
+                } else if (!this.newProjectForm.hidden) {
+                    this.newProjectForm.hidden = true;
+                }
+            });
+        }
+
         // Collapsible sidebar sections
         document.querySelectorAll(".sidebar-section-toggle").forEach((btn) => {
             btn.addEventListener("click", () => {
@@ -399,6 +446,9 @@ class TodoApp {
         this.addTaskVisible = !this.addTaskVisible;
         this.addTaskRow.hidden = !this.addTaskVisible;
         if (this.addTaskVisible) {
+            if (this.projectSelect && this.currentView.type === "project") {
+                this.projectSelect.value = String(this.currentView.value);
+            }
             this.todoInput.focus();
         }
     }
@@ -451,17 +501,16 @@ class TodoApp {
     setView(view) {
         this.currentView = view;
 
-        // Update sidebar active state
-        this.sidebarItems.forEach((item) => {
+        // Update sidebar active state (includes dynamically rendered project items)
+        document.querySelectorAll(".sidebar-item").forEach((item) => {
             let isActive = false;
             if (view.type === "list" && item.dataset.list === view.value)
                 isActive = true;
             if (view.type === "view" && item.dataset.view === view.value)
                 isActive = true;
-            if (
-                view.type === "area" &&
-                item.dataset.areaFilter === view.value
-            )
+            if (view.type === "area" && item.dataset.areaFilter === view.value)
+                isActive = true;
+            if (view.type === "project" && Number(item.dataset.projectFilter) === view.value)
                 isActive = true;
             item.classList.toggle("active", isActive);
             item.setAttribute("aria-pressed", isActive.toString());
@@ -485,6 +534,10 @@ class TodoApp {
                 return "Voltooid";
             case "area":
                 return this.getAreaLabel(this.currentView.value);
+            case "project": {
+                const project = this.projects.find(p => p.id === this.currentView.value);
+                return project ? project.name : "Project";
+            }
             default:
                 return "Inbox";
         }
@@ -564,6 +617,12 @@ class TodoApp {
         return labels[normalized] || (normalized.charAt(0).toUpperCase() + normalized.slice(1));
     }
 
+    getProjectLabel(projectId) {
+        if (!projectId) return "";
+        const project = this.projects.find(p => p.id === projectId);
+        return project ? project.name : "";
+    }
+
     getStateLabel(state) {
         const labels = {
             to_do: "Te doen",
@@ -638,6 +697,72 @@ class TodoApp {
         }
     }
 
+    async loadProjects() {
+        try {
+            const data = await this.request("/api/projects");
+            this.projects = data.projects || [];
+            this.renderProjectsSidebar();
+            this._populateProjectSelects();
+        } catch (_) {
+            // Projects failing shouldn't block the app
+        }
+    }
+
+    renderProjectsSidebar() {
+        if (!this.projectNav) return;
+        this.projectNav.innerHTML = this.projects
+            .map(project => `
+                <button class="sidebar-item" type="button" data-project-filter="${project.id}" aria-pressed="false">
+                    <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <span class="sidebar-label">${this.escapeHtml(project.name)}</span>
+                    <span class="sidebar-count" data-count-project="${project.id}"></span>
+                </button>`)
+            .join("");
+        // Re-apply active state if currently viewing this project
+        if (this.currentView.type === "project") {
+            this.projectNav.querySelectorAll("[data-project-filter]").forEach(item => {
+                const isActive = Number(item.dataset.projectFilter) === this.currentView.value;
+                item.classList.toggle("active", isActive);
+                item.setAttribute("aria-pressed", isActive.toString());
+            });
+        }
+        this.updateSidebarCounts();
+    }
+
+    async createProject(name) {
+        if (!name) return;
+        this.newProjectForm.hidden = true;
+        this.newProjectInput.value = "";
+        try {
+            const data = await this.request("/api/projects", {
+                method: "POST",
+                body: JSON.stringify({ name }),
+            });
+            if (data.project) {
+                this.projects.unshift(data.project);
+                this.renderProjectsSidebar();
+                this._populateProjectSelects();
+            }
+        } catch (error) {
+            this.setStatus(error.message);
+        }
+    }
+
+    _populateProjectSelects() {
+        const options = `<option value="">Geen project</option>` +
+            this.projects.map(p =>
+                `<option value="${p.id}">${this.escapeHtml(p.name)}</option>`
+            ).join("");
+        if (this.projectSelect) this.projectSelect.innerHTML = options;
+        if (this.modalProject) {
+            const current = this.modalProject.value;
+            this.modalProject.innerHTML = options;
+            this.modalProject.value = current;
+        }
+    }
+
     async addTodo() {
         const title = this.todoInput.value.trim();
         if (!title) {
@@ -652,6 +777,7 @@ class TodoApp {
         const recurrenceUnitVal = this.recurrenceUnit?.value || null;
         const recurrenceIntervalVal = recurrenceUnitVal && this.recurrenceInterval?.value ? Number(this.recurrenceInterval.value) : null;
         const recurrenceEndVal = recurrenceUnitVal && this.recurrenceEnd?.value ? this.recurrenceEnd.value : null;
+        const projectId = this.projectSelect?.value ? Number(this.projectSelect.value) : null;
 
         // Determine target list from current view
         let targetList = "inbox";
@@ -677,6 +803,7 @@ class TodoApp {
                     recurrence_interval: recurrenceIntervalVal,
                     recurrence_unit: recurrenceUnitVal,
                     recurrence_end: recurrenceEndVal,
+                    project_id: projectId,
                 }),
             });
             if (data.todo) {
@@ -695,6 +822,9 @@ class TodoApp {
                     this.recurrenceEnd.value = "";
                     this.recurrenceEnd.hidden = true;
                     this.recurrenceEndLabel.hidden = true;
+                }
+                if (this.projectSelect && this.currentView.type !== "project") {
+                    this.projectSelect.value = "";
                 }
                 this.renderTodos();
                 this.todoInput.focus();
@@ -928,6 +1058,7 @@ class TodoApp {
         this._setModalDateField(this.modalDeadline, todo.deadline || "");
         this.modalPriority.value = this.normalizePriority(todo.priority);
         this.modalArea.value = todo.area || "";
+        if (this.modalProject) this.modalProject.value = todo.project_id ? String(todo.project_id) : "";
         if (this.modalRecurrenceUnit) {
             this.modalRecurrenceUnit.value = todo.recurrence_unit || "";
             this.modalRecurrenceInterval.value = todo.recurrence_interval || "";
@@ -947,6 +1078,7 @@ class TodoApp {
             { el: this.modalDeadline,    isSet: () => !!this.modalDeadline.dataset.date },
             { el: this.modalPriority,    isSet: () => this.modalPriority.value !== "not_set" },
             { el: this.modalArea,        isSet: () => !!this.modalArea.value },
+            { el: this.modalProject,     isSet: () => !!this.modalProject?.value },
         ].forEach(({ el, isSet }) => {
             if (!el) return;
             const field = el.closest(".modal-field");
@@ -992,6 +1124,8 @@ class TodoApp {
             payload = { duration: value ? Number(value) : null };
         } else if (field === "list") {
             payload = { list: value };
+        } else if (field === "project") {
+            payload = { project_id: value ? Number(value) : null };
         } else {
             payload = { [field]: value || null };
         }
@@ -1047,6 +1181,10 @@ class TodoApp {
                 return this.todos.filter(
                     (todo) => todo.area === view.value && !todo.completed
                 );
+            case "project":
+                return this.todos.filter(
+                    (todo) => !todo.completed && todo.project_id === view.value
+                );
             default:
                 return this.todos;
         }
@@ -1084,6 +1222,13 @@ class TodoApp {
                     ? `<span class="todo-meta-chip todo-area">${this.escapeHtml(areaLabel)}</span>`
                     : "";
 
+                const projectLabel = this.currentView.type !== "project"
+                    ? this.getProjectLabel(todo.project_id)
+                    : "";
+                const projectMarkup = projectLabel
+                    ? `<span class="todo-meta-chip todo-project">${this.escapeHtml(projectLabel)}</span>`
+                    : "";
+
                 const stateMarkup = todo.state && todo.state !== "to_do"
                     ? `<span class="todo-meta-chip todo-state-${todo.state}">${this.escapeHtml(this.getStateLabel(todo.state))}</span>`
                     : "";
@@ -1112,6 +1257,7 @@ class TodoApp {
 
                 const hasMeta =
                     areaLabel ||
+                    projectLabel ||
                     listLabel ||
                     todo.start_date ||
                     todo.planned_date ||
@@ -1120,7 +1266,7 @@ class TodoApp {
                     todo.recurrence_interval ||
                     (todo.state && todo.state !== "to_do");
                 const metadataMarkup = hasMeta
-                    ? `<div class="todo-meta">${listLabel}${stateMarkup}${startDateMarkup}${plannedDateMarkup}${deadlineMarkup}${durationMarkup}${areaMarkup}${recurrenceMarkup}</div>`
+                    ? `<div class="todo-meta">${listLabel}${stateMarkup}${startDateMarkup}${plannedDateMarkup}${deadlineMarkup}${durationMarkup}${areaMarkup}${projectMarkup}${recurrenceMarkup}</div>`
                     : "";
 
                 return `
@@ -1218,6 +1364,13 @@ class TodoApp {
         document.querySelectorAll("[data-count-area]").forEach((el) => {
             const area = el.dataset.countArea;
             const count = activeTodos.filter((t) => t.area === area).length;
+            el.textContent = count > 0 ? String(count) : "";
+        });
+
+        // Project counts
+        document.querySelectorAll("[data-count-project]").forEach((el) => {
+            const projectId = Number(el.dataset.countProject);
+            const count = activeTodos.filter((t) => t.project_id === projectId).length;
             el.textContent = count > 0 ? String(count) : "";
         });
     }
