@@ -12,10 +12,30 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from mcp.server.auth.provider import AuthorizationCode
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from grip.routes.authentication import router as auth_router
 from grip.routes.todos import router as todo_router
 from grip.supabase_service import supabase_service
+
+
+class _MCPSlashMiddleware:
+    """Rewrite /mcp (without trailing slash) to /mcp/ before routing.
+
+    Starlette's Mount redirects the exact mount path to the same path with a
+    trailing slash (307). Claude Desktop doesn't follow POST redirects, so the
+    OAuth discovery flow never starts. Rewriting the scope path here prevents
+    the redirect entirely.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope.get("type") == "http" and scope.get("path") == "/mcp":
+            scope = {**scope, "path": "/mcp/", "raw_path": b"/mcp/"}
+        await self.app(scope, receive, send)
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("grip")
@@ -48,6 +68,7 @@ app.include_router(auth_router)
 app.include_router(todo_router)
 
 app.mount("/mcp", _mcp_sub_app)
+app.add_middleware(_MCPSlashMiddleware)
 
 
 @app.get("/health")

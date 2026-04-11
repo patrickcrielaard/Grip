@@ -116,12 +116,21 @@ class GripOAuthProvider:
     async def exchange_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: AuthorizationCode
     ) -> OAuthToken:
+        import logging as _logging
+
+        _log = _logging.getLogger("grip.oauth")
         entry = self._auth_codes.pop(authorization_code.code, None)
         if not entry:
+            _log.error("exchange_authorization_code: auth code not found")
             raise TokenError(error="invalid_grant", error_description="Code not found")
         _, user_id = entry
         mcp_token = supabase_service.get_mcp_token(user_id)
         if not mcp_token:
+            _log.error(
+                "exchange_authorization_code: mcp_token is NULL for user %s — "
+                "did you run the Supabase migration to add the mcp_token column?",
+                user_id,
+            )
             raise TokenError(
                 error="invalid_grant", error_description="User token not found"
             )
