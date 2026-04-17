@@ -230,7 +230,15 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
     title = payload.title.strip()
     if not title:
         raise HTTPException(status_code=400, detail="Title is required")
-    list_name = _normalize_list_name(payload.list_name) or DEFAULT_LIST
+
+    # Enforce mutual exclusivity: task cannot be in both a list and a project
+    project_id = _validate_project_id(user["id"], payload.project_id)
+    if project_id is not None:
+        # Tasks in projects should not have a list
+        list_name = None
+    else:
+        list_name = _normalize_list_name(payload.list_name) or DEFAULT_LIST
+
     area = _normalize_area(payload.area)
     priority = _normalize_priority(payload.priority)
     deadline = _normalize_date(payload.deadline, "Deadline")
@@ -242,7 +250,6 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
     )
     recurrence_end = _normalize_date(payload.recurrence_end, "Recurrence end")
     state = _normalize_state(payload.state)
-    project_id = _validate_project_id(user["id"], payload.project_id)
     todo = supabase_service.create_task(
         user["id"],
         title,
@@ -291,9 +298,29 @@ async def update_todo(
         updates["title"] = title
     if payload.completed is not None:
         updates["completed"] = payload.completed
-    if payload.list_name is not None:
+    # Handle list and project_id with mutual exclusivity enforcement
+    setting_list = payload.list_name is not None
+    setting_project = "project_id" in payload.model_fields_set
+
+    if setting_list:
         list_name = _normalize_list_name(payload.list_name)
         updates["list"] = list_name
+        # If setting list, clear project
+        if setting_project and payload.project_id is not None:
+            updates["project_id"] = None
+        elif not setting_project:
+            # Only clear project if not explicitly setting it
+            updates["project_id"] = None
+    elif setting_project:
+        if payload.project_id is not None:
+            _validate_project_id(user["id"], payload.project_id)
+            updates["project_id"] = payload.project_id
+            # If setting project, clear list
+            updates["list"] = None
+        else:
+            # Setting project to None, keep it
+            updates["project_id"] = None
+
     if "area" in payload.model_fields_set:
         updates["area"] = _normalize_area(payload.area)
     if "priority" in payload.model_fields_set:
@@ -329,10 +356,6 @@ async def update_todo(
         )
     if "state" in payload.model_fields_set:
         updates["state"] = _normalize_state(payload.state)
-    if "project_id" in payload.model_fields_set:
-        if payload.project_id is not None:
-            _validate_project_id(user["id"], payload.project_id)
-        updates["project_id"] = payload.project_id
 
     # Bidirectional state ↔ completed sync
     if "state" in updates and "completed" not in updates:

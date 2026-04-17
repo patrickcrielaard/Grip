@@ -494,5 +494,15 @@ def delete_project(project_id: int) -> dict[str, Any]:
     return {"deleted": True}
 
 
+@mcp.tool()
+def update_project_status(project_id: int, status: str) -> dict[str, Any]:
+    """Update a project's status. Status can be 'active', 'completed', or 'deleted'."""
+    if status not in ("active", "completed", "deleted"):
+        raise ValueError("status must be 'active', 'completed', or 'deleted'")
+    if not supabase_service.update_project_status(_user_id(), project_id, status):
+        raise RuntimeError(f"Project {project_id} not found")
+    return {"status": status}
+
+
 if __name__ == "__main__":
     mcp.run()

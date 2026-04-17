@@ -23,6 +23,12 @@ class ProjectCreate(BaseModel):
     end_date: str | None = None
 
 
+class ProjectStatusUpdate(BaseModel):
+    """Payload for updating project status."""
+
+    status: str = Field(..., pattern="^(active|completed|deleted)$")
+
+
 @router.get("/api/projects")
 async def list_projects(request: Request) -> Dict[str, Any]:
     """Return projects for the current user."""
@@ -63,9 +69,28 @@ async def get_project(request: Request, project_id: int) -> Dict[str, Any]:
     return {"project": project}
 
 
+@router.patch("/api/projects/{project_id}/status")
+async def update_project_status(
+    request: Request, project_id: int, payload: ProjectStatusUpdate
+) -> Dict[str, Any]:
+    """Update a project's status."""
+    user = _require_user(request)
+    updated = supabase_service.update_project_status(
+        user["id"], project_id, payload.status
+    )
+    if not updated:
+        logger.error(
+            "update_project_status failed for user_id=%s project_id=%s",
+            user["id"],
+            project_id,
+        )
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"status": payload.status}
+
+
 @router.delete("/api/projects/{project_id}")
 async def delete_project(request: Request, project_id: int) -> Dict[str, Any]:
-    """Delete a project."""
+    """Soft-delete a project (mark as deleted)."""
     user = _require_user(request)
     deleted = supabase_service.delete_project(user["id"], project_id)
     if not deleted:

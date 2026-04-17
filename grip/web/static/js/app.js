@@ -63,6 +63,8 @@ class TodoApp {
         // Projects
         this.projectSelect = document.getElementById("projectSelect");
         this.modalProject = document.getElementById("modal-project");
+        this.projectActionsEl = document.getElementById("projectActions");
+        this.archiveProjectBtn = document.getElementById("archiveProjectBtn");
         this.projectNav = document.getElementById("projectNav");
         this.addProjectBtn = document.getElementById("addProjectBtn");
         this.newProjectForm = document.getElementById("newProjectForm");
@@ -381,6 +383,11 @@ class TodoApp {
             });
         }
 
+        // Archive project button
+        if (this.archiveProjectBtn) {
+            this.archiveProjectBtn.addEventListener("click", () => this.archiveProject());
+        }
+
         // Project sidebar navigation (event delegation for dynamic items)
         if (this.projectNav) {
             this.projectNav.addEventListener("click", (e) => {
@@ -518,6 +525,14 @@ class TodoApp {
 
         // Update header title
         this.activeListLabel.textContent = this.getViewLabel();
+
+        // Show archive button only when viewing an active project
+        if (this.projectActionsEl) {
+            const isActiveProject = view.type === "project" &&
+                this.projects.some(p => p.id === view.value && (p.status === undefined || p.status === "active"));
+            this.projectActionsEl.hidden = !isActiveProject;
+        }
+
         this.renderTodos();
     }
 
@@ -531,6 +546,7 @@ class TodoApp {
                 if (this.currentView.value === "all") return "Alle taken";
                 if (this.currentView.value === "week") return "Deze week";
                 if (this.currentView.value === "next-week") return "Volgende week";
+                if (this.currentView.value === "waiting") return "Wachten op";
                 return "Voltooid";
             case "area":
                 return this.getAreaLabel(this.currentView.value);
@@ -710,7 +726,13 @@ class TodoApp {
 
     renderProjectsSidebar() {
         if (!this.projectNav) return;
-        this.projectNav.innerHTML = this.projects
+
+        // Separate active and completed projects
+        const activeProjects = this.projects.filter(p => p.status === undefined || p.status === "active");
+        const completedProjects = this.projects.filter(p => p.status === "completed");
+
+        // Render active projects
+        this.projectNav.innerHTML = activeProjects
             .map(project => `
                 <button class="sidebar-item" type="button" data-project-filter="${project.id}" aria-pressed="false">
                     <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -720,9 +742,31 @@ class TodoApp {
                     <span class="sidebar-count" data-count-project="${project.id}"></span>
                 </button>`)
             .join("");
+
+        // Render completed projects in archive section
+        const archivedSection = document.getElementById("projectsArchivedSection");
+        const archivedNav = document.getElementById("projectArchivedNav");
+        if (completedProjects.length > 0) {
+            archivedSection.style.display = "block";
+            archivedNav.innerHTML = completedProjects
+                .map(project => `
+                    <button class="sidebar-item project-completed" type="button" data-project-filter="${project.id}" aria-pressed="false">
+                        <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <span class="sidebar-label">${this.escapeHtml(project.name)}</span>
+                        <span class="sidebar-count" data-count-project="${project.id}"></span>
+                    </button>`)
+                .join("");
+        } else {
+            archivedSection.style.display = "none";
+            archivedNav.innerHTML = "";
+        }
+
         // Re-apply active state if currently viewing this project
         if (this.currentView.type === "project") {
-            this.projectNav.querySelectorAll("[data-project-filter]").forEach(item => {
+            const allProjectButtons = document.querySelectorAll("[data-project-filter]");
+            allProjectButtons.forEach(item => {
                 const isActive = Number(item.dataset.projectFilter) === this.currentView.value;
                 item.classList.toggle("active", isActive);
                 item.setAttribute("aria-pressed", isActive.toString());
@@ -750,9 +794,27 @@ class TodoApp {
         }
     }
 
+    async archiveProject() {
+        const projectId = this.currentView.value;
+        this.setStatus("");
+        try {
+            await this.request(`/api/projects/${projectId}/status`, {
+                method: "PATCH",
+                body: JSON.stringify({ status: "completed" }),
+            });
+            this.projects = this.projects.filter(p => p.id !== projectId);
+            this.renderProjectsSidebar();
+            this._populateProjectSelects();
+            this.setView({ type: "list", value: "inbox" });
+        } catch (error) {
+            this.setStatus(error.message);
+        }
+    }
+
     _populateProjectSelects() {
+        const activeProjects = this.projects.filter(p => p.status === undefined || p.status === "active");
         const options = `<option value="">Geen project</option>` +
-            this.projects.map(p =>
+            activeProjects.map(p =>
                 `<option value="${p.id}">${this.escapeHtml(p.name)}</option>`
             ).join("");
         if (this.projectSelect) this.projectSelect.innerHTML = options;
@@ -1153,16 +1215,16 @@ class TodoApp {
                 if (view.value === "today") {
                     const today = this.getToday();
                     return this.todos.filter(
-                        (t) => !t.completed && (t.list === "today" || t.planned_date === today)
+                        (t) => !t.completed && !t.project_id && (t.list === "today" || t.planned_date === today)
                     );
                 }
                 if (view.value === "inbox") {
                     return this.todos.filter(
-                        (todo) => todo.list === "inbox" && !todo.completed && !todo.area && !todo.project_id
+                        (todo) => todo.list === "inbox" && !todo.completed && !todo.area && !todo.project_id && todo.state !== "waiting"
                     );
                 }
                 return this.todos.filter(
-                    (todo) => todo.list === view.value && !todo.completed
+                    (todo) => todo.list === view.value && !todo.completed && !todo.project_id
                 );
             case "view":
                 if (view.value === "all") {
@@ -1178,13 +1240,16 @@ class TodoApp {
                              (t.deadline && t.deadline >= start && t.deadline <= end))
                     );
                 }
+                if (view.value === "waiting") {
+                    return this.todos.filter((todo) => todo.state === "waiting");
+                }
                 if (view.value === "completed") {
                     return this.todos.filter((todo) => todo.completed);
                 }
                 return this.todos;
             case "area":
                 return this.todos.filter(
-                    (todo) => todo.area === view.value && !todo.completed
+                    (todo) => todo.area === view.value && !todo.completed && !todo.project_id
                 );
             case "project":
                 return this.todos.filter(
@@ -1343,11 +1408,11 @@ class TodoApp {
             const count =
                 list === "today"
                     ? activeTodos.filter(
-                          (t) => t.list === "today" || t.planned_date === todayStr
+                          (t) => !t.project_id && (t.list === "today" || t.planned_date === todayStr)
                       ).length
                     : list === "inbox"
-                    ? activeTodos.filter((t) => t.list === "inbox" && !t.area && !t.project_id).length
-                    : activeTodos.filter((t) => t.list === list).length;
+                    ? activeTodos.filter((t) => t.list === "inbox" && !t.area && !t.project_id && t.state !== "waiting").length
+                    : activeTodos.filter((t) => t.list === list && !t.project_id).length;
             el.textContent = count > 0 ? String(count) : "";
         });
 
@@ -1366,6 +1431,9 @@ class TodoApp {
                         (t.deadline && t.deadline >= start && t.deadline <= end)
                 ).length;
                 el.textContent = count > 0 ? String(count) : "";
+            } else if (view === "waiting") {
+                const count = this.todos.filter((t) => t.state === "waiting").length;
+                el.textContent = count > 0 ? String(count) : "";
             } else if (view === "completed") {
                 el.textContent =
                     completedTodos.length > 0
@@ -1377,7 +1445,7 @@ class TodoApp {
         // Area counts
         document.querySelectorAll("[data-count-area]").forEach((el) => {
             const area = el.dataset.countArea;
-            const count = activeTodos.filter((t) => t.area === area).length;
+            const count = activeTodos.filter((t) => t.area === area && !t.project_id).length;
             el.textContent = count > 0 ? String(count) : "";
         });
 

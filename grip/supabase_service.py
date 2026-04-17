@@ -18,7 +18,7 @@ TASK_SELECT_COLUMNS = (
     "planned_date, start_date, duration, recurrence_interval, recurrence_unit, "
     "recurrence_end, state, project_id"
 )
-PROJECT_SELECT_COLUMNS = "id, name, start_date, end_date, created_at"
+PROJECT_SELECT_COLUMNS = "id, name, start_date, end_date, created_at, status"
 
 
 class SupabaseService:
@@ -171,7 +171,7 @@ class SupabaseService:
         self,
         user_id: str,
         title: str,
-        list_name: str,
+        list_name: str | None,
         area: str | None,
         priority: str,
         deadline: str | None = None,
@@ -278,12 +278,13 @@ class SupabaseService:
             return 0
 
     def list_projects(self, user_id: str) -> List[Dict[str, Any]]:
-        """Return all projects for a user."""
+        """Return all active projects for a user."""
         try:
             result = (
                 self.supabase.table("projects")
                 .select(PROJECT_SELECT_COLUMNS)
                 .eq("user_id", user_id)
+                .eq("status", "active")
                 .order("created_at", desc=True)
                 .execute()
             )
@@ -293,13 +294,14 @@ class SupabaseService:
             return []
 
     def get_project(self, user_id: str, project_id: int) -> Optional[Dict[str, Any]]:
-        """Return a single project by id for a user."""
+        """Return a single active project by id for a user."""
         try:
             result = (
                 self.supabase.table("projects")
                 .select(PROJECT_SELECT_COLUMNS)
                 .eq("id", project_id)
                 .eq("user_id", user_id)
+                .eq("status", "active")
                 .execute()
             )
             if not result.data:
@@ -333,20 +335,24 @@ class SupabaseService:
             self.logger.exception("create_project failed: %s", exc)
             return None
 
-    def delete_project(self, user_id: str, project_id: int) -> bool:
-        """Delete a project for a user."""
+    def update_project_status(self, user_id: str, project_id: int, status: str) -> bool:
+        """Update the status of a project for a user."""
         try:
             result = (
                 self.supabase.table("projects")
-                .delete()
+                .update({"status": status})
                 .eq("id", project_id)
                 .eq("user_id", user_id)
                 .execute()
             )
             return bool(result.data)
         except Exception as exc:
-            self.logger.exception("delete_project failed: %s", exc)
+            self.logger.exception("update_project_status failed: %s", exc)
             return False
+
+    def delete_project(self, user_id: str, project_id: int) -> bool:
+        """Soft-delete a project for a user (mark as deleted)."""
+        return self.update_project_status(user_id, project_id, "deleted")
 
 
 supabase_service = SupabaseService()
