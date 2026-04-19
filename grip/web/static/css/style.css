@@ -1896,3 +1896,196 @@ body.auth-page {
         transition: none !important;
     }
 }
+
+/* ── Calendar (Apple Calendar via ICS) ────────────────────────────────── */
+
+.sidebar-empty-hint {
+    font-size: 12px;
+    color: #888;
+    padding: 6px 12px;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.calendar-sub-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    font-size: 13px;
+    color: #333;
+}
+
+.calendar-sub-swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.calendar-sub-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.calendar-sub-error {
+    color: #d32f2f;
+    font-weight: 700;
+    font-size: 12px;
+    cursor: help;
+}
+
+.calendar-sub-sync,
+.calendar-sub-delete {
+    background: none;
+    border: none;
+    padding: 2px 4px;
+    color: #888;
+    cursor: pointer;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+}
+
+.calendar-sub-sync:hover,
+.calendar-sub-delete:hover {
+    color: #333;
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.calendar-sub-delete:hover {
+    color: #d32f2f;
+}
+
+/* Inline events shown above task list in week views */
+.calendar-events-list {
+    list-style: none;
+    margin: 0 0 12px 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.calendar-event-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: #fafafa;
+    border-left: 3px solid #0288D1;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #444;
+}
+
+.calendar-event-date {
+    font-weight: 600;
+    color: #666;
+    min-width: 90px;
+}
+
+.calendar-event-time {
+    font-variant-numeric: tabular-nums;
+    color: #555;
+    min-width: 88px;
+}
+
+.calendar-event-summary {
+    flex: 1;
+    color: #222;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.calendar-event-location {
+    color: #777;
+    font-size: 12px;
+}
+
+.calendar-event-source {
+    color: #999;
+    font-size: 11px;
+    margin-left: auto;
+}
+
+/* Today agenda side panel */
+.today-agenda-toggle {
+    background: none;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #444;
+}
+
+.today-agenda-toggle:hover {
+    background: #f5f5f5;
+}
+
+.today-agenda-toggle.is-active {
+    background: #1976D2;
+    border-color: #1976D2;
+    color: #fff;
+}
+
+.today-agenda-panel {
+    width: 320px;
+    flex: 0 0 320px;
+    border-left: 1px solid #eee;
+    padding: 16px 20px;
+    overflow-y: auto;
+    background: #fafafa;
+}
+
+.today-agenda-header {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    text-transform: capitalize;
+}
+
+.today-agenda-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.today-agenda-empty {
+    color: #888;
+    font-size: 13px;
+    padding: 8px 0;
+}
+
+.today-agenda-item {
+    background: #fff;
+}
+
+.entity-modal-help {
+    font-size: 12px;
+    color: #666;
+    line-height: 1.5;
+    margin: 0 0 8px 0;
+}
+
+.entity-modal-help code {
+    background: #f0f0f0;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 11px;
+}
+
+.entity-modal-error {
+    color: #d32f2f;
+    font-size: 13px;
+    margin: 0;
+}

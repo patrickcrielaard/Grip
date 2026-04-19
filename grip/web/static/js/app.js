@@ -15,6 +15,10 @@ class TodoApp {
         this.expandedGoalIds = new Set();
         this.editingAreaId = null;
         this.editingGoalId = null;
+        this.calendarSubscriptions = [];
+        this.calendarEventsByRange = new Map(); // "from|to" -> events
+        this.todayAgendaOpen = localStorage.getItem("gripTodayAgendaOpen") === "1";
+        this._statusTimer = null;
         this.cacheElements();
         this.bindEvents();
         this.boot();
@@ -27,6 +31,7 @@ class TodoApp {
         this.renderAreaTree();
         this._populateAreaSelects();
         await Promise.all([this.loadProjects(), this.loadTodos()]);
+        this.loadCalendarSubscriptions();
     }
 
     cacheElements() {
@@ -103,6 +108,22 @@ class TodoApp {
         this.goalStartDateInput = document.getElementById("goalStartDateInput");
         this.goalEndDateInput = document.getElementById("goalEndDateInput");
         this.goalDescriptionInput = document.getElementById("goalDescriptionInput");
+        // Calendar (Apple Calendar via ICS)
+        this.calendarNav = document.getElementById("calendarNav");
+        this.addCalendarBtn = document.getElementById("addCalendarBtn");
+        this.calendarModal = document.getElementById("calendarModal");
+        this.calendarModalCloseBtn = document.getElementById("calendarModalCloseBtn");
+        this.calendarModalCancel = document.getElementById("calendarModalCancel");
+        this.calendarModalSave = document.getElementById("calendarModalSave");
+        this.calendarNameInput = document.getElementById("calendarNameInput");
+        this.calendarUrlInput = document.getElementById("calendarUrlInput");
+        this.calendarColorInput = document.getElementById("calendarColorInput");
+        this.calendarModalError = document.getElementById("calendarModalError");
+        this.calendarEventsList = document.getElementById("calendarEventsList");
+        this.todayAgendaToggle = document.getElementById("todayAgendaToggle");
+        this.todayAgendaPanel = document.getElementById("todayAgendaPanel");
+        this.todayAgendaList = document.getElementById("todayAgendaList");
+        this.todayAgendaTitle = document.getElementById("todayAgendaTitle");
         // Date picker
         this.datePicker = document.getElementById("datePicker");
         this.dpTextInput = document.getElementById("dpTextInput");
@@ -309,6 +330,44 @@ class TodoApp {
                 }
             });
         });
+
+        // Calendar subscription modal
+        if (this.addCalendarBtn) {
+            this.addCalendarBtn.addEventListener("click", () => this.openCalendarModal());
+        }
+        if (this.calendarModal) {
+            this.calendarModalCloseBtn.addEventListener("click", () => this.closeCalendarModal());
+            this.calendarModalCancel.addEventListener("click", () => this.closeCalendarModal());
+            this.calendarModal.addEventListener("click", (event) => {
+                if (event.target === this.calendarModal) this.closeCalendarModal();
+            });
+            this.calendarModalSave.addEventListener("click", () => this.saveCalendarSubscription());
+        }
+        if (this.calendarNav) {
+            this.calendarNav.addEventListener("click", (event) => {
+                const delBtn = event.target.closest(".calendar-sub-delete");
+                if (delBtn) {
+                    event.stopPropagation();
+                    const id = Number(delBtn.dataset.id);
+                    if (confirm("Agenda verwijderen?")) this.deleteCalendarSubscription(id);
+                    return;
+                }
+                const syncBtn = event.target.closest(".calendar-sub-sync");
+                if (syncBtn) {
+                    event.stopPropagation();
+                    this.syncCalendarSubscription(Number(syncBtn.dataset.id));
+                }
+            });
+        }
+        // Today agenda panel toggle
+        if (this.todayAgendaToggle) {
+            this.todayAgendaToggle.addEventListener("click", () => {
+                this.todayAgendaOpen = !this.todayAgendaOpen;
+                localStorage.setItem("gripTodayAgendaOpen", this.todayAgendaOpen ? "1" : "0");
+                this._applyCalendarChrome();
+                if (this.todayAgendaOpen) this.refreshTodayAgenda();
+            });
+        }
 
         // Date picker internal events
         if (this.datePicker) {
@@ -642,7 +701,40 @@ class TodoApp {
             this.projectActionsEl.hidden = !isActiveProject;
         }
 
+        this._applyCalendarChrome();
         this.renderTodos();
+        if (view.type === "view" && (view.value === "week" || view.value === "next-week")) {
+            const offset = view.value === "next-week" ? 1 : 0;
+            const range = this.getWeekRange(offset);
+            this.loadCalendarEvents(range.start, range.end).then(() =>
+                this.renderWeekEvents(range)
+            );
+        }
+        if (this._isTodayView() && this.todayAgendaOpen) {
+            this.refreshTodayAgenda();
+        }
+    }
+
+    _isTodayView() {
+        return this.currentView.type === "list" && this.currentView.value === "today";
+    }
+
+    _applyCalendarChrome() {
+        const isWeek = this.currentView.type === "view" &&
+            (this.currentView.value === "week" || this.currentView.value === "next-week");
+        const isToday = this._isTodayView();
+        if (this.calendarEventsList && !isWeek) {
+            this.calendarEventsList.hidden = true;
+            this.calendarEventsList.innerHTML = "";
+        }
+        if (this.todayAgendaToggle) {
+            this.todayAgendaToggle.hidden = !isToday;
+            this.todayAgendaToggle.setAttribute("aria-pressed", String(this.todayAgendaOpen));
+            this.todayAgendaToggle.classList.toggle("is-active", isToday && this.todayAgendaOpen);
+        }
+        const showPanel = isToday && this.todayAgendaOpen;
+        if (this.todayAgendaPanel) this.todayAgendaPanel.hidden = !showPanel;
+        document.body.classList.toggle("with-today-agenda", showPanel);
     }
 
     getViewLabel() {
@@ -816,13 +908,25 @@ class TodoApp {
         return response.json();
     }
 
-    setStatus(message) {
+    setStatus(message, options = {}) {
         if (!this.statusMessage) {
             return;
+        }
+        if (this._statusTimer) {
+            clearTimeout(this._statusTimer);
+            this._statusTimer = null;
         }
         this.statusMessage.textContent = message;
         if (message) {
             this.statusMessage.classList.add("visible");
+            const duration = options.duration ?? 3000;
+            if (duration > 0) {
+                this._statusTimer = setTimeout(() => {
+                    this.statusMessage.textContent = "";
+                    this.statusMessage.classList.remove("visible");
+                    this._statusTimer = null;
+                }, duration);
+            }
         } else {
             this.statusMessage.classList.remove("visible");
         }
@@ -2152,6 +2256,233 @@ class TodoApp {
         div.textContent = text;
         return div.innerHTML;
     }
+
+    // --- Calendar (Apple Calendar via ICS subscriptions) ---
+
+    async loadCalendarSubscriptions() {
+        try {
+            const data = await this.request("/api/calendar/subscriptions");
+            this.calendarSubscriptions = data.subscriptions || [];
+            this.renderCalendarSidebar();
+        } catch (error) {
+            console.warn("loadCalendarSubscriptions failed", error);
+        }
+    }
+
+    renderCalendarSidebar() {
+        if (!this.calendarNav) return;
+        if (this.calendarSubscriptions.length === 0) {
+            this.calendarNav.innerHTML = `<p class="sidebar-empty-hint">Nog geen agenda's. Voeg er één toe.</p>`;
+            return;
+        }
+        this.calendarNav.innerHTML = this.calendarSubscriptions
+            .map((sub) => {
+                const color = sub.color || "#0288D1";
+                const errorTitle = sub.last_error
+                    ? ` title="${this.escapeHtml(sub.last_error)}"`
+                    : "";
+                const errorBadge = sub.last_error
+                    ? `<span class="calendar-sub-error" aria-label="Synchronisatiefout"${errorTitle}>!</span>`
+                    : "";
+                return `
+                    <div class="calendar-sub-item"${errorTitle}>
+                        <span class="calendar-sub-swatch" style="background:${this.escapeHtml(color)}"></span>
+                        <span class="calendar-sub-name">${this.escapeHtml(sub.name)}</span>
+                        ${errorBadge}
+                        <button class="calendar-sub-sync" data-id="${sub.id}" type="button" title="Nu synchroniseren" aria-label="Nu synchroniseren">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="23 4 23 10 17 10"/>
+                                <polyline points="1 20 1 14 7 14"/>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                            </svg>
+                        </button>
+                        <button class="calendar-sub-delete" data-id="${sub.id}" type="button" title="Verwijderen" aria-label="Verwijderen">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                            </svg>
+                        </button>
+                    </div>
+                `;
+            })
+            .join("");
+    }
+
+    openCalendarModal() {
+        if (!this.calendarModal) return;
+        this.calendarNameInput.value = "";
+        this.calendarUrlInput.value = "";
+        this.calendarColorInput.value = "#0288D1";
+        this.calendarModalError.hidden = true;
+        this.calendarModalError.textContent = "";
+        this.calendarModal.hidden = false;
+        setTimeout(() => this.calendarNameInput.focus(), 0);
+    }
+
+    closeCalendarModal() {
+        if (this.calendarModal) this.calendarModal.hidden = true;
+    }
+
+    async saveCalendarSubscription() {
+        const name = (this.calendarNameInput.value || "").trim();
+        const url = (this.calendarUrlInput.value || "").trim();
+        const color = this.calendarColorInput.value || null;
+        if (!name || !url) {
+            this.calendarModalError.textContent = "Naam en URL zijn verplicht.";
+            this.calendarModalError.hidden = false;
+            return;
+        }
+        this.calendarModalSave.disabled = true;
+        try {
+            const data = await this.request("/api/calendar/subscriptions", {
+                method: "POST",
+                body: JSON.stringify({ name, url, color }),
+            });
+            this.closeCalendarModal();
+            await this.loadCalendarSubscriptions();
+            if (data.sync_error) {
+                this.setStatus(`Agenda toegevoegd, maar sync gaf een fout: ${data.sync_error}`);
+            } else {
+                this.setStatus("Agenda toegevoegd.");
+            }
+            this._refreshCalendarEventsForCurrentView();
+        } catch (error) {
+            this.calendarModalError.textContent = error.message || "Kon agenda niet toevoegen.";
+            this.calendarModalError.hidden = false;
+        } finally {
+            this.calendarModalSave.disabled = false;
+        }
+    }
+
+    async deleteCalendarSubscription(id) {
+        try {
+            await this.request(`/api/calendar/subscriptions/${id}`, { method: "DELETE" });
+            await this.loadCalendarSubscriptions();
+            this.calendarEventsByRange.clear();
+            this._refreshCalendarEventsForCurrentView();
+            this.setStatus("Agenda verwijderd.");
+        } catch (error) {
+            this.setStatus(error.message);
+        }
+    }
+
+    async syncCalendarSubscription(id) {
+        try {
+            const data = await this.request(`/api/calendar/subscriptions/${id}/sync`, { method: "POST" });
+            await this.loadCalendarSubscriptions();
+            this.calendarEventsByRange.clear();
+            this._refreshCalendarEventsForCurrentView();
+            if (data.sync_error) {
+                this.setStatus(`Sync mislukt: ${data.sync_error}`);
+            } else {
+                this.setStatus("Agenda gesynchroniseerd.");
+            }
+        } catch (error) {
+            this.setStatus(error.message);
+        }
+    }
+
+    _refreshCalendarEventsForCurrentView() {
+        if (this.currentView.type === "view" &&
+            (this.currentView.value === "week" || this.currentView.value === "next-week")) {
+            const offset = this.currentView.value === "next-week" ? 1 : 0;
+            const range = this.getWeekRange(offset);
+            this.calendarEventsByRange.delete(`${range.start}|${range.end}`);
+            this.loadCalendarEvents(range.start, range.end).then(() => this.renderWeekEvents(range));
+        }
+        if (this._isTodayView() && this.todayAgendaOpen) {
+            this.refreshTodayAgenda(true);
+        }
+    }
+
+    async loadCalendarEvents(startDate, endDate) {
+        const key = `${startDate}|${endDate}`;
+        if (this.calendarEventsByRange.has(key)) {
+            return this.calendarEventsByRange.get(key);
+        }
+        try {
+            const data = await this.request(
+                `/api/calendar/events?from=${encodeURIComponent(startDate)}&to=${encodeURIComponent(endDate)}`
+            );
+            const events = data.events || [];
+            this.calendarEventsByRange.set(key, events);
+            return events;
+        } catch (error) {
+            console.warn("loadCalendarEvents failed", error);
+            this.calendarEventsByRange.set(key, []);
+            return [];
+        }
+    }
+
+    _formatEventTime(event) {
+        if (event.all_day) return "Hele dag";
+        const start = new Date(event.start_at);
+        const end = new Date(event.end_at);
+        const fmt = (d) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+        return `${fmt(start)}–${fmt(end)}`;
+    }
+
+    _eventDateKey(event) {
+        // Group events by their local-date start.
+        const d = new Date(event.start_at);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    }
+
+    renderWeekEvents(range) {
+        if (!this.calendarEventsList) return;
+        const events = this.calendarEventsByRange.get(`${range.start}|${range.end}`) || [];
+        if (events.length === 0) {
+            this.calendarEventsList.hidden = true;
+            this.calendarEventsList.innerHTML = "";
+            return;
+        }
+        this.calendarEventsList.hidden = false;
+        this.calendarEventsList.innerHTML = events
+            .map((e) => {
+                const color = e.subscription_color || "#0288D1";
+                const time = this._formatEventTime(e);
+                const date = this._eventDateKey(e);
+                return `
+                    <li class="calendar-event-item" style="border-left-color:${this.escapeHtml(color)}">
+                        <span class="calendar-event-date">${this.escapeHtml(date)}</span>
+                        <span class="calendar-event-time">${this.escapeHtml(time)}</span>
+                        <span class="calendar-event-summary">${this.escapeHtml(e.summary || "(geen titel)")}</span>
+                        ${e.location ? `<span class="calendar-event-location">${this.escapeHtml(e.location)}</span>` : ""}
+                        <span class="calendar-event-source">${this.escapeHtml(e.subscription_name || "")}</span>
+                    </li>
+                `;
+            })
+            .join("");
+    }
+
+    async refreshTodayAgenda(force = false) {
+        if (!this.todayAgendaList) return;
+        const today = this.getToday();
+        if (force) this.calendarEventsByRange.delete(`${today}|${today}`);
+        const events = await this.loadCalendarEvents(today, today);
+        const sameDay = events.filter((e) => this._eventDateKey(e) === today);
+        if (this.todayAgendaTitle) {
+            this.todayAgendaTitle.textContent = this._dpFormatDisplay(today);
+        }
+        if (sameDay.length === 0) {
+            this.todayAgendaList.innerHTML = `<li class="today-agenda-empty">Geen afspraken vandaag.</li>`;
+            return;
+        }
+        this.todayAgendaList.innerHTML = sameDay
+            .map((e) => {
+                const color = e.subscription_color || "#0288D1";
+                return `
+                    <li class="calendar-event-item today-agenda-item" style="border-left-color:${this.escapeHtml(color)}">
+                        <span class="calendar-event-time">${this.escapeHtml(this._formatEventTime(e))}</span>
+                        <span class="calendar-event-summary">${this.escapeHtml(e.summary || "(geen titel)")}</span>
+                        ${e.location ? `<span class="calendar-event-location">${this.escapeHtml(e.location)}</span>` : ""}
+                        <span class="calendar-event-source">${this.escapeHtml(e.subscription_name || "")}</span>
+                    </li>
+                `;
+            })
+            .join("");
+    }
+
 }
 
 const app = new TodoApp();

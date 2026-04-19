@@ -29,6 +29,14 @@ GOAL_SELECT_COLUMNS = (
 AREA_STATUSES = {"active", "archived"}
 GOAL_STATUSES = {"active", "completed", "archived"}
 
+CALENDAR_SUBSCRIPTION_SELECT_COLUMNS = (
+    "id, user_id, name, url, color, enabled, last_synced_at, last_error, created_at"
+)
+CALENDAR_EVENT_SELECT_COLUMNS = (
+    "id, subscription_id, uid, summary, description, location, "
+    "start_at, end_at, all_day, rrule"
+)
+
 
 class SupabaseService:
     """Service for accessing Grip data via Supabase."""
@@ -604,6 +612,198 @@ class SupabaseService:
         except Exception as exc:
             self.logger.exception("delete_goal failed: %s", exc)
             return False
+
+    # ── Calendar subscriptions ──────────────────────────────────────────────
+
+    def list_calendar_subscriptions(self, user_id: str) -> List[Dict[str, Any]]:
+        """Return all calendar subscriptions for a user, oldest first."""
+        try:
+            result = (
+                self.supabase.table("calendar_subscriptions")
+                .select(CALENDAR_SUBSCRIPTION_SELECT_COLUMNS)
+                .eq("user_id", user_id)
+                .order("created_at", desc=False)
+                .execute()
+            )
+            return [cast(Dict[str, Any], row) for row in (result.data or [])]
+        except Exception as exc:
+            self.logger.exception("list_calendar_subscriptions failed: %s", exc)
+            return []
+
+    def get_calendar_subscription(
+        self, user_id: str, subscription_id: int
+    ) -> Optional[Dict[str, Any]]:
+        """Return a single calendar subscription owned by the user."""
+        try:
+            result = (
+                self.supabase.table("calendar_subscriptions")
+                .select(CALENDAR_SUBSCRIPTION_SELECT_COLUMNS)
+                .eq("id", subscription_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if not result.data:
+                return None
+            return cast(Dict[str, Any], result.data[0])
+        except Exception as exc:
+            self.logger.exception("get_calendar_subscription failed: %s", exc)
+            return None
+
+    def get_calendar_subscription_internal(
+        self, subscription_id: int
+    ) -> Optional[Dict[str, Any]]:
+        """Return a calendar subscription by id (no user scoping).
+
+        For background-sync use only — not exposed to HTTP routes.
+        """
+        try:
+            result = (
+                self.supabase.table("calendar_subscriptions")
+                .select(CALENDAR_SUBSCRIPTION_SELECT_COLUMNS)
+                .eq("id", subscription_id)
+                .execute()
+            )
+            if not result.data:
+                return None
+            return cast(Dict[str, Any], result.data[0])
+        except Exception as exc:
+            self.logger.exception("get_calendar_subscription_internal failed: %s", exc)
+            return None
+
+    def list_enabled_calendar_subscription_ids(self) -> List[int]:
+        """Return ids of all enabled subscriptions across all users."""
+        try:
+            result = (
+                self.supabase.table("calendar_subscriptions")
+                .select("id")
+                .eq("enabled", True)
+                .execute()
+            )
+            rows = [cast(Dict[str, Any], r) for r in (result.data or [])]
+            return [int(row["id"]) for row in rows]
+        except Exception as exc:
+            self.logger.exception(
+                "list_enabled_calendar_subscription_ids failed: %s", exc
+            )
+            return []
+
+    def create_calendar_subscription(
+        self,
+        user_id: str,
+        name: str,
+        url: str,
+        color: str | None = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Create a calendar subscription."""
+        try:
+            payload: Dict[str, Any] = {
+                "user_id": user_id,
+                "name": name,
+                "url": url,
+            }
+            if color is not None:
+                payload["color"] = color
+            result = (
+                self.supabase.table("calendar_subscriptions").insert(payload).execute()
+            )
+            if not result.data:
+                return None
+            if isinstance(result.data, list):
+                return cast(Dict[str, Any], result.data[0])
+            return cast(Dict[str, Any], result.data)
+        except Exception as exc:
+            self.logger.exception("create_calendar_subscription failed: %s", exc)
+            return None
+
+    def delete_calendar_subscription(self, user_id: str, subscription_id: int) -> bool:
+        """Delete a calendar subscription. Cached events cascade."""
+        try:
+            result = (
+                self.supabase.table("calendar_subscriptions")
+                .delete()
+                .eq("id", subscription_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            return bool(result.data)
+        except Exception as exc:
+            self.logger.exception("delete_calendar_subscription failed: %s", exc)
+            return False
+
+    def mark_calendar_subscription_synced(
+        self, subscription_id: int, error: str | None
+    ) -> None:
+        """Update last_synced_at + last_error for a subscription."""
+        try:
+            self.supabase.table("calendar_subscriptions").update(
+                {
+                    "last_synced_at": datetime.now(timezone.utc).isoformat(),
+                    "last_error": error,
+                }
+            ).eq("id", subscription_id).execute()
+        except Exception as exc:
+            self.logger.warning("mark_calendar_subscription_synced failed: %s", exc)
+
+    # ── Calendar events ─────────────────────────────────────────────────────
+
+    def replace_calendar_events(
+        self, subscription_id: int, events: List[Dict[str, Any]]
+    ) -> None:
+        """Replace all cached events for a subscription with the given list."""
+        try:
+            self.supabase.table("calendar_events").delete().eq(
+                "subscription_id", subscription_id
+            ).execute()
+            if not events:
+                return
+            payload = [
+                {**event, "subscription_id": subscription_id} for event in events
+            ]
+            # Insert in chunks to stay well below the PostgREST request limit.
+            for i in range(0, len(payload), 500):
+                self.supabase.table("calendar_events").insert(
+                    payload[i : i + 500]
+                ).execute()
+        except Exception as exc:
+            self.logger.exception("replace_calendar_events failed: %s", exc)
+
+    def list_calendar_events(
+        self, user_id: str, start: str, end: str
+    ) -> List[Dict[str, Any]]:
+        """Return events for the user that overlap [start, end] (ISO timestamps)."""
+        try:
+            sub_result = (
+                self.supabase.table("calendar_subscriptions")
+                .select("id, name, color")
+                .eq("user_id", user_id)
+                .eq("enabled", True)
+                .execute()
+            )
+            sub_rows = [cast(Dict[str, Any], r) for r in (sub_result.data or [])]
+            if not sub_rows:
+                return []
+            sub_ids = [int(r["id"]) for r in sub_rows]
+            sub_meta = {int(r["id"]): r for r in sub_rows}
+
+            result = (
+                self.supabase.table("calendar_events")
+                .select(CALENDAR_EVENT_SELECT_COLUMNS)
+                .in_("subscription_id", sub_ids)
+                .lte("start_at", end)
+                .gte("end_at", start)
+                .order("start_at", desc=False)
+                .execute()
+            )
+            rows = [cast(Dict[str, Any], r) for r in (result.data or [])]
+            for row in rows:
+                meta = sub_meta.get(int(row["subscription_id"]))
+                if meta:
+                    row["subscription_name"] = meta.get("name")
+                    row["subscription_color"] = meta.get("color")
+            return rows
+        except Exception as exc:
+            self.logger.exception("list_calendar_events failed: %s", exc)
+            return []
 
 
 supabase_service = SupabaseService()

@@ -1,5 +1,6 @@
 """FastAPI application setup for Grip."""
 
+import asyncio
 import secrets
 import time
 from contextlib import asynccontextmanager
@@ -14,8 +15,10 @@ from fastapi.templating import Jinja2Templates
 from mcp.server.auth.provider import AuthorizationCode
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from grip.calendar_service import sync_subscription
 from grip.routes.areas import router as area_router
 from grip.routes.authentication import router as auth_router
+from grip.routes.calendar import router as calendar_router
 from grip.routes.goals import router as goal_router
 from grip.routes.projects import router as project_router
 from grip.routes.todos import router as todo_router
@@ -53,10 +56,37 @@ _mcp_sub_app = _grip_mcp.streamable_http_app()  # initialises session manager la
 _templates = Jinja2Templates(directory=str(BASE_DIR / "web" / "templates"))
 
 
+CALENDAR_SYNC_INTERVAL_SECONDS = 15 * 60
+
+
+async def _calendar_sync_loop() -> None:
+    """Periodically refresh enabled calendar subscriptions."""
+    while True:
+        try:
+            ids = await asyncio.to_thread(
+                supabase_service.list_enabled_calendar_subscription_ids
+            )
+            for sub_id in ids:
+                await asyncio.to_thread(sync_subscription, sub_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — keep loop alive
+            logger.warning("calendar sync loop iteration failed: %s", exc)
+        await asyncio.sleep(CALENDAR_SYNC_INTERVAL_SECONDS)
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     async with _grip_mcp.session_manager.run():
-        yield
+        sync_task = asyncio.create_task(_calendar_sync_loop())
+        try:
+            yield
+        finally:
+            sync_task.cancel()
+            try:
+                await sync_task
+            except asyncio.CancelledError:
+                pass
 
 
 # ── FastAPI app ─────────────────────────────────────────────────────────────
@@ -72,6 +102,7 @@ app.include_router(todo_router)
 app.include_router(project_router)
 app.include_router(area_router)
 app.include_router(goal_router)
+app.include_router(calendar_router)
 
 app.mount("/mcp", _mcp_sub_app)
 app.add_middleware(_MCPSlashMiddleware)

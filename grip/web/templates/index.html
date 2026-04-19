@@ -98,6 +98,27 @@
         <div class="sidebar-section">
             <div class="sidebar-section-header">
                 <button class="sidebar-section-label sidebar-section-toggle" type="button"
+                        aria-expanded="true" data-toggle-section="calendarNav">
+                    Agenda's
+                    <svg class="collapse-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </button>
+                <button class="sidebar-section-add-btn" id="addCalendarBtn" type="button" title="Agenda toevoegen" aria-label="Agenda toevoegen">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                </button>
+            </div>
+            <nav class="sidebar-nav" id="calendarNav" aria-label="Agenda's">
+                <!-- rendered by JS -->
+            </nav>
+        </div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-section-header">
+                <button class="sidebar-section-label sidebar-section-toggle" type="button"
                         aria-expanded="true" data-toggle-section="areaNav">
                     Gebieden
                     <svg class="collapse-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -176,6 +197,14 @@
                 <h1 class="content-title" id="activeListLabel">Inbox</h1>
                 <span class="content-task-count" id="itemCount">0 tasks</span>
             </div>
+            <button class="today-agenda-toggle" id="todayAgendaToggle" type="button" hidden aria-pressed="false" title="Agenda van vandaag">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+            </button>
             <div class="content-header-actions" id="projectActions" hidden>
                 <button class="project-complete-btn" id="archiveProjectBtn" type="button" title="Project afronden">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -238,11 +267,24 @@
 
         <div id="statusMessage" class="status-message" role="status" aria-live="polite"></div>
 
+        <ul id="calendarEventsList" class="calendar-events-list" hidden>
+            <!-- Calendar events for the active week, injected by JS -->
+        </ul>
+
         <ul id="todoList" class="task-list">
             <!-- Todo items injected by JS -->
         </ul>
 
     </main>
+
+    <aside class="today-agenda-panel" id="todayAgendaPanel" hidden aria-label="Agenda vandaag">
+        <header class="today-agenda-header">
+            <h2 id="todayAgendaTitle">Vandaag</h2>
+        </header>
+        <ul class="today-agenda-list" id="todayAgendaList">
+            <!-- rendered by JS -->
+        </ul>
+    </aside>
 
     <!-- Floating action button -->
     <button class="fab-add-btn" id="addTaskToggle" type="button" aria-label="Taak toevoegen">
@@ -491,6 +533,45 @@
     </div>
 </div>
 
+<!-- Calendar subscription modal -->
+<div class="task-modal-overlay entity-modal-overlay" id="calendarModal" hidden role="dialog" aria-modal="true" aria-labelledby="calendarModalTitle">
+    <div class="entity-modal">
+        <div class="entity-modal-header">
+            <h2 id="calendarModalTitle">Agenda toevoegen</h2>
+            <button type="button" class="modal-close-btn" id="calendarModalCloseBtn" aria-label="Sluiten">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="entity-modal-body">
+            <p class="entity-modal-help">
+                Plak hier de openbare iCloud-deelbare URL van je agenda
+                (Calendar &rarr; rechtsklik op agenda &rarr; Delen &rarr; Openbare agenda).
+                URL begint met <code>webcal://</code> of <code>https://</code>.
+            </p>
+            <label class="entity-modal-field">
+                <span>Naam</span>
+                <input type="text" id="calendarNameInput" maxlength="120" autocomplete="off" placeholder="bijv. Werk">
+            </label>
+            <label class="entity-modal-field">
+                <span>URL</span>
+                <input type="url" id="calendarUrlInput" autocomplete="off" placeholder="webcal://...">
+            </label>
+            <label class="entity-modal-field">
+                <span>Kleur</span>
+                <input type="color" id="calendarColorInput" value="#0288D1">
+            </label>
+            <p class="entity-modal-error" id="calendarModalError" hidden></p>
+        </div>
+        <div class="entity-modal-actions">
+            <button type="button" class="entity-modal-cancel" id="calendarModalCancel">Annuleren</button>
+            <button type="button" class="entity-modal-save" id="calendarModalSave">Opslaan</button>
+        </div>
+    </div>
+</div>
+
 <!-- Custom date picker (singleton, shared across modal date fields) -->
 <div class="date-picker" id="datePicker" hidden>
     <div class="dp-manual-row">
@@ -527,5 +608,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=12"></script>
+<script src="/static/js/app.js?v=14"></script>
 {% endblock %}
