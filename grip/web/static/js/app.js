@@ -1432,9 +1432,11 @@ class TodoApp {
     async moveTodo(id, targetList) {
         this.setStatus("");
         try {
+            // Also clear project_id: the exclusivity trigger would otherwise
+            // wipe `list` back to NULL for a task that still has a project.
             const data = await this.request(`/api/todos/${id}`, {
                 method: "PATCH",
-                body: JSON.stringify({ list: targetList }),
+                body: JSON.stringify({ list: targetList, project_id: null }),
             });
             if (data.todo) {
                 this.applyTodoUpdate(data.todo);
@@ -1818,8 +1820,10 @@ class TodoApp {
                     ? `<span class="todo-meta-chip todo-state-${todo.state}">${this.escapeHtml(this.getStateLabel(todo.state))}</span>`
                     : "";
 
+                // Project tasks have list=null by invariant — skip the chip
+                // instead of rendering a misleading "Inbox" label.
                 const listLabel =
-                    this.currentView.type !== "list"
+                    this.currentView.type !== "list" && todo.list
                         ? `<span class="todo-meta-chip">${this.escapeHtml(this.getListLabel(todo.list))}</span>`
                         : "";
 
