@@ -229,13 +229,10 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
     if not title:
         raise HTTPException(status_code=400, detail="Title is required")
 
-    # Enforce mutual exclusivity: task cannot be in both a list and a project
+    # Validate inputs; the DB trigger `tasks_list_project_exclusivity_trg`
+    # owns the invariant (project ⊕ list) so we just pass both through.
     project_id = _validate_project_id(user["id"], payload.project_id)
-    if project_id is not None:
-        # Tasks in projects should not have a list
-        list_name = None
-    else:
-        list_name = _normalize_list_name(payload.list_name) or DEFAULT_LIST
+    list_name = _normalize_list_name(payload.list_name) or DEFAULT_LIST
 
     area_id = _resolve_area_id(user["id"], payload.area_id)
     priority = _normalize_priority(payload.priority)
@@ -296,28 +293,16 @@ async def update_todo(
         updates["title"] = title
     if payload.completed is not None:
         updates["completed"] = payload.completed
-    # Handle list and project_id with mutual exclusivity enforcement
-    setting_list = payload.list_name is not None
-    setting_project = "project_id" in payload.model_fields_set
-
-    if setting_list:
-        list_name = _normalize_list_name(payload.list_name)
-        updates["list"] = list_name
-        # If setting list, clear project
-        if setting_project and payload.project_id is not None:
-            updates["project_id"] = None
-        elif not setting_project:
-            # Only clear project if not explicitly setting it
-            updates["project_id"] = None
-    elif setting_project:
+    # Pass list_name / project_id through after validation. The DB trigger
+    # tasks_list_project_exclusivity_trg enforces `project ⊕ list`:
+    #   • project_id set → list auto-cleared to NULL
+    #   • project_id cleared → list auto-restored to 'inbox' if NULL
+    if payload.list_name is not None:
+        updates["list"] = _normalize_list_name(payload.list_name)
+    if "project_id" in payload.model_fields_set:
         if payload.project_id is not None:
             _validate_project_id(user["id"], payload.project_id)
-            updates["project_id"] = payload.project_id
-            # If setting project, clear list
-            updates["list"] = None
-        else:
-            # Setting project to None, keep it
-            updates["project_id"] = None
+        updates["project_id"] = payload.project_id
 
     if "area_id" in payload.model_fields_set:
         updates["area_id"] = _resolve_area_id(user["id"], payload.area_id)
@@ -381,10 +366,18 @@ async def update_todo(
             )
             recurrence_end = current.get("recurrence_end")
             if not recurrence_end or next_date <= recurrence_end:
+                # Preserve parent's bucket semantics: a project task spawns
+                # a project task with list=None; a list task spawns a list
+                # task. Trigger would normalise either way, but being
+                # explicit keeps the intent clear at the call site.
+                parent_project_id = current.get("project_id")
+                spawned_list = (
+                    None if parent_project_id else (current.get("list") or "inbox")
+                )
                 spawned_todo = supabase_service.create_task(
                     user["id"],
                     current["title"],
-                    current.get("list", "inbox"),
+                    spawned_list,
                     current.get("area_id"),
                     current.get("priority", "not_set"),
                     deadline=current.get("deadline"),
@@ -394,7 +387,7 @@ async def update_todo(
                     recurrence_interval=current["recurrence_interval"],
                     recurrence_unit=current["recurrence_unit"],
                     recurrence_end=recurrence_end,
-                    project_id=current.get("project_id"),
+                    project_id=parent_project_id,
                 )
 
     todo = supabase_service.update_task(user["id"], todo_id, updates)

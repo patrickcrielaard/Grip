@@ -302,10 +302,17 @@ def create_todo(
         _v(_validate_project_id, _user_id(), project_id)
     resolved_area_id = _v(_resolve_area_id, _user_id(), area_id)
     ri, ru = _v(_normalize_recurrence, recurrence_interval, recurrence_unit)
+    # Enforce `project ⊕ list` invariant at the application layer too so the
+    # caller sees predictable results; the DB trigger is the canonical enforcer.
+    list_arg = (
+        None
+        if project_id is not None
+        else (_v(_normalize_list_name, list) or DEFAULT_LIST)
+    )
     todo = supabase_service.create_task(
         _user_id(),
         title,
-        _v(_normalize_list_name, list) or DEFAULT_LIST,
+        list_arg,
         resolved_area_id,
         _v(_normalize_priority, priority),
         deadline=_v(_normalize_date, deadline, "deadline"),
@@ -363,6 +370,9 @@ def update_todo(
             updates["area_id"] = None
         else:
             updates["area_id"] = _v(_resolve_area_id, _user_id(), area_id)
+    # `project ⊕ list`: if the caller assigns a project, any concurrent `list`
+    # would violate the invariant. Trigger would silently clear it; drop it
+    # here so the caller's intent is unambiguous in logs/payloads.
     if priority is not None:
         updates["priority"] = _v(_normalize_priority, priority)
     if deadline is not None:
@@ -389,6 +399,8 @@ def update_todo(
         else:
             _v(_validate_project_id, _user_id(), project_id)
             updates["project_id"] = project_id
+            # Strip any concurrent list assignment — project wins.
+            updates.pop("list", None)
 
     # Bidirectional state <-> completed sync
     if "state" in updates and "completed" not in updates:
@@ -416,10 +428,16 @@ def update_todo(
             )
             rec_end = current.get("recurrence_end")
             if not rec_end or next_date <= rec_end:
+                # `project ⊕ list`: spawn inherits parent bucket; project
+                # tasks spawn project tasks with list=None.
+                parent_project_id = current.get("project_id")
+                spawned_list = (
+                    None if parent_project_id else (current.get("list") or "inbox")
+                )
                 spawned = supabase_service.create_task(
                     _user_id(),
                     current["title"],
-                    current.get("list", "inbox"),
+                    spawned_list,
                     current.get("area_id"),
                     current.get("priority", "not_set"),
                     deadline=current.get("deadline"),
@@ -429,7 +447,7 @@ def update_todo(
                     recurrence_interval=current["recurrence_interval"],
                     recurrence_unit=current["recurrence_unit"],
                     recurrence_end=rec_end,
-                    project_id=current.get("project_id"),
+                    project_id=parent_project_id,
                 )
 
     result = supabase_service.update_task(_user_id(), todo_id, updates)

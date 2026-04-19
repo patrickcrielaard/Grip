@@ -42,7 +42,11 @@ class SupabaseService:
 
     def _normalize_task_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
         """Backfill task defaults for nullable/legacy columns."""
-        if not row.get("list"):
+        # `list` is legitimately NULL for project tasks (enforced by the
+        # tasks_list_project_exclusivity_trg trigger). Only default to "inbox"
+        # when the task has no project either — i.e. an unparented task with
+        # a stray NULL from legacy data.
+        if not row.get("list") and not row.get("project_id"):
             row["list"] = "inbox"
         if not row.get("state"):
             row["state"] = "to_do"

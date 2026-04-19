@@ -729,8 +729,11 @@ class TodoApp {
     }
 
     normalizeTodo(todo) {
-        const normalizedList =
-            this.normalizeListName(todo.list) || this.availableLists[0];
+        // A task is in a list XOR a project. Keep list=null for project tasks;
+        // only default to "inbox" for unparented tasks with a stray null list.
+        const normalizedList = todo.project_id
+            ? null
+            : this.normalizeListName(todo.list) || this.availableLists[0];
         const normalizedPriority = this.normalizePriority(todo.priority);
         return {
             ...todo,
@@ -1337,23 +1340,27 @@ class TodoApp {
         this.addButton.disabled = true;
         this.setStatus("");
 
+        // A task lives in a list XOR a project; if we're creating inside a
+        // project view, omit `list` so the backend trigger keeps it NULL.
+        const body = {
+            title,
+            area_id: areaId,
+            priority,
+            start_date: startDate,
+            planned_date: plannedDate,
+            deadline,
+            duration,
+            recurrence_interval: recurrenceIntervalVal,
+            recurrence_unit: recurrenceUnitVal,
+            recurrence_end: recurrenceEndVal,
+            project_id: projectId,
+        };
+        if (!projectId) body.list = targetList;
+
         try {
             const data = await this.request("/api/todos", {
                 method: "POST",
-                body: JSON.stringify({
-                    title,
-                    list: targetList,
-                    area_id: areaId,
-                    priority,
-                    start_date: startDate,
-                    planned_date: plannedDate,
-                    deadline,
-                    duration,
-                    recurrence_interval: recurrenceIntervalVal,
-                    recurrence_unit: recurrenceUnitVal,
-                    recurrence_end: recurrenceEndVal,
-                    project_id: projectId,
-                }),
+                body: JSON.stringify(body),
             });
             if (data.todo) {
                 this.todos.unshift(this.normalizeTodo(data.todo));
@@ -1600,7 +1607,9 @@ class TodoApp {
         this.modalCheckbox.checked = todo.completed;
         this.modalTitleInput.value = todo.title;
         if (this.modalState) this.modalState.value = todo.state || "to_do";
-        this.modalList.value = todo.list || "inbox";
+        // Project tasks have list=NULL by invariant; show the empty placeholder
+        // option so the modal doesn't misleadingly claim the task is in "Inbox".
+        this.modalList.value = todo.project_id ? "" : (todo.list || "inbox");
         this._setModalDateField(this.modalPlannedDate, todo.planned_date || "");
         this._setModalDateField(this.modalStartDate, todo.start_date || "");
         this.modalDuration.value = todo.duration || "";
@@ -1672,7 +1681,12 @@ class TodoApp {
         if (field === "duration") {
             payload = { duration: value ? Number(value) : null };
         } else if (field === "list") {
-            payload = { list: value };
+            // The "—" placeholder is for display only (project tasks have no
+            // list). Ignore it so we don't POST an invalid empty list value.
+            if (!value) return;
+            // Moving a task to a list must also clear project_id; otherwise
+            // the exclusivity trigger wipes `list` straight back to NULL.
+            payload = { list: value, project_id: null };
         } else if (field === "project") {
             payload = { project_id: value ? Number(value) : null };
         } else if (field === "area") {
