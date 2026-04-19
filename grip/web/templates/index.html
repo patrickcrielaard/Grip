@@ -98,8 +98,29 @@
         <div class="sidebar-section">
             <div class="sidebar-section-header">
                 <button class="sidebar-section-label sidebar-section-toggle" type="button"
+                        aria-expanded="true" data-toggle-section="areaNav">
+                    Gebieden
+                    <svg class="collapse-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </button>
+                <button class="sidebar-section-add-btn" id="addAreaBtn" type="button" title="Nieuw gebied" aria-label="Nieuw gebied">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                </button>
+            </div>
+            <nav class="sidebar-nav area-tree" id="areaNav" aria-label="Gebieden">
+                <!-- rendered by JS -->
+            </nav>
+        </div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-section-header">
+                <button class="sidebar-section-label sidebar-section-toggle" type="button"
                         aria-expanded="true" data-toggle-section="projectNav">
-                    Projecten
+                    Losse projecten
                     <svg class="collapse-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="6 9 12 15 18 9"/>
                     </svg>
@@ -111,7 +132,7 @@
                     </svg>
                 </button>
             </div>
-            <nav class="sidebar-nav" id="projectNav" aria-label="Projecten">
+            <nav class="sidebar-nav" id="projectNav" aria-label="Losse projecten">
                 <!-- rendered by JS -->
             </nav>
             <div id="newProjectForm" class="sidebar-add-project-form" hidden>
@@ -129,28 +150,6 @@
             </button>
             <nav class="sidebar-nav" id="projectArchivedNav" aria-label="Gearchiveerde projecten">
                 <!-- rendered by JS -->
-            </nav>
-        </div>
-
-        <div class="sidebar-section">
-            <button class="sidebar-section-label sidebar-section-toggle" type="button"
-                    aria-expanded="true" data-toggle-section="areaNav">
-                Gebieden
-                <svg class="collapse-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"/>
-                </svg>
-            </button>
-            <nav class="sidebar-nav" id="areaNav" aria-label="Areas">
-                <button class="sidebar-item" type="button" data-area-filter="personal" aria-pressed="false">
-                    <span class="sidebar-dot dot-personal"></span>
-                    <span class="sidebar-label">Persoonlijk</span>
-                    <span class="sidebar-count" data-count-area="personal"></span>
-                </button>
-                <button class="sidebar-item" type="button" data-area-filter="work" aria-pressed="false">
-                    <span class="sidebar-dot dot-work"></span>
-                    <span class="sidebar-label">Werk</span>
-                    <span class="sidebar-count" data-count-area="work"></span>
-                </button>
             </nav>
         </div>
 
@@ -193,8 +192,6 @@
                 <input type="text" id="todoInput" placeholder="Nieuwe taak..." class="add-task-input" autocomplete="off">
                 <select id="areaSelect" class="add-task-select" aria-label="Task area">
                     <option value="">Geen gebied</option>
-                    <option value="personal">Persoonlijk</option>
-                    <option value="work">Werk</option>
                 </select>
                 <select id="prioritySelect" class="add-task-select" aria-label="Task priority">
                     <option value="not_set">Geen prioriteit</option>
@@ -377,8 +374,6 @@
                             <span class="modal-field-label">Gebied</span>
                             <select id="modal-area" class="modal-field-input">
                                 <option value="">Geen gebied</option>
-                                <option value="personal">Persoonlijk</option>
-                                <option value="work">Werk</option>
                             </select>
                         </div>
                     </div>
@@ -419,6 +414,82 @@
         </div>
     </div>
 </div>
+<!-- Area create/edit modal -->
+<div class="task-modal-overlay entity-modal-overlay" id="areaModal" hidden role="dialog" aria-modal="true" aria-labelledby="areaModalTitle">
+    <div class="entity-modal">
+        <div class="entity-modal-header">
+            <h2 id="areaModalTitle">Nieuw gebied</h2>
+            <button type="button" class="modal-close-btn" id="areaModalCloseBtn" aria-label="Sluiten">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="entity-modal-body">
+            <label class="entity-modal-field">
+                <span>Naam</span>
+                <input type="text" id="areaNameInput" maxlength="120" autocomplete="off" placeholder="bijv. Gezondheid">
+            </label>
+            <label class="entity-modal-field">
+                <span>Kleur</span>
+                <input type="color" id="areaColorInput" value="#1976D2">
+            </label>
+            <label class="entity-modal-field">
+                <span>Beschrijving</span>
+                <textarea id="areaDescriptionInput" rows="3" placeholder="Optioneel"></textarea>
+            </label>
+        </div>
+        <div class="entity-modal-actions">
+            <button type="button" class="entity-modal-cancel" id="areaModalCancel">Annuleren</button>
+            <button type="button" class="entity-modal-save" id="areaModalSave">Opslaan</button>
+        </div>
+    </div>
+</div>
+
+<!-- Goal create/edit modal -->
+<div class="task-modal-overlay entity-modal-overlay" id="goalModal" hidden role="dialog" aria-modal="true" aria-labelledby="goalModalTitle">
+    <div class="entity-modal">
+        <div class="entity-modal-header">
+            <h2 id="goalModalTitle">Nieuw doel</h2>
+            <button type="button" class="modal-close-btn" id="goalModalCloseBtn" aria-label="Sluiten">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="entity-modal-body">
+            <label class="entity-modal-field">
+                <span>Naam</span>
+                <input type="text" id="goalNameInput" maxlength="280" autocomplete="off" placeholder="bijv. Marathon lopen">
+            </label>
+            <label class="entity-modal-field">
+                <span>Gebied</span>
+                <select id="goalAreaSelect"></select>
+            </label>
+            <div class="entity-modal-field-row">
+                <label class="entity-modal-field">
+                    <span>Startdatum</span>
+                    <input type="date" id="goalStartDateInput">
+                </label>
+                <label class="entity-modal-field">
+                    <span>Einddatum</span>
+                    <input type="date" id="goalEndDateInput">
+                </label>
+            </div>
+            <label class="entity-modal-field">
+                <span>Beschrijving</span>
+                <textarea id="goalDescriptionInput" rows="3" placeholder="Optioneel"></textarea>
+            </label>
+        </div>
+        <div class="entity-modal-actions">
+            <button type="button" class="entity-modal-cancel" id="goalModalCancel">Annuleren</button>
+            <button type="button" class="entity-modal-save" id="goalModalSave">Opslaan</button>
+        </div>
+    </div>
+</div>
+
 <!-- Custom date picker (singleton, shared across modal date fields) -->
 <div class="date-picker" id="datePicker" hidden>
     <div class="dp-manual-row">
@@ -455,5 +526,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=10"></script>
+<script src="/static/js/app.js?v=11"></script>
 {% endblock %}

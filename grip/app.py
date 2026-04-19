@@ -14,7 +14,9 @@ from fastapi.templating import Jinja2Templates
 from mcp.server.auth.provider import AuthorizationCode
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from grip.routes.areas import router as area_router
 from grip.routes.authentication import router as auth_router
+from grip.routes.goals import router as goal_router
 from grip.routes.projects import router as project_router
 from grip.routes.todos import router as todo_router
 from grip.supabase_service import supabase_service
@@ -68,6 +70,8 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 app.include_router(auth_router)
 app.include_router(todo_router)
 app.include_router(project_router)
+app.include_router(area_router)
+app.include_router(goal_router)
 
 app.mount("/mcp", _mcp_sub_app)
 app.add_middleware(_MCPSlashMiddleware)

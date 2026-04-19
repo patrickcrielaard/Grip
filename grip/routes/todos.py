@@ -24,7 +24,6 @@ logger = logging.getLogger("grip.todos")
 
 ALLOWED_LISTS = {"inbox", "today"}
 DEFAULT_LIST = "inbox"
-ALLOWED_AREAS = {"personal", "work"}
 ALLOWED_PRIORITIES = {"not_set", "low", "medium", "high"}
 DEFAULT_PRIORITY = "not_set"
 ALLOWED_STATES = {"to_do", "in_progress", "done", "waiting", "someday"}
@@ -39,7 +38,7 @@ class TodoCreate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     title: str = Field(..., min_length=1, max_length=280)
     list_name: str = Field(default=DEFAULT_LIST, alias="list")
-    area: str | None = None
+    area_id: int | None = None
     priority: str | None = DEFAULT_PRIORITY
     deadline: str | None = None
     planned_date: str | None = None
@@ -59,7 +58,7 @@ class TodoUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=280)
     completed: bool | None = None
     list_name: str | None = Field(default=None, alias="list")
-    area: str | None = None
+    area_id: int | None = None
     priority: str | None = None
     deadline: str | None = None
     planned_date: str | None = None
@@ -83,15 +82,14 @@ def _normalize_list_name(value: str | None) -> str | None:
     return normalized
 
 
-def _normalize_area(value: str | None) -> str | None:
-    if value is None:
+def _resolve_area_id(user_id: str, area_id: int | None) -> int | None:
+    """Validate that area_id belongs to the user (or return None)."""
+    if area_id is None:
         return None
-    normalized = value.strip().lower()
-    if not normalized:
-        return None
-    if normalized not in ALLOWED_AREAS:
-        raise HTTPException(status_code=400, detail="Area must be Personal or Work")
-    return normalized
+    area = supabase_service.get_area(user_id, area_id)
+    if not area:
+        raise HTTPException(status_code=400, detail=f"Area {area_id} not found")
+    return area_id
 
 
 def _normalize_priority(value: str | None) -> str:
@@ -239,7 +237,7 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
     else:
         list_name = _normalize_list_name(payload.list_name) or DEFAULT_LIST
 
-    area = _normalize_area(payload.area)
+    area_id = _resolve_area_id(user["id"], payload.area_id)
     priority = _normalize_priority(payload.priority)
     deadline = _normalize_date(payload.deadline, "Deadline")
     planned_date = _normalize_date(payload.planned_date, "Planned date")
@@ -254,7 +252,7 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
         user["id"],
         title,
         list_name,
-        area,
+        area_id,
         priority,
         deadline=deadline,
         planned_date=planned_date,
@@ -321,8 +319,8 @@ async def update_todo(
             # Setting project to None, keep it
             updates["project_id"] = None
 
-    if "area" in payload.model_fields_set:
-        updates["area"] = _normalize_area(payload.area)
+    if "area_id" in payload.model_fields_set:
+        updates["area_id"] = _resolve_area_id(user["id"], payload.area_id)
     if "priority" in payload.model_fields_set:
         updates["priority"] = _normalize_priority(payload.priority)
     if "deadline" in payload.model_fields_set:
@@ -387,7 +385,7 @@ async def update_todo(
                     user["id"],
                     current["title"],
                     current.get("list", "inbox"),
-                    current.get("area"),
+                    current.get("area_id"),
                     current.get("priority", "not_set"),
                     deadline=current.get("deadline"),
                     planned_date=next_date,

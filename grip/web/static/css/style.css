@@ -223,19 +223,204 @@ button.sidebar-section-label {
     display: none;
 }
 
-.sidebar-dot {
+/* ===== Area Tree (Areas → Goals → Projects) ===== */
+.area-tree {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* Tree node: shared row for areas, goals, projects */
+.tree-node {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px 7px 6px;
+    border-radius: var(--radius-sm);
+    color: var(--ink-secondary);
+    font-size: 0.82rem;
+    font-weight: 300;
+    font-family: var(--font-body);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+    width: 100%;
+    text-align: left;
+    user-select: none;
+}
+
+.tree-node:hover {
+    background: var(--hover-bg);
+    color: var(--ink);
+}
+
+.tree-node.active {
+    background: var(--active-bg);
+    color: var(--ink);
+    font-weight: 600;
+}
+
+/* Area nodes stand out slightly: heavier weight */
+.tree-node.tree-area {
+    font-weight: 600;
+    color: var(--ink);
+    font-size: 0.84rem;
+}
+
+/* Goal nodes: medium-weight accent */
+.tree-node.tree-goal {
+    font-weight: 500;
+    color: var(--ink);
+}
+
+/* Expand/collapse chevron */
+.tree-toggle {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    border: none;
+    background: transparent;
+    color: var(--ink-tertiary);
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+}
+
+.tree-toggle:hover {
+    color: var(--ink);
+    background: var(--hover-bg);
+}
+
+.tree-toggle svg {
+    width: 12px;
+    height: 12px;
+}
+
+.tree-toggle-placeholder {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+/* Color swatch for areas (inherits color via inline style) */
+.area-swatch {
     width: 10px;
     height: 10px;
     border-radius: 50%;
     flex-shrink: 0;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
-.dot-personal {
-    background: #5856d6;
+/* Small tree icon (for goals and projects) */
+.tree-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    color: var(--ink-tertiary);
+    stroke: currentColor;
+    fill: none;
 }
 
-.dot-work {
-    background: #30b0c7;
+.tree-node.active .tree-icon {
+    color: var(--ink);
+}
+
+/* Label wraps intelligently, meta sits after */
+.tree-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tree-label-meta {
+    font-size: 0.72rem;
+    font-weight: 400;
+    color: var(--ink-tertiary);
+}
+
+/* Inline action buttons (+ Doel / +) — hidden until hover */
+.tree-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    flex-shrink: 0;
+}
+
+.tree-node:hover .tree-actions,
+.tree-node:focus-within .tree-actions {
+    opacity: 1;
+}
+
+.tree-action {
+    border: none;
+    background: transparent;
+    color: var(--ink-tertiary);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    font-family: var(--font-body);
+    line-height: 1.2;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.tree-action:hover {
+    background: var(--hover-bg);
+    color: var(--ink);
+}
+
+/* Nested children indent progressively */
+.tree-children {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-left: 18px;
+}
+
+.tree-children-goal {
+    padding-left: 14px;
+}
+
+/* Count badge at the right edge of a tree row */
+.tree-count {
+    flex-shrink: 0;
+}
+
+/* Archived area bucket: greyed out, still navigable */
+.tree-archived-header {
+    padding: 12px 8px 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-tertiary);
+}
+
+.tree-node.tree-archived {
+    opacity: 0.6;
+}
+
+.tree-node.tree-archived .tree-label {
+    font-style: italic;
+}
+
+/* Inline color swatch in task chips */
+.todo-area-swatch {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+    vertical-align: middle;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
 /* ===== Main Content ===== */
@@ -286,6 +471,10 @@ button.sidebar-section-label {
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+.content-header-actions[hidden] {
+    display: none;
 }
 
 .project-complete-btn {
@@ -1012,6 +1201,149 @@ input.modal-field-input {
 .modal-field.is-set input.modal-field-input,
 .modal-field.is-editing input.modal-field-input {
     display: block;
+}
+
+/* ===== Entity Modal (Area / Goal create & edit) ===== */
+.entity-modal-overlay[hidden] {
+    display: none;
+}
+
+.entity-modal {
+    width: min(460px, 100%);
+    background: #fff;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.entity-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.entity-modal-header h2 {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 0;
+}
+
+.entity-modal-body {
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.entity-modal-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: var(--ink-secondary);
+}
+
+.entity-modal-field > span {
+    font-weight: 500;
+    color: var(--ink);
+}
+
+.entity-modal-field input[type="text"],
+.entity-modal-field input[type="date"],
+.entity-modal-field select,
+.entity-modal-field textarea {
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    color: var(--ink);
+    background: #fff;
+    transition: border-color 0.15s ease;
+    resize: vertical;
+}
+
+.entity-modal-field input[type="text"]:focus,
+.entity-modal-field input[type="date"]:focus,
+.entity-modal-field select:focus,
+.entity-modal-field textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.entity-modal-field input[type="color"] {
+    width: 48px;
+    height: 32px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    cursor: pointer;
+    padding: 2px;
+}
+
+.entity-modal-field-row {
+    display: flex;
+    gap: 10px;
+}
+
+.entity-modal-field-row .entity-modal-field {
+    flex: 1;
+    min-width: 0;
+}
+
+.entity-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 20px 16px;
+    border-top: 1px solid var(--border-light);
+}
+
+.entity-modal-cancel,
+.entity-modal-save {
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-body);
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.entity-modal-cancel {
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--ink-secondary);
+}
+
+.entity-modal-cancel:hover {
+    background: var(--hover-bg);
+    color: var(--ink);
+    border-color: var(--ink-tertiary);
+}
+
+.entity-modal-save {
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+}
+
+.entity-modal-save:hover {
+    opacity: 0.88;
+}
+
+.entity-modal-save:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* ===== Collapsible sidebar section ===== */

@@ -14,11 +14,20 @@ from grip.configuration import settings
 TASK_PRIORITIES = {"not_set", "low", "medium", "high"}
 
 TASK_SELECT_COLUMNS = (
-    "id, title, completed, created_at, list, area, priority, deadline, "
+    "id, title, completed, created_at, list, area_id, priority, deadline, "
     "planned_date, start_date, duration, recurrence_interval, recurrence_unit, "
     "recurrence_end, state, project_id"
 )
-PROJECT_SELECT_COLUMNS = "id, name, start_date, end_date, created_at, status"
+PROJECT_SELECT_COLUMNS = (
+    "id, name, start_date, end_date, created_at, status, area_id, goal_id"
+)
+AREA_SELECT_COLUMNS = "id, name, color, description, status, created_at"
+GOAL_SELECT_COLUMNS = (
+    "id, area_id, name, description, start_date, end_date, status, created_at"
+)
+
+AREA_STATUSES = {"active", "archived"}
+GOAL_STATUSES = {"active", "completed", "archived"}
 
 
 class SupabaseService:
@@ -172,7 +181,7 @@ class SupabaseService:
         user_id: str,
         title: str,
         list_name: str | None,
-        area: str | None,
+        area_id: int | None,
         priority: str,
         deadline: str | None = None,
         planned_date: str | None = None,
@@ -190,7 +199,7 @@ class SupabaseService:
                 "user_id": user_id,
                 "title": title,
                 "list": list_name,
-                "area": area,
+                "area_id": area_id,
                 "priority": priority,
                 "state": state or "to_do",
             }
@@ -277,17 +286,35 @@ class SupabaseService:
             self.logger.exception("clear_completed failed: %s", exc)
             return 0
 
-    def list_projects(self, user_id: str) -> List[Dict[str, Any]]:
-        """Return all active projects for a user."""
+    # ── Projects ────────────────────────────────────────────────────────────
+
+    def list_projects(
+        self,
+        user_id: str,
+        area_id: int | None = None,
+        goal_id: int | None = None,
+        unparented: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Return projects for a user, optionally filtered.
+
+        area_id: return only projects attached to this area (directly or via a goal).
+        goal_id: return only projects attached to this goal.
+        unparented: if True, return only projects with neither area_id nor goal_id.
+        """
         try:
-            result = (
+            query = (
                 self.supabase.table("projects")
                 .select(PROJECT_SELECT_COLUMNS)
                 .eq("user_id", user_id)
                 .eq("status", "active")
-                .order("created_at", desc=True)
-                .execute()
             )
+            if area_id is not None:
+                query = query.eq("area_id", area_id)
+            if goal_id is not None:
+                query = query.eq("goal_id", goal_id)
+            if unparented:
+                query = query.is_("area_id", None).is_("goal_id", None)
+            result = query.order("created_at", desc=True).execute()
             return [cast(Dict[str, Any], row) for row in (result.data or [])]
         except Exception as exc:
             self.logger.exception("list_projects failed: %s", exc)
@@ -317,14 +344,23 @@ class SupabaseService:
         name: str,
         start_date: str | None = None,
         end_date: str | None = None,
+        area_id: int | None = None,
+        goal_id: int | None = None,
     ) -> Optional[Dict[str, Any]]:
-        """Create a new project."""
+        """Create a new project.
+
+        If goal_id is set, the DB trigger forces area_id to match the goal's area.
+        """
         try:
             payload: Dict[str, Any] = {"user_id": user_id, "name": name}
             if start_date is not None:
                 payload["start_date"] = start_date
             if end_date is not None:
                 payload["end_date"] = end_date
+            if area_id is not None:
+                payload["area_id"] = area_id
+            if goal_id is not None:
+                payload["goal_id"] = goal_id
             result = self.supabase.table("projects").insert(payload).execute()
             if not result.data:
                 return None
@@ -335,24 +371,235 @@ class SupabaseService:
             self.logger.exception("create_project failed: %s", exc)
             return None
 
-    def update_project_status(self, user_id: str, project_id: int, status: str) -> bool:
-        """Update the status of a project for a user."""
+    def update_project(
+        self, user_id: str, project_id: int, updates: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Update a project's mutable fields (name, dates, area_id, goal_id, status)."""
         try:
             result = (
                 self.supabase.table("projects")
-                .update({"status": status})
+                .update(updates)
                 .eq("id", project_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if not result.data:
+                return None
+            if isinstance(result.data, list):
+                return cast(Dict[str, Any], result.data[0])
+            return cast(Dict[str, Any], result.data)
+        except Exception as exc:
+            self.logger.exception("update_project failed: %s", exc)
+            return None
+
+    def update_project_status(self, user_id: str, project_id: int, status: str) -> bool:
+        """Update the status of a project for a user."""
+        return self.update_project(user_id, project_id, {"status": status}) is not None
+
+    def delete_project(self, user_id: str, project_id: int) -> bool:
+        """Soft-delete a project for a user (mark as deleted)."""
+        return self.update_project_status(user_id, project_id, "deleted")
+
+    # ── Areas ───────────────────────────────────────────────────────────────
+
+    def list_areas(self, user_id: str) -> List[Dict[str, Any]]:
+        """Return all areas for a user (both active and archived), newest first."""
+        try:
+            result = (
+                self.supabase.table("areas")
+                .select(AREA_SELECT_COLUMNS)
+                .eq("user_id", user_id)
+                .order("created_at", desc=False)
+                .execute()
+            )
+            return [cast(Dict[str, Any], row) for row in (result.data or [])]
+        except Exception as exc:
+            self.logger.exception("list_areas failed: %s", exc)
+            return []
+
+    def get_area(self, user_id: str, area_id: int) -> Optional[Dict[str, Any]]:
+        """Return a single area by id for a user."""
+        try:
+            result = (
+                self.supabase.table("areas")
+                .select(AREA_SELECT_COLUMNS)
+                .eq("id", area_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if not result.data:
+                return None
+            return cast(Dict[str, Any], result.data[0])
+        except Exception as exc:
+            self.logger.exception("get_area failed: %s", exc)
+            return None
+
+    def create_area(
+        self,
+        user_id: str,
+        name: str,
+        color: str,
+        description: str | None = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Create a new area."""
+        try:
+            payload: Dict[str, Any] = {
+                "user_id": user_id,
+                "name": name,
+                "color": color,
+            }
+            if description is not None:
+                payload["description"] = description
+            result = self.supabase.table("areas").insert(payload).execute()
+            if not result.data:
+                return None
+            if isinstance(result.data, list):
+                return cast(Dict[str, Any], result.data[0])
+            return cast(Dict[str, Any], result.data)
+        except Exception as exc:
+            self.logger.exception("create_area failed: %s", exc)
+            return None
+
+    def update_area(
+        self, user_id: str, area_id: int, updates: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Update an area's mutable fields (name, color, description, status)."""
+        try:
+            result = (
+                self.supabase.table("areas")
+                .update(updates)
+                .eq("id", area_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if not result.data:
+                return None
+            if isinstance(result.data, list):
+                return cast(Dict[str, Any], result.data[0])
+            return cast(Dict[str, Any], result.data)
+        except Exception as exc:
+            self.logger.exception("update_area failed: %s", exc)
+            return None
+
+    def delete_area(self, user_id: str, area_id: int) -> bool:
+        """Hard-delete an area. The DB RESTRICTs if goals or projects reference it."""
+        try:
+            result = (
+                self.supabase.table("areas")
+                .delete()
+                .eq("id", area_id)
                 .eq("user_id", user_id)
                 .execute()
             )
             return bool(result.data)
         except Exception as exc:
-            self.logger.exception("update_project_status failed: %s", exc)
+            self.logger.exception("delete_area failed: %s", exc)
             return False
 
-    def delete_project(self, user_id: str, project_id: int) -> bool:
-        """Soft-delete a project for a user (mark as deleted)."""
-        return self.update_project_status(user_id, project_id, "deleted")
+    # ── Goals ───────────────────────────────────────────────────────────────
+
+    def list_goals(
+        self, user_id: str, area_id: int | None = None
+    ) -> List[Dict[str, Any]]:
+        """Return goals for a user, optionally filtered by area_id."""
+        try:
+            query = (
+                self.supabase.table("goals")
+                .select(GOAL_SELECT_COLUMNS)
+                .eq("user_id", user_id)
+            )
+            if area_id is not None:
+                query = query.eq("area_id", area_id)
+            result = query.order("created_at", desc=False).execute()
+            return [cast(Dict[str, Any], row) for row in (result.data or [])]
+        except Exception as exc:
+            self.logger.exception("list_goals failed: %s", exc)
+            return []
+
+    def get_goal(self, user_id: str, goal_id: int) -> Optional[Dict[str, Any]]:
+        """Return a single goal by id for a user."""
+        try:
+            result = (
+                self.supabase.table("goals")
+                .select(GOAL_SELECT_COLUMNS)
+                .eq("id", goal_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if not result.data:
+                return None
+            return cast(Dict[str, Any], result.data[0])
+        except Exception as exc:
+            self.logger.exception("get_goal failed: %s", exc)
+            return None
+
+    def create_goal(
+        self,
+        user_id: str,
+        area_id: int,
+        name: str,
+        description: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Create a new goal under an area."""
+        try:
+            payload: Dict[str, Any] = {
+                "user_id": user_id,
+                "area_id": area_id,
+                "name": name,
+            }
+            if description is not None:
+                payload["description"] = description
+            if start_date is not None:
+                payload["start_date"] = start_date
+            if end_date is not None:
+                payload["end_date"] = end_date
+            result = self.supabase.table("goals").insert(payload).execute()
+            if not result.data:
+                return None
+            if isinstance(result.data, list):
+                return cast(Dict[str, Any], result.data[0])
+            return cast(Dict[str, Any], result.data)
+        except Exception as exc:
+            self.logger.exception("create_goal failed: %s", exc)
+            return None
+
+    def update_goal(
+        self, user_id: str, goal_id: int, updates: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Update a goal's mutable fields."""
+        try:
+            result = (
+                self.supabase.table("goals")
+                .update(updates)
+                .eq("id", goal_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if not result.data:
+                return None
+            if isinstance(result.data, list):
+                return cast(Dict[str, Any], result.data[0])
+            return cast(Dict[str, Any], result.data)
+        except Exception as exc:
+            self.logger.exception("update_goal failed: %s", exc)
+            return None
+
+    def delete_goal(self, user_id: str, goal_id: int) -> bool:
+        """Hard-delete a goal. The DB RESTRICTs if projects reference it."""
+        try:
+            result = (
+                self.supabase.table("goals")
+                .delete()
+                .eq("id", goal_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            return bool(result.data)
+        except Exception as exc:
+            self.logger.exception("delete_goal failed: %s", exc)
+            return False
 
 
 supabase_service = SupabaseService()

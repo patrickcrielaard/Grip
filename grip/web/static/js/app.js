@@ -4,16 +4,29 @@ class TodoApp {
     constructor() {
         this.todos = [];
         this.projects = [];
+        this.areas = [];
+        this.goals = [];
         this.currentView = { type: "list", value: "inbox" };
         this.availableLists = ["inbox", "today"];
-        this.availableAreas = ["personal", "work"];
         this.availablePriorities = ["not_set", "low", "medium", "high"];
         this.addTaskVisible = false;
         this.openTodoId = null;
+        this.expandedAreaIds = new Set();
+        this.expandedGoalIds = new Set();
+        this.editingAreaId = null;
+        this.editingGoalId = null;
         this.cacheElements();
         this.bindEvents();
-        this.loadTodos();
-        this.loadProjects();
+        this.boot();
+    }
+
+    async boot() {
+        // Load areas & goals first so the sidebar tree and selects can render
+        // with the correct data before todos/projects trigger re-renders.
+        await Promise.all([this.loadAreas(), this.loadGoals()]);
+        this.renderAreaTree();
+        this._populateAreaSelects();
+        await Promise.all([this.loadProjects(), this.loadTodos()]);
     }
 
     cacheElements() {
@@ -69,6 +82,27 @@ class TodoApp {
         this.addProjectBtn = document.getElementById("addProjectBtn");
         this.newProjectForm = document.getElementById("newProjectForm");
         this.newProjectInput = document.getElementById("newProjectInput");
+        // Areas & Goals
+        this.areaNav = document.getElementById("areaNav");
+        this.addAreaBtn = document.getElementById("addAreaBtn");
+        this.areaModal = document.getElementById("areaModal");
+        this.areaModalCloseBtn = document.getElementById("areaModalCloseBtn");
+        this.areaModalCancel = document.getElementById("areaModalCancel");
+        this.areaModalSave = document.getElementById("areaModalSave");
+        this.areaModalTitle = document.getElementById("areaModalTitle");
+        this.areaNameInput = document.getElementById("areaNameInput");
+        this.areaColorInput = document.getElementById("areaColorInput");
+        this.areaDescriptionInput = document.getElementById("areaDescriptionInput");
+        this.goalModal = document.getElementById("goalModal");
+        this.goalModalCloseBtn = document.getElementById("goalModalCloseBtn");
+        this.goalModalCancel = document.getElementById("goalModalCancel");
+        this.goalModalSave = document.getElementById("goalModalSave");
+        this.goalModalTitle = document.getElementById("goalModalTitle");
+        this.goalNameInput = document.getElementById("goalNameInput");
+        this.goalAreaSelect = document.getElementById("goalAreaSelect");
+        this.goalStartDateInput = document.getElementById("goalStartDateInput");
+        this.goalEndDateInput = document.getElementById("goalEndDateInput");
+        this.goalDescriptionInput = document.getElementById("goalDescriptionInput");
         // Date picker
         this.datePicker = document.getElementById("datePicker");
         this.dpTextInput = document.getElementById("dpTextInput");
@@ -97,7 +131,7 @@ class TodoApp {
             }
         });
 
-        // Sidebar navigation
+        // Sidebar navigation (only static todoNav items — areas/goals/projects are delegated)
         this.sidebarItems.forEach((item) => {
             item.addEventListener("click", () => {
                 if (item.dataset.list) {
@@ -109,11 +143,6 @@ class TodoApp {
                     this.setView({
                         type: "view",
                         value: item.dataset.view,
-                    });
-                } else if (item.dataset.areaFilter) {
-                    this.setView({
-                        type: "area",
-                        value: item.dataset.areaFilter,
                     });
                 }
                 if (window.innerWidth <= 768) this.closeMobileSidebar();
@@ -177,9 +206,10 @@ class TodoApp {
             if (areaButton) {
                 event.stopPropagation();
                 const id = Number(areaButton.dataset.id);
-                const targetArea = areaButton.dataset.area;
+                const targetAreaRaw = areaButton.dataset.areaId || "";
+                const targetAreaId = targetAreaRaw ? Number(targetAreaRaw) : null;
                 this.closeAllMenus();
-                this.setArea(id, targetArea || null);
+                this.setArea(id, targetAreaId);
                 return;
             }
 
@@ -388,6 +418,78 @@ class TodoApp {
             this.archiveProjectBtn.addEventListener("click", () => this.archiveProject());
         }
 
+        // Area tree delegation: expand/collapse, selection, add buttons
+        if (this.areaNav) {
+            this.areaNav.addEventListener("click", (e) => {
+                const toggle = e.target.closest(".tree-toggle");
+                if (toggle) {
+                    e.stopPropagation();
+                    const kind = toggle.dataset.kind;
+                    const id = Number(toggle.dataset.id);
+                    if (kind === "area") {
+                        if (this.expandedAreaIds.has(id)) this.expandedAreaIds.delete(id);
+                        else this.expandedAreaIds.add(id);
+                    } else if (kind === "goal") {
+                        if (this.expandedGoalIds.has(id)) this.expandedGoalIds.delete(id);
+                        else this.expandedGoalIds.add(id);
+                    }
+                    this.renderAreaTree();
+                    return;
+                }
+                const addGoal = e.target.closest(".add-goal-btn");
+                if (addGoal) {
+                    e.stopPropagation();
+                    this.openGoalModal({ area_id: Number(addGoal.dataset.areaId) });
+                    return;
+                }
+                const addProject = e.target.closest(".add-project-btn");
+                if (addProject) {
+                    e.stopPropagation();
+                    const areaId = addProject.dataset.areaId ? Number(addProject.dataset.areaId) : null;
+                    const goalId = addProject.dataset.goalId ? Number(addProject.dataset.goalId) : null;
+                    this.createProject({ areaId, goalId });
+                    return;
+                }
+                const item = e.target.closest("[data-tree-node]");
+                if (!item) return;
+                const kind = item.dataset.treeNode;
+                const id = Number(item.dataset.id);
+                if (kind === "area") {
+                    this.setView({ type: "area", value: id });
+                } else if (kind === "goal") {
+                    this.setView({ type: "goal", value: id });
+                } else if (kind === "project") {
+                    this.setView({ type: "project", value: id });
+                }
+                if (window.innerWidth <= 768) this.closeMobileSidebar();
+            });
+        }
+
+        // Area add button (header +)
+        if (this.addAreaBtn) {
+            this.addAreaBtn.addEventListener("click", () => this.openAreaModal());
+        }
+
+        // Area modal bindings
+        if (this.areaModal) {
+            this.areaModalCloseBtn.addEventListener("click", () => this.closeAreaModal());
+            this.areaModalCancel.addEventListener("click", () => this.closeAreaModal());
+            this.areaModalSave.addEventListener("click", () => this.saveAreaModal());
+            this.areaModal.addEventListener("click", (e) => {
+                if (e.target === this.areaModal) this.closeAreaModal();
+            });
+        }
+
+        // Goal modal bindings
+        if (this.goalModal) {
+            this.goalModalCloseBtn.addEventListener("click", () => this.closeGoalModal());
+            this.goalModalCancel.addEventListener("click", () => this.closeGoalModal());
+            this.goalModalSave.addEventListener("click", () => this.saveGoalModal());
+            this.goalModal.addEventListener("click", (e) => {
+                if (e.target === this.goalModal) this.closeGoalModal();
+            });
+        }
+
         // Project sidebar navigation (event delegation for dynamic items)
         if (this.projectNav) {
             this.projectNav.addEventListener("click", (e) => {
@@ -515,12 +617,19 @@ class TodoApp {
                 isActive = true;
             if (view.type === "view" && item.dataset.view === view.value)
                 isActive = true;
-            if (view.type === "area" && item.dataset.areaFilter === view.value)
-                isActive = true;
             if (view.type === "project" && Number(item.dataset.projectFilter) === view.value)
                 isActive = true;
             item.classList.toggle("active", isActive);
             item.setAttribute("aria-pressed", isActive.toString());
+        });
+
+        // Area tree nodes (area, goal, project-in-area)
+        document.querySelectorAll("[data-tree-node]").forEach((node) => {
+            const kind = node.dataset.treeNode;
+            const id = Number(node.dataset.id);
+            const isActive = view.type === kind && view.value === id;
+            node.classList.toggle("active", isActive);
+            node.setAttribute("aria-pressed", isActive.toString());
         });
 
         // Update header title
@@ -548,8 +657,14 @@ class TodoApp {
                 if (this.currentView.value === "next-week") return "Volgende week";
                 if (this.currentView.value === "waiting") return "Wachten op";
                 return "Voltooid";
-            case "area":
-                return this.getAreaLabel(this.currentView.value);
+            case "area": {
+                const area = this.getAreaById(this.currentView.value);
+                return area ? area.name : "Gebied";
+            }
+            case "goal": {
+                const goal = this.getGoalById(this.currentView.value);
+                return goal ? goal.name : "Doel";
+            }
             case "project": {
                 const project = this.projects.find(p => p.id === this.currentView.value);
                 return project ? project.name : "Project";
@@ -572,18 +687,27 @@ class TodoApp {
         return normalized;
     }
 
-    normalizeArea(area) {
-        if (area === null || area === undefined) {
-            return null;
+    getAreaById(areaId) {
+        if (areaId === null || areaId === undefined) return null;
+        const id = Number(areaId);
+        return this.areas.find((a) => a.id === id) || null;
+    }
+
+    getGoalById(goalId) {
+        if (goalId === null || goalId === undefined) return null;
+        const id = Number(goalId);
+        return this.goals.find((g) => g.id === id) || null;
+    }
+
+    // Returns the area_id associated with a task: direct task.area_id,
+    // or resolved via project → goal → area for project-linked tasks.
+    resolveTaskAreaId(task) {
+        if (task.area_id) return task.area_id;
+        if (task.project_id) {
+            const project = this.projects.find((p) => p.id === task.project_id);
+            if (project && project.area_id) return project.area_id;
         }
-        const normalized = area.toString().trim().toLowerCase();
-        if (!normalized) {
-            return null;
-        }
-        if (!this.availableAreas.includes(normalized)) {
-            return null;
-        }
-        return normalized;
+        return null;
     }
 
     normalizePriority(priority) {
@@ -607,12 +731,11 @@ class TodoApp {
     normalizeTodo(todo) {
         const normalizedList =
             this.normalizeListName(todo.list) || this.availableLists[0];
-        const normalizedArea = this.normalizeArea(todo.area);
         const normalizedPriority = this.normalizePriority(todo.priority);
         return {
             ...todo,
             list: normalizedList,
-            area: normalizedArea,
+            area_id: todo.area_id ?? null,
             priority: normalizedPriority,
             state: todo.state || "to_do",
         };
@@ -624,13 +747,14 @@ class TodoApp {
         return normalized === "inbox" ? "Inbox" : "Vandaag";
     }
 
-    getAreaLabel(area) {
-        const normalized = this.normalizeArea(area);
-        if (!normalized) {
-            return "";
-        }
-        const labels = { personal: "Persoonlijk", work: "Werk" };
-        return labels[normalized] || (normalized.charAt(0).toUpperCase() + normalized.slice(1));
+    getAreaLabel(areaId) {
+        const area = this.getAreaById(areaId);
+        return area ? area.name : "";
+    }
+
+    getAreaColor(areaId) {
+        const area = this.getAreaById(areaId);
+        return area ? area.color : "#888";
     }
 
     getProjectLabel(projectId) {
@@ -718,21 +842,350 @@ class TodoApp {
             const data = await this.request("/api/projects");
             this.projects = data.projects || [];
             this.renderProjectsSidebar();
+            this.renderAreaTree();
             this._populateProjectSelects();
         } catch (_) {
             // Projects failing shouldn't block the app
         }
     }
 
+    async loadAreas() {
+        try {
+            const data = await this.request("/api/areas");
+            this.areas = data.areas || [];
+            // Default: expand all active areas on first load.
+            if (this.expandedAreaIds.size === 0) {
+                this.areas
+                    .filter((a) => a.status === "active")
+                    .forEach((a) => this.expandedAreaIds.add(a.id));
+            }
+        } catch (_) {
+            // Areas failing shouldn't block the app
+        }
+    }
+
+    async loadGoals() {
+        try {
+            const data = await this.request("/api/goals");
+            this.goals = data.goals || [];
+        } catch (_) {
+            // Goals failing shouldn't block the app
+        }
+    }
+
+    // --- Area tree rendering ---
+
+    renderAreaTree() {
+        if (!this.areaNav) return;
+
+        const activeAreas = this.areas.filter((a) => a.status === "active");
+        const archivedAreas = this.areas.filter((a) => a.status === "archived");
+        const activeProjects = this.projects.filter(
+            (p) => p.status === undefined || p.status === "active"
+        );
+
+        const renderArea = (area, extraClass = "") => {
+            const expanded = this.expandedAreaIds.has(area.id);
+            const goalsInArea = this.goals.filter(
+                (g) => g.area_id === area.id && g.status !== "archived"
+            );
+            const projectsInArea = activeProjects.filter(
+                (p) => p.area_id === area.id && !p.goal_id
+            );
+            const hasChildren = goalsInArea.length > 0 || projectsInArea.length > 0;
+
+            const chevron = hasChildren
+                ? `<button class="tree-toggle" type="button" data-kind="area" data-id="${area.id}" aria-expanded="${expanded}" aria-label="Toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="${expanded ? "6 9 12 15 18 9" : "9 18 15 12 9 6"}"/></svg></button>`
+                : `<span class="tree-toggle tree-toggle-placeholder"></span>`;
+
+            let html = `
+                <div class="tree-node tree-area ${extraClass}" data-tree-node="area" data-id="${area.id}" role="button" aria-pressed="false">
+                    ${chevron}
+                    <span class="area-swatch" style="background:${this.escapeHtml(area.color)}"></span>
+                    <span class="tree-label">${this.escapeHtml(area.name)}</span>
+                    <span class="tree-actions">
+                        <button class="tree-action add-goal-btn" type="button" title="Nieuw doel" data-area-id="${area.id}" aria-label="Nieuw doel">+ Doel</button>
+                        <button class="tree-action add-project-btn" type="button" title="Nieuw project" data-area-id="${area.id}" aria-label="Nieuw project">+</button>
+                    </span>
+                    <span class="sidebar-count tree-count" data-count-area="${area.id}"></span>
+                </div>`;
+
+            if (expanded && hasChildren) {
+                html += `<div class="tree-children">`;
+                goalsInArea.forEach((goal) => {
+                    html += renderGoal(goal);
+                });
+                projectsInArea.forEach((project) => {
+                    html += `
+                        <div class="tree-node tree-project" data-tree-node="project" data-id="${project.id}" role="button" aria-pressed="false">
+                            <span class="tree-toggle tree-toggle-placeholder"></span>
+                            <svg class="tree-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                            <span class="tree-label">${this.escapeHtml(project.name)}</span>
+                            <span class="sidebar-count tree-count" data-count-project="${project.id}"></span>
+                        </div>`;
+                });
+                html += `</div>`;
+            }
+            return html;
+        };
+
+        const renderGoal = (goal) => {
+            const expanded = this.expandedGoalIds.has(goal.id);
+            const projectsInGoal = activeProjects.filter((p) => p.goal_id === goal.id);
+            const hasChildren = projectsInGoal.length > 0;
+            const dateRange = this._formatGoalDateRange(goal);
+
+            const chevron = hasChildren
+                ? `<button class="tree-toggle" type="button" data-kind="goal" data-id="${goal.id}" aria-expanded="${expanded}" aria-label="Toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="${expanded ? "6 9 12 15 18 9" : "9 18 15 12 9 6"}"/></svg></button>`
+                : `<span class="tree-toggle tree-toggle-placeholder"></span>`;
+
+            let html = `
+                <div class="tree-node tree-goal" data-tree-node="goal" data-id="${goal.id}" role="button" aria-pressed="false">
+                    ${chevron}
+                    <svg class="tree-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                    <span class="tree-label">${this.escapeHtml(goal.name)}${dateRange ? `<span class="tree-label-meta"> · ${this.escapeHtml(dateRange)}</span>` : ""}</span>
+                    <span class="tree-actions">
+                        <button class="tree-action add-project-btn" type="button" title="Nieuw project" data-goal-id="${goal.id}" aria-label="Nieuw project">+</button>
+                    </span>
+                    <span class="sidebar-count tree-count" data-count-goal="${goal.id}"></span>
+                </div>`;
+
+            if (expanded && hasChildren) {
+                html += `<div class="tree-children tree-children-goal">`;
+                projectsInGoal.forEach((project) => {
+                    html += `
+                        <div class="tree-node tree-project" data-tree-node="project" data-id="${project.id}" role="button" aria-pressed="false">
+                            <span class="tree-toggle tree-toggle-placeholder"></span>
+                            <svg class="tree-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                            <span class="tree-label">${this.escapeHtml(project.name)}</span>
+                            <span class="sidebar-count tree-count" data-count-project="${project.id}"></span>
+                        </div>`;
+                });
+                html += `</div>`;
+            }
+            return html;
+        };
+
+        let html = "";
+        activeAreas.forEach((area) => {
+            html += renderArea(area);
+        });
+        if (archivedAreas.length > 0) {
+            html += `
+                <div class="tree-archived-header">Gearchiveerde gebieden</div>`;
+            archivedAreas.forEach((area) => {
+                html += renderArea(area, "tree-archived");
+            });
+        }
+
+        this.areaNav.innerHTML = html;
+
+        // Re-apply active state for the current view
+        if (this.currentView.type === "area" || this.currentView.type === "goal" || this.currentView.type === "project") {
+            document.querySelectorAll("[data-tree-node]").forEach((node) => {
+                const kind = node.dataset.treeNode;
+                const id = Number(node.dataset.id);
+                const isActive = this.currentView.type === kind && this.currentView.value === id;
+                node.classList.toggle("active", isActive);
+                node.setAttribute("aria-pressed", isActive.toString());
+            });
+        }
+
+        this.updateSidebarCounts();
+    }
+
+    _formatGoalDateRange(goal) {
+        if (!goal.start_date && !goal.end_date) return "";
+        const fmt = (d) => {
+            if (!d) return "";
+            const [y, m, day] = d.split("-");
+            return `${day}-${m}-${y.slice(2)}`;
+        };
+        if (goal.start_date && goal.end_date) {
+            return `${fmt(goal.start_date)} → ${fmt(goal.end_date)}`;
+        }
+        if (goal.end_date) return `→ ${fmt(goal.end_date)}`;
+        return fmt(goal.start_date);
+    }
+
+    _populateAreaSelects() {
+        const activeAreas = this.areas.filter((a) => a.status === "active");
+        const options = `<option value="">Geen gebied</option>` +
+            activeAreas.map((a) =>
+                `<option value="${a.id}">${this.escapeHtml(a.name)}</option>`
+            ).join("");
+        if (this.areaSelect) {
+            const current = this.areaSelect.value;
+            this.areaSelect.innerHTML = options;
+            this.areaSelect.value = current;
+        }
+        if (this.modalArea) {
+            const current = this.modalArea.value;
+            this.modalArea.innerHTML = options;
+            this.modalArea.value = current;
+        }
+        // Goal modal area picker needs at least one area; no "none" option.
+        if (this.goalAreaSelect) {
+            const current = this.goalAreaSelect.value;
+            this.goalAreaSelect.innerHTML = activeAreas
+                .map((a) => `<option value="${a.id}">${this.escapeHtml(a.name)}</option>`)
+                .join("");
+            this.goalAreaSelect.value = current;
+        }
+    }
+
+    // --- Area modal ---
+
+    openAreaModal(area = null) {
+        if (!this.areaModal) return;
+        this.editingAreaId = area ? area.id : null;
+        this.areaModalTitle.textContent = area ? "Gebied bewerken" : "Nieuw gebied";
+        this.areaNameInput.value = area ? area.name : "";
+        this.areaColorInput.value = area ? area.color : "#1976D2";
+        this.areaDescriptionInput.value = area ? area.description || "" : "";
+        this.areaModal.hidden = false;
+        this.areaNameInput.focus();
+    }
+
+    closeAreaModal() {
+        if (!this.areaModal) return;
+        this.areaModal.hidden = true;
+        this.editingAreaId = null;
+    }
+
+    async saveAreaModal() {
+        const name = this.areaNameInput.value.trim();
+        if (!name) {
+            this.areaNameInput.focus();
+            return;
+        }
+        const color = this.areaColorInput.value.trim();
+        const description = this.areaDescriptionInput.value.trim() || null;
+        this.setStatus("");
+        try {
+            if (this.editingAreaId) {
+                const data = await this.request(`/api/areas/${this.editingAreaId}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ name, color, description }),
+                });
+                if (data.area) {
+                    this.areas = this.areas.map((a) =>
+                        a.id === data.area.id ? data.area : a
+                    );
+                }
+            } else {
+                const data = await this.request("/api/areas", {
+                    method: "POST",
+                    body: JSON.stringify({ name, color, description }),
+                });
+                if (data.area) {
+                    this.areas.push(data.area);
+                    this.expandedAreaIds.add(data.area.id);
+                }
+            }
+            this.closeAreaModal();
+            this.renderAreaTree();
+            this._populateAreaSelects();
+        } catch (error) {
+            this.setStatus(error.message);
+        }
+    }
+
+    // --- Goal modal ---
+
+    openGoalModal(prefill = {}) {
+        if (!this.goalModal) return;
+        const goal = prefill.id ? prefill : null;
+        this.editingGoalId = goal ? goal.id : null;
+        this.goalModalTitle.textContent = goal ? "Doel bewerken" : "Nieuw doel";
+        this.goalNameInput.value = goal ? goal.name : "";
+        this.goalDescriptionInput.value = goal ? goal.description || "" : "";
+        this.goalStartDateInput.value = goal ? goal.start_date || "" : "";
+        this.goalEndDateInput.value = goal ? goal.end_date || "" : "";
+        this._populateAreaSelects();
+        if (prefill.area_id) {
+            this.goalAreaSelect.value = String(prefill.area_id);
+        } else if (goal) {
+            this.goalAreaSelect.value = String(goal.area_id);
+        }
+        this.goalModal.hidden = false;
+        this.goalNameInput.focus();
+    }
+
+    closeGoalModal() {
+        if (!this.goalModal) return;
+        this.goalModal.hidden = true;
+        this.editingGoalId = null;
+    }
+
+    async saveGoalModal() {
+        const name = this.goalNameInput.value.trim();
+        if (!name) {
+            this.goalNameInput.focus();
+            return;
+        }
+        const areaIdRaw = this.goalAreaSelect.value;
+        if (!areaIdRaw) {
+            this.setStatus("Kies een gebied voor dit doel");
+            return;
+        }
+        const areaId = Number(areaIdRaw);
+        const description = this.goalDescriptionInput.value.trim() || null;
+        const startDate = this.goalStartDateInput.value || null;
+        const endDate = this.goalEndDateInput.value || null;
+        this.setStatus("");
+        try {
+            if (this.editingGoalId) {
+                const data = await this.request(`/api/goals/${this.editingGoalId}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({
+                        name,
+                        area_id: areaId,
+                        description,
+                        start_date: startDate,
+                        end_date: endDate,
+                    }),
+                });
+                if (data.goal) {
+                    this.goals = this.goals.map((g) =>
+                        g.id === data.goal.id ? data.goal : g
+                    );
+                }
+            } else {
+                const data = await this.request("/api/goals", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        name,
+                        area_id: areaId,
+                        description,
+                        start_date: startDate,
+                        end_date: endDate,
+                    }),
+                });
+                if (data.goal) {
+                    this.goals.push(data.goal);
+                    this.expandedAreaIds.add(areaId);
+                }
+            }
+            this.closeGoalModal();
+            this.renderAreaTree();
+        } catch (error) {
+            this.setStatus(error.message);
+        }
+    }
+
     renderProjectsSidebar() {
         if (!this.projectNav) return;
 
-        // Separate active and completed projects
-        const activeProjects = this.projects.filter(p => p.status === undefined || p.status === "active");
+        // "Losse projecten" shows only projects with no area and no goal — those are
+        // the orphans. Projects attached to an area or goal render inside the area tree.
+        const unparented = this.projects.filter(
+            (p) => (p.status === undefined || p.status === "active") && !p.area_id && !p.goal_id
+        );
         const completedProjects = this.projects.filter(p => p.status === "completed");
 
-        // Render active projects
-        this.projectNav.innerHTML = activeProjects
+        // Render unparented projects
+        this.projectNav.innerHTML = unparented
             .map(project => `
                 <button class="sidebar-item" type="button" data-project-filter="${project.id}" aria-pressed="false">
                     <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -775,18 +1228,41 @@ class TodoApp {
         this.updateSidebarCounts();
     }
 
-    async createProject(name) {
-        if (!name) return;
-        this.newProjectForm.hidden = true;
-        this.newProjectInput.value = "";
+    async createProject(arg) {
+        // Accept either a plain name (legacy sidebar form) or an options object
+        // { name?, areaId?, goalId? } from the area-tree "+ project" buttons.
+        let name, areaId, goalId;
+        if (typeof arg === "string") {
+            name = arg;
+            areaId = null;
+            goalId = null;
+        } else if (arg && typeof arg === "object") {
+            name = (arg.name || "").trim();
+            areaId = arg.areaId || null;
+            goalId = arg.goalId || null;
+        }
+        if (!name) {
+            // Prompt the user inline via a simple browser prompt when invoked from the tree.
+            const promptedName = window.prompt(
+                goalId ? "Naam van het project (onder dit doel):" : "Naam van het project:"
+            );
+            if (!promptedName || !promptedName.trim()) return;
+            name = promptedName.trim();
+        }
+        if (this.newProjectForm) this.newProjectForm.hidden = true;
+        if (this.newProjectInput) this.newProjectInput.value = "";
         try {
+            const payload = { name };
+            if (goalId) payload.goal_id = goalId;
+            else if (areaId) payload.area_id = areaId;
             const data = await this.request("/api/projects", {
                 method: "POST",
-                body: JSON.stringify({ name }),
+                body: JSON.stringify(payload),
             });
             if (data.project) {
                 this.projects.unshift(data.project);
                 this.renderProjectsSidebar();
+                this.renderAreaTree();
                 this._populateProjectSelects();
             }
         } catch (error) {
@@ -795,7 +1271,16 @@ class TodoApp {
     }
 
     async archiveProject() {
+        // Defense in depth: only projects can be completed. Lists (inbox/today),
+        // areas, and goals use archive/status semantics handled elsewhere. The
+        // toolbar button is already hidden outside project views (see setView),
+        // this guard prevents direct/stale calls from mutating anything.
+        if (this.currentView.type !== "project") return;
         const projectId = this.currentView.value;
+        const isActive = this.projects.some(
+            (p) => p.id === projectId && (p.status === undefined || p.status === "active")
+        );
+        if (!isActive) return;
         this.setStatus("");
         try {
             await this.request(`/api/projects/${projectId}/status`, {
@@ -804,6 +1289,7 @@ class TodoApp {
             });
             this.projects = this.projects.filter(p => p.id !== projectId);
             this.renderProjectsSidebar();
+            this.renderAreaTree();
             this._populateProjectSelects();
             this.setView({ type: "list", value: "inbox" });
         } catch (error) {
@@ -830,7 +1316,8 @@ class TodoApp {
         if (!title) {
             return;
         }
-        const area = this.normalizeArea(this.areaSelect?.value);
+        const areaIdRaw = this.areaSelect?.value;
+        const areaId = areaIdRaw ? Number(areaIdRaw) : null;
         const priority = this.normalizePriority(this.prioritySelect?.value);
         const startDate = this.startDateInput?.value || null;
         const plannedDate = this.plannedDateInput?.value || null;
@@ -856,7 +1343,7 @@ class TodoApp {
                 body: JSON.stringify({
                     title,
                     list: targetList,
-                    area,
+                    area_id: areaId,
                     priority,
                     start_date: startDate,
                     planned_date: plannedDate,
@@ -951,12 +1438,12 @@ class TodoApp {
         }
     }
 
-    async setArea(id, area) {
+    async setArea(id, areaId) {
         this.setStatus("");
         try {
             const data = await this.request(`/api/todos/${id}`, {
                 method: "PATCH",
-                body: JSON.stringify({ area }),
+                body: JSON.stringify({ area_id: areaId === null ? null : Number(areaId) }),
             });
             if (data.todo) {
                 this.applyTodoUpdate(data.todo);
@@ -1119,7 +1606,7 @@ class TodoApp {
         this.modalDuration.value = todo.duration || "";
         this._setModalDateField(this.modalDeadline, todo.deadline || "");
         this.modalPriority.value = this.normalizePriority(todo.priority);
-        this.modalArea.value = todo.area || "";
+        this.modalArea.value = todo.area_id ? String(todo.area_id) : "";
         if (this.modalProject) this.modalProject.value = todo.project_id ? String(todo.project_id) : "";
         if (this.modalRecurrenceUnit) {
             this.modalRecurrenceUnit.value = todo.recurrence_unit || "";
@@ -1188,6 +1675,8 @@ class TodoApp {
             payload = { list: value };
         } else if (field === "project") {
             payload = { project_id: value ? Number(value) : null };
+        } else if (field === "area") {
+            payload = { area_id: value ? Number(value) : null };
         } else {
             payload = { [field]: value || null };
         }
@@ -1220,7 +1709,7 @@ class TodoApp {
                 }
                 if (view.value === "inbox") {
                     return this.todos.filter(
-                        (todo) => todo.list === "inbox" && !todo.completed && !todo.area && !todo.project_id && todo.state !== "waiting"
+                        (todo) => todo.list === "inbox" && !todo.completed && !todo.area_id && !todo.project_id && todo.state !== "waiting"
                     );
                 }
                 return this.todos.filter(
@@ -1249,8 +1738,19 @@ class TodoApp {
                 return this.todos;
             case "area":
                 return this.todos.filter(
-                    (todo) => todo.area === view.value && !todo.completed && !todo.project_id
+                    (todo) => !todo.completed && this.resolveTaskAreaId(todo) === view.value
                 );
+            case "goal": {
+                // Tasks in a goal: those whose project belongs to the goal.
+                const projectIdsInGoal = new Set(
+                    this.projects
+                        .filter((p) => p.goal_id === view.value)
+                        .map((p) => p.id)
+                );
+                return this.todos.filter(
+                    (todo) => !todo.completed && todo.project_id && projectIdsInGoal.has(todo.project_id)
+                );
+            }
             case "project":
                 return this.todos.filter(
                     (todo) => !todo.completed && todo.project_id === view.value
@@ -1287,9 +1787,10 @@ class TodoApp {
                     this.availableLists[0];
                 const moveLabel = `Verplaats naar ${this.getListLabel(alternateList)}`;
 
-                const areaLabel = this.getAreaLabel(todo.area);
+                const areaLabel = this.getAreaLabel(todo.area_id);
+                const areaColor = todo.area_id ? this.getAreaColor(todo.area_id) : null;
                 const areaMarkup = areaLabel
-                    ? `<span class="todo-meta-chip todo-area">${this.escapeHtml(areaLabel)}</span>`
+                    ? `<span class="todo-meta-chip todo-area"><span class="todo-area-swatch" style="background:${this.escapeHtml(areaColor || "#888")}"></span>${this.escapeHtml(areaLabel)}</span>`
                     : "";
 
                 const projectLabel = this.currentView.type !== "project"
@@ -1346,6 +1847,10 @@ class TodoApp {
                     ? `<div class="todo-meta">${listLabel}${stateMarkup}${startDateMarkup}${plannedDateMarkup}${deadlineMarkup}${durationMarkup}${areaMarkup}${projectMarkup}${recurrenceMarkup}</div>`
                     : "";
 
+                const activeAreas = this.areas.filter((a) => a.status === "active");
+                const areaMenuItems = activeAreas
+                    .map((a) => `<button class="todo-menu-item set-area-btn" data-id="${todo.id}" type="button" data-area-id="${a.id}" role="menuitem">Gebied: ${this.escapeHtml(a.name)}</button>`)
+                    .join("");
                 return `
                 <li class="todo-item ${completedClass} ${priorityClass}" data-id="${todo.id}" style="animation-delay: ${index * 25}ms">
                     <input type="checkbox" class="todo-checkbox" data-id="${todo.id}" ${checked}>
@@ -1357,9 +1862,8 @@ class TodoApp {
                         <button class="menu-btn" data-id="${todo.id}" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Task actions">...</button>
                         <div class="todo-menu" role="menu">
                             <button class="todo-menu-item change-list-btn" data-id="${todo.id}" type="button" data-target-list="${alternateList}" role="menuitem">${this.escapeHtml(moveLabel)}</button>
-                            <button class="todo-menu-item set-area-btn" data-id="${todo.id}" type="button" data-area="personal" role="menuitem">Gebied: Persoonlijk</button>
-                            <button class="todo-menu-item set-area-btn" data-id="${todo.id}" type="button" data-area="work" role="menuitem">Gebied: Werk</button>
-                            <button class="todo-menu-item set-area-btn" data-id="${todo.id}" type="button" data-area="" role="menuitem">Gebied wissen</button>
+                            ${areaMenuItems}
+                            <button class="todo-menu-item set-area-btn" data-id="${todo.id}" type="button" data-area-id="" role="menuitem">Gebied wissen</button>
                             <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="high" role="menuitem">Prioriteit: Hoog</button>
                             <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="medium" role="menuitem">Prioriteit: Gemiddeld</button>
                             <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="low" role="menuitem">Prioriteit: Laag</button>
@@ -1411,7 +1915,7 @@ class TodoApp {
                           (t) => !t.project_id && (t.list === "today" || t.planned_date === todayStr)
                       ).length
                     : list === "inbox"
-                    ? activeTodos.filter((t) => t.list === "inbox" && !t.area && !t.project_id && t.state !== "waiting").length
+                    ? activeTodos.filter((t) => t.list === "inbox" && !t.area_id && !t.project_id && t.state !== "waiting").length
                     : activeTodos.filter((t) => t.list === list && !t.project_id).length;
             el.textContent = count > 0 ? String(count) : "";
         });
@@ -1442,10 +1946,25 @@ class TodoApp {
             }
         });
 
-        // Area counts
+        // Area counts — include tasks with direct area_id AND tasks whose
+        // project→goal or project→area resolves to this area.
         document.querySelectorAll("[data-count-area]").forEach((el) => {
-            const area = el.dataset.countArea;
-            const count = activeTodos.filter((t) => t.area === area && !t.project_id).length;
+            const areaId = Number(el.dataset.countArea);
+            const count = activeTodos.filter(
+                (t) => this.resolveTaskAreaId(t) === areaId
+            ).length;
+            el.textContent = count > 0 ? String(count) : "";
+        });
+
+        // Goal counts — tasks in projects belonging to the goal
+        document.querySelectorAll("[data-count-goal]").forEach((el) => {
+            const goalId = Number(el.dataset.countGoal);
+            const projectIds = new Set(
+                this.projects.filter((p) => p.goal_id === goalId).map((p) => p.id)
+            );
+            const count = activeTodos.filter(
+                (t) => t.project_id && projectIds.has(t.project_id)
+            ).length;
             el.textContent = count > 0 ? String(count) : "";
         });
 

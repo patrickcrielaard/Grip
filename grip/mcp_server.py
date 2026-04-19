@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import secrets
 import time
 from typing import Any
@@ -34,16 +35,16 @@ from grip.routes.todos import (
     DEFAULT_PRIORITY,
     DEFAULT_STATE,
     _advance_planned_date,
-    _normalize_area,
     _normalize_date,
     _normalize_duration,
     _normalize_list_name,
     _normalize_priority,
     _normalize_recurrence,
     _normalize_state,
+    _resolve_area_id,
     _validate_project_id,
 )
-from grip.supabase_service import supabase_service
+from grip.supabase_service import AREA_STATUSES, GOAL_STATUSES, supabase_service
 
 
 # ── User ID resolution ──────────────────────────────────────────────────────
@@ -271,7 +272,7 @@ def list_todos() -> list[dict[str, Any]]:
 def create_todo(
     title: str,
     list: str = DEFAULT_LIST,
-    area: str | None = None,
+    area_id: int | None = None,
     priority: str = DEFAULT_PRIORITY,
     deadline: str | None = None,
     planned_date: str | None = None,
@@ -286,7 +287,7 @@ def create_todo(
     """
     Create a new todo.
     list: "inbox" (default) | "today"
-    area: "personal" | "work" | omit
+    area_id: optional id of the Life Area (see list_areas). Omit for no area.
     priority: "not_set" (default) | "low" | "medium" | "high"
     deadline / planned_date / start_date / recurrence_end: YYYY-MM-DD strings
     duration: minutes as an integer
@@ -299,12 +300,13 @@ def create_todo(
         raise ValueError("title is required")
     if project_id is not None:
         _v(_validate_project_id, _user_id(), project_id)
+    resolved_area_id = _v(_resolve_area_id, _user_id(), area_id)
     ri, ru = _v(_normalize_recurrence, recurrence_interval, recurrence_unit)
     todo = supabase_service.create_task(
         _user_id(),
         title,
         _v(_normalize_list_name, list) or DEFAULT_LIST,
-        _v(_normalize_area, area),
+        resolved_area_id,
         _v(_normalize_priority, priority),
         deadline=_v(_normalize_date, deadline, "deadline"),
         planned_date=_v(_normalize_date, planned_date, "planned_date"),
@@ -327,7 +329,7 @@ def update_todo(
     title: str | None = None,
     completed: bool | None = None,
     list: str | None = None,
-    area: str | None = None,
+    area_id: int | None = None,
     priority: str | None = None,
     deadline: str | None = None,
     planned_date: str | None = None,
@@ -343,6 +345,7 @@ def update_todo(
     Update one or more fields on an existing todo.
     Only supplied fields are changed.
     Setting state="done" auto-sets completed=true and vice versa.
+    area_id: set to an Area id, or 0 to clear the area.
     project_id: set to assign to a project, or 0 to remove from project.
     """
     updates: dict[str, Any] = {}
@@ -355,8 +358,11 @@ def update_todo(
         updates["completed"] = completed
     if list is not None:
         updates["list"] = _v(_normalize_list_name, list)
-    if area is not None:
-        updates["area"] = _v(_normalize_area, area)
+    if area_id is not None:
+        if area_id <= 0:
+            updates["area_id"] = None
+        else:
+            updates["area_id"] = _v(_resolve_area_id, _user_id(), area_id)
     if priority is not None:
         updates["priority"] = _v(_normalize_priority, priority)
     if deadline is not None:
@@ -414,7 +420,7 @@ def update_todo(
                     _user_id(),
                     current["title"],
                     current.get("list", "inbox"),
-                    current.get("area"),
+                    current.get("area_id"),
                     current.get("priority", "not_set"),
                     deadline=current.get("deadline"),
                     planned_date=next_date,
@@ -465,11 +471,15 @@ def create_project(
     name: str,
     start_date: str | None = None,
     end_date: str | None = None,
+    area_id: int | None = None,
+    goal_id: int | None = None,
 ) -> dict[str, Any]:
     """
     Create a new project.
     name: 1-280 characters.
     start_date / end_date: optional YYYY-MM-DD strings. If both provided, start_date must be <= end_date.
+    area_id: optional Life Area id. Ignored if goal_id is set (inherited from goal).
+    goal_id: optional Goal id. If set, the project inherits the goal's area automatically.
     """
     name = name.strip()
     if not name:
@@ -480,7 +490,26 @@ def create_project(
     ed = _v(_normalize_date, end_date, "end_date")
     if sd and ed and sd > ed:
         raise ValueError("start_date must be on or before end_date")
-    project = supabase_service.create_project(_user_id(), name, sd, ed)
+
+    resolved_area_id = area_id
+    if goal_id is not None:
+        goal = supabase_service.get_goal(_user_id(), goal_id)
+        if not goal:
+            raise ValueError(f"goal {goal_id} not found")
+        resolved_area_id = goal["area_id"]
+    elif area_id is not None:
+        area = supabase_service.get_area(_user_id(), area_id)
+        if not area:
+            raise ValueError(f"area {area_id} not found")
+
+    project = supabase_service.create_project(
+        _user_id(),
+        name,
+        start_date=sd,
+        end_date=ed,
+        area_id=resolved_area_id,
+        goal_id=goal_id,
+    )
     if project is None:
         raise RuntimeError("create_project failed")
     return project
@@ -502,6 +531,231 @@ def update_project_status(project_id: int, status: str) -> dict[str, Any]:
     if not supabase_service.update_project_status(_user_id(), project_id, status):
         raise RuntimeError(f"Project {project_id} not found")
     return {"status": status}
+
+
+# ── Areas ────────────────────────────────────────────────────────────────────
+
+
+_COLOR_RE_MCP = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+def _validate_color(color: str) -> str:
+    value = color.strip()
+    if not _COLOR_RE_MCP.match(value):
+        raise ValueError("color must be a hex string like #2E7D32")
+    return value
+
+
+@mcp.tool()
+def list_areas() -> list[dict[str, Any]]:
+    """Return all Life Areas (Work, Personal, Health…) for the configured user."""
+    return supabase_service.list_areas(_user_id())
+
+
+@mcp.tool()
+def create_area(
+    name: str,
+    color: str,
+    description: str | None = None,
+) -> dict[str, Any]:
+    """
+    Create a new Life Area.
+    name: 1-120 characters, unique per user (case-insensitive).
+    color: hex string like "#2E7D32".
+    description: optional free-text description.
+    """
+    name = name.strip()
+    if not name:
+        raise ValueError("name is required")
+    if len(name) > 120:
+        raise ValueError("name must be 120 characters or fewer")
+    validated_color = _validate_color(color)
+    desc = description.strip() if description else None
+    area = supabase_service.create_area(
+        _user_id(), name, validated_color, description=desc or None
+    )
+    if area is None:
+        raise RuntimeError("create_area failed (duplicate name?)")
+    return area
+
+
+@mcp.tool()
+def update_area(
+    area_id: int,
+    name: str | None = None,
+    color: str | None = None,
+    description: str | None = None,
+    status: str | None = None,
+) -> dict[str, Any]:
+    """
+    Update a Life Area's mutable fields.
+    status: "active" or "archived".
+    Only supplied fields are changed.
+    """
+    updates: dict[str, Any] = {}
+    if name is not None:
+        n = name.strip()
+        if not n:
+            raise ValueError("name cannot be empty")
+        if len(n) > 120:
+            raise ValueError("name must be 120 characters or fewer")
+        updates["name"] = n
+    if color is not None:
+        updates["color"] = _validate_color(color)
+    if description is not None:
+        d = description.strip()
+        updates["description"] = d or None
+    if status is not None:
+        if status not in AREA_STATUSES:
+            raise ValueError("status must be 'active' or 'archived'")
+        updates["status"] = status
+    if not updates:
+        raise ValueError("No fields to update were provided")
+    existing = supabase_service.get_area(_user_id(), area_id)
+    if not existing:
+        raise RuntimeError(f"Area {area_id} not found")
+    result = supabase_service.update_area(_user_id(), area_id, updates)
+    if result is None:
+        raise RuntimeError(f"Failed to update area {area_id}")
+    return result
+
+
+@mcp.tool()
+def delete_area(area_id: int) -> dict[str, Any]:
+    """
+    Permanently delete a Life Area. The database RESTRICTs deletion if the area
+    still has goals or projects — archive or reparent them first.
+    """
+    existing = supabase_service.get_area(_user_id(), area_id)
+    if not existing:
+        raise RuntimeError(f"Area {area_id} not found")
+    if not supabase_service.delete_area(_user_id(), area_id):
+        raise RuntimeError(
+            f"Area {area_id} still has goals or projects — archive or reparent them first"
+        )
+    return {"deleted": True}
+
+
+# ── Goals ────────────────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+def list_goals(area_id: int | None = None) -> list[dict[str, Any]]:
+    """Return goals for the configured user, optionally filtered by area_id."""
+    return supabase_service.list_goals(_user_id(), area_id=area_id)
+
+
+@mcp.tool()
+def create_goal(
+    area_id: int,
+    name: str,
+    description: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> dict[str, Any]:
+    """
+    Create a new Goal under a Life Area.
+    area_id: required — goals always live in an area.
+    name: 1-280 characters.
+    start_date / end_date: optional YYYY-MM-DD strings.
+    """
+    name = name.strip()
+    if not name:
+        raise ValueError("name is required")
+    if len(name) > 280:
+        raise ValueError("name must be 280 characters or fewer")
+    area = supabase_service.get_area(_user_id(), area_id)
+    if not area:
+        raise ValueError(f"area {area_id} not found")
+    sd = _v(_normalize_date, start_date, "start_date")
+    ed = _v(_normalize_date, end_date, "end_date")
+    if sd and ed and sd > ed:
+        raise ValueError("start_date must be on or before end_date")
+    desc = description.strip() if description else None
+    goal = supabase_service.create_goal(
+        _user_id(),
+        area_id,
+        name,
+        description=desc or None,
+        start_date=sd,
+        end_date=ed,
+    )
+    if goal is None:
+        raise RuntimeError("create_goal failed")
+    return goal
+
+
+@mcp.tool()
+def update_goal(
+    goal_id: int,
+    area_id: int | None = None,
+    name: str | None = None,
+    description: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    status: str | None = None,
+) -> dict[str, Any]:
+    """
+    Update a Goal's mutable fields.
+    area_id: moving a goal between areas also rewrites dependent projects (via DB trigger).
+    status: "active" | "completed" | "archived".
+    Only supplied fields are changed.
+    """
+    existing = supabase_service.get_goal(_user_id(), goal_id)
+    if not existing:
+        raise RuntimeError(f"Goal {goal_id} not found")
+    updates: dict[str, Any] = {}
+    if area_id is not None:
+        area = supabase_service.get_area(_user_id(), area_id)
+        if not area:
+            raise ValueError(f"area {area_id} not found")
+        updates["area_id"] = area_id
+    if name is not None:
+        n = name.strip()
+        if not n:
+            raise ValueError("name cannot be empty")
+        if len(n) > 280:
+            raise ValueError("name must be 280 characters or fewer")
+        updates["name"] = n
+    if description is not None:
+        d = description.strip()
+        updates["description"] = d or None
+    if start_date is not None:
+        updates["start_date"] = _v(_normalize_date, start_date, "start_date")
+    if end_date is not None:
+        updates["end_date"] = _v(_normalize_date, end_date, "end_date")
+    if status is not None:
+        if status not in GOAL_STATUSES:
+            raise ValueError("status must be 'active', 'completed', or 'archived'")
+        updates["status"] = status
+    if not updates:
+        raise ValueError("No fields to update were provided")
+
+    sd = updates.get("start_date", existing.get("start_date"))
+    ed = updates.get("end_date", existing.get("end_date"))
+    if sd and ed and sd > ed:
+        raise ValueError("start_date must be on or before end_date")
+
+    result = supabase_service.update_goal(_user_id(), goal_id, updates)
+    if result is None:
+        raise RuntimeError(f"Failed to update goal {goal_id}")
+    return result
+
+
+@mcp.tool()
+def delete_goal(goal_id: int) -> dict[str, Any]:
+    """
+    Permanently delete a Goal. The database RESTRICTs deletion if projects
+    still reference it — archive or reparent them first.
+    """
+    existing = supabase_service.get_goal(_user_id(), goal_id)
+    if not existing:
+        raise RuntimeError(f"Goal {goal_id} not found")
+    if not supabase_service.delete_goal(_user_id(), goal_id):
+        raise RuntimeError(
+            f"Goal {goal_id} still has projects — archive or reparent them first"
+        )
+    return {"deleted": True}
 
 
 if __name__ == "__main__":
