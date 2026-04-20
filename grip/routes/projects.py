@@ -109,6 +109,14 @@ async def create_project(request: Request, payload: ProjectCreate) -> Dict[str, 
     return {"project": project}
 
 
+@router.get("/api/projects/completed")
+async def list_completed_projects(request: Request) -> Dict[str, Any]:
+    """Return completed projects for the current user."""
+    user = _require_user(request)
+    projects = supabase_service.list_completed_projects(user["id"])
+    return {"projects": projects}
+
+
 @router.get("/api/projects/{project_id}")
 async def get_project(request: Request, project_id: int) -> Dict[str, Any]:
     """Return a single project."""

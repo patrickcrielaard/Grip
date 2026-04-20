@@ -332,6 +332,22 @@ class SupabaseService:
             self.logger.exception("list_projects failed: %s", exc)
             return []
 
+    def list_completed_projects(self, user_id: str) -> List[Dict[str, Any]]:
+        """Return completed projects for a user, newest first."""
+        try:
+            result = (
+                self.supabase.table("projects")
+                .select(PROJECT_SELECT_COLUMNS)
+                .eq("user_id", user_id)
+                .eq("status", "completed")
+                .order("created_at", desc=True)
+                .execute()
+            )
+            return [cast(Dict[str, Any], row) for row in (result.data or [])]
+        except Exception as exc:
+            self.logger.exception("list_completed_projects failed: %s", exc)
+            return []
+
     def get_project(self, user_id: str, project_id: int) -> Optional[Dict[str, Any]]:
         """Return a single active project by id for a user."""
         try:

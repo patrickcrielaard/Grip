@@ -4,6 +4,7 @@ class TodoApp {
     constructor() {
         this.todos = [];
         this.projects = [];
+        this.completedProjects = [];
         this.areas = [];
         this.goals = [];
         this.currentView = { type: "list", value: "inbox" };
@@ -30,7 +31,7 @@ class TodoApp {
         await Promise.all([this.loadAreas(), this.loadGoals()]);
         this.renderAreaTree();
         this._populateAreaSelects();
-        await Promise.all([this.loadProjects(), this.loadTodos()]);
+        await Promise.all([this.loadProjects(), this.loadCompletedProjects(), this.loadTodos()]);
         this.loadCalendarSubscriptions();
     }
 
@@ -956,6 +957,16 @@ class TodoApp {
         }
     }
 
+    async loadCompletedProjects() {
+        try {
+            const data = await this.request("/api/projects/completed");
+            this.completedProjects = data.projects || [];
+            this.renderProjectsSidebar();
+        } catch (_) {
+            // Completed projects failing shouldn't block the app
+        }
+    }
+
     async loadAreas() {
         try {
             const data = await this.request("/api/areas");
@@ -1289,7 +1300,7 @@ class TodoApp {
         const unparented = this.projects.filter(
             (p) => (p.status === undefined || p.status === "active") && !p.area_id && !p.goal_id
         );
-        const completedProjects = this.projects.filter(p => p.status === "completed");
+        const completedProjects = this.completedProjects;
 
         // Render unparented projects
         this.projectNav.innerHTML = unparented
@@ -1390,10 +1401,12 @@ class TodoApp {
         if (!isActive) return;
         this.setStatus("");
         try {
+            const project = this.projects.find(p => p.id === projectId);
             await this.request(`/api/projects/${projectId}/status`, {
                 method: "PATCH",
                 body: JSON.stringify({ status: "completed" }),
             });
+            if (project) this.completedProjects.unshift({ ...project, status: "completed" });
             this.projects = this.projects.filter(p => p.id !== projectId);
             this.renderProjectsSidebar();
             this.renderAreaTree();
