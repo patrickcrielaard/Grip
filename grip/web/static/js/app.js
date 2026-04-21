@@ -84,7 +84,9 @@ class TodoApp {
         this.modalProject = document.getElementById("modal-project");
         this.projectActionsEl = document.getElementById("projectActions");
         this.archiveProjectBtn = document.getElementById("archiveProjectBtn");
+        this.reviveProjectBtn = document.getElementById("reviveProjectBtn");
         this.projectNav = document.getElementById("projectNav");
+        this.projectArchivedNav = document.getElementById("projectArchivedNav");
         this.addProjectBtn = document.getElementById("addProjectBtn");
         this.newProjectForm = document.getElementById("newProjectForm");
         this.newProjectInput = document.getElementById("newProjectInput");
@@ -477,6 +479,18 @@ class TodoApp {
         if (this.archiveProjectBtn) {
             this.archiveProjectBtn.addEventListener("click", () => this.archiveProject());
         }
+        if (this.reviveProjectBtn) {
+            this.reviveProjectBtn.addEventListener("click", () => this.reviveProject());
+        }
+        if (this.projectArchivedNav) {
+            this.projectArchivedNav.addEventListener("click", (e) => {
+                const item = e.target.closest("[data-project-filter]");
+                if (item) {
+                    this.setView({ type: "project", value: Number(item.dataset.projectFilter) });
+                    if (window.innerWidth <= 768) this.closeMobileSidebar();
+                }
+            });
+        }
 
         // Area tree delegation: expand/collapse, selection, add buttons
         if (this.areaNav) {
@@ -695,11 +709,16 @@ class TodoApp {
         // Update header title
         this.activeListLabel.textContent = this.getViewLabel();
 
-        // Show archive button only when viewing an active project
+        // Show archive button for active projects, revive button for completed ones
         if (this.projectActionsEl) {
-            const isActiveProject = view.type === "project" &&
+            const isProject = view.type === "project";
+            const isActiveProject = isProject &&
                 this.projects.some(p => p.id === view.value && (p.status === undefined || p.status === "active"));
-            this.projectActionsEl.hidden = !isActiveProject;
+            const isCompletedProject = isProject &&
+                this.completedProjects.some(p => p.id === view.value);
+            this.projectActionsEl.hidden = !(isActiveProject || isCompletedProject);
+            if (this.archiveProjectBtn) this.archiveProjectBtn.hidden = !isActiveProject;
+            if (this.reviveProjectBtn) this.reviveProjectBtn.hidden = !isCompletedProject;
         }
 
         this._applyCalendarChrome();
@@ -759,7 +778,8 @@ class TodoApp {
                 return goal ? goal.name : "Doel";
             }
             case "project": {
-                const project = this.projects.find(p => p.id === this.currentView.value);
+                const project = this.projects.find(p => p.id === this.currentView.value)
+                    || this.completedProjects.find(p => p.id === this.currentView.value);
                 return project ? project.name : "Project";
             }
             default:
@@ -1412,6 +1432,28 @@ class TodoApp {
             this.renderAreaTree();
             this._populateProjectSelects();
             this.setView({ type: "list", value: "inbox" });
+        } catch (error) {
+            this.setStatus(error.message);
+        }
+    }
+
+    async reviveProject() {
+        if (this.currentView.type !== "project") return;
+        const projectId = this.currentView.value;
+        const archived = this.completedProjects.find(p => p.id === projectId);
+        if (!archived) return;
+        this.setStatus("");
+        try {
+            await this.request(`/api/projects/${projectId}/status`, {
+                method: "PATCH",
+                body: JSON.stringify({ status: "active" }),
+            });
+            this.completedProjects = this.completedProjects.filter(p => p.id !== projectId);
+            this.projects.unshift({ ...archived, status: "active" });
+            this.renderProjectsSidebar();
+            this.renderAreaTree();
+            this._populateProjectSelects();
+            this.setView({ type: "project", value: projectId });
         } catch (error) {
             this.setStatus(error.message);
         }
