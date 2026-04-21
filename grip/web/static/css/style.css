@@ -1684,23 +1684,86 @@ input.modal-field-input {
 /* ===== Week View Day Sections ===== */
 .week-day-header {
     list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-size: 0.82rem;
     font-weight: 700;
     color: var(--ink);
-    padding: 16px 8px 6px;
+    padding: 32px 8px 8px;
+    margin-top: 8px;
     border-bottom: 1px solid var(--border-light);
-    margin-bottom: 4px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.week-day-header:first-child {
+    padding-top: 8px;
+    margin-top: 0;
+}
+
+.week-day-header:hover .week-day-chevron {
+    color: var(--ink-secondary);
 }
 
 .week-day-header.is-today {
     color: var(--accent);
 }
 
+.week-day-chevron {
+    color: var(--ink-tertiary);
+    flex-shrink: 0;
+    transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.week-day-header.is-collapsed .week-day-chevron {
+    transform: rotate(-90deg);
+}
+
 .week-day-empty {
     list-style: none;
     color: var(--ink-tertiary);
     font-size: 0.85rem;
-    padding: 6px 8px 10px;
+    padding: 6px 8px 4px;
+}
+
+.week-day-add {
+    list-style: none;
+    color: var(--ink-tertiary);
+    font-size: 0.82rem;
+    padding: 8px 8px 16px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.week-day-add:hover {
+    color: var(--ink-secondary);
+    background: var(--hover-bg);
+}
+
+.week-day-add.is-editing {
+    padding: 4px 0 16px;
+    cursor: text;
+    background: transparent;
+}
+
+.week-day-add-input {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    font-size: 0.9rem;
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--font-body);
+    outline: none;
+    transition: border-color 0.15s ease;
+}
+
+.week-day-add-input:focus {
+    border-color: var(--accent);
 }
 
 .week-section-divider {
@@ -1717,6 +1780,16 @@ input.modal-field-input {
 
 .week-day-event {
     margin: 4px 0;
+    font-size: 11px;
+    background: #ececee;
+}
+
+.week-day-event .calendar-event-location {
+    font-size: 10px;
+}
+
+.week-day-event .calendar-event-source {
+    font-size: 9px;
 }
 
 /* ===== Animations ===== */

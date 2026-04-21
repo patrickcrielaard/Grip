@@ -18,6 +18,8 @@ class TodoApp {
         this.editingGoalId = null;
         this.calendarSubscriptions = [];
         this.calendarEventsByRange = new Map(); // "from|to" -> events
+        this.weekAddDay = null;
+        this.collapsedWeekDays = new Set();
         this.todayAgendaOpen = localStorage.getItem("gripTodayAgendaOpen") === "1";
         this._statusTimer = null;
         this.cacheElements();
@@ -201,6 +203,31 @@ class TodoApp {
         });
 
         this.todoList.addEventListener("click", (event) => {
+            const dayHeader = event.target.closest(".week-day-header");
+            if (dayHeader) {
+                const day = dayHeader.dataset.day;
+                if (day) {
+                    if (this.collapsedWeekDays.has(day)) {
+                        this.collapsedWeekDays.delete(day);
+                    } else {
+                        this.collapsedWeekDays.add(day);
+                        if (this.weekAddDay === day) this.weekAddDay = null;
+                    }
+                    this.renderTodos();
+                }
+                return;
+            }
+
+            const addRow = event.target.closest(".week-day-add");
+            if (addRow && !event.target.closest(".week-day-add-input")) {
+                const day = addRow.dataset.day;
+                if (day && this.weekAddDay !== day) {
+                    this.weekAddDay = day;
+                    this.renderTodos();
+                }
+                return;
+            }
+
             const menuButton = event.target.closest(".menu-btn");
             if (menuButton) {
                 event.stopPropagation();
@@ -263,6 +290,24 @@ class TodoApp {
                     const id = Number(item.dataset.id);
                     this.openModal(id);
                 }
+            }
+        });
+
+        this.todoList.addEventListener("keydown", (event) => {
+            const addInput = event.target.closest(".week-day-add-input");
+            if (!addInput) return;
+            if (event.key === "Enter") {
+                event.preventDefault();
+                const day = addInput.dataset.day;
+                const title = addInput.value;
+                if (day && title.trim()) {
+                    this.addTodoForDay(day, title);
+                }
+            } else if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                this.weekAddDay = null;
+                this.renderTodos();
             }
         });
 
@@ -1502,6 +1547,32 @@ class TodoApp {
         }
     }
 
+    async addTodoForDay(dateStr, title) {
+        const trimmed = title.trim();
+        if (!trimmed || !dateStr) return;
+        this.setStatus("");
+        try {
+            const data = await this.request("/api/todos", {
+                method: "POST",
+                body: JSON.stringify({
+                    title: trimmed,
+                    list: "inbox",
+                    priority: "not_set",
+                    planned_date: dateStr,
+                }),
+            });
+            if (data.todo) {
+                this.todos.unshift(this.normalizeTodo(data.todo));
+                // Keep the add row open so the user can type more tasks for
+                // the same day without having to click again.
+                this.weekAddDay = dateStr;
+                this.renderTodos();
+            }
+        } catch (error) {
+            this.setStatus(error.message);
+        }
+    }
+
     async toggleTodo(id) {
         const todo = this.todos.find((item) => item.id === id);
         if (!todo) {
@@ -1904,6 +1975,7 @@ class TodoApp {
 
         if (isWeekView) {
             this.todoList.innerHTML = this._renderWeekGroupedHtml(todos, view.value);
+            this._focusWeekAddInputIfPending();
         } else {
             this.todoList.innerHTML = todos
                 .map((todo, index) => this._renderTodoItemHtml(todo, index))
@@ -1912,6 +1984,18 @@ class TodoApp {
 
         this.updateItemCount();
         this.updateSidebarCounts();
+    }
+
+    _focusWeekAddInputIfPending() {
+        if (!this.weekAddDay) return;
+        const input = this.todoList.querySelector(
+            `.week-day-add-input[data-day="${this.weekAddDay}"]`
+        );
+        if (input) {
+            input.focus();
+            const len = input.value.length;
+            input.setSelectionRange(len, len);
+        }
     }
 
     _renderTodoItemHtml(todo, index) {
@@ -2056,9 +2140,11 @@ class TodoApp {
         let itemIndex = 0;
 
         const renderDay = (day) => {
+            const collapsed = this.collapsedWeekDays.has(day);
+            fragments.push(this._renderWeekDayHeader(day, today, collapsed));
+            if (collapsed) return;
             const items = byDay.get(day) || [];
             const events = eventsByDay.get(day) || [];
-            fragments.push(this._renderWeekDayHeader(day, today));
             for (const e of events) {
                 fragments.push(this._renderWeekEventHtml(e));
             }
@@ -2068,6 +2154,7 @@ class TodoApp {
             if (items.length === 0 && events.length === 0) {
                 fragments.push(`<li class="week-day-empty">Geen taken</li>`);
             }
+            fragments.push(this._renderWeekDayAddHtml(day));
         };
 
         for (const day of upcomingDays) {
@@ -2117,10 +2204,21 @@ class TodoApp {
         </li>`;
     }
 
-    _renderWeekDayHeader(dateStr, today) {
-        const isToday = dateStr === today;
-        const cls = isToday ? "week-day-header is-today" : "week-day-header";
-        return `<li class="${cls}">${this.escapeHtml(this._weekDayLabel(dateStr, today))}</li>`;
+    _renderWeekDayHeader(dateStr, today, collapsed = false) {
+        const classes = ["week-day-header"];
+        if (dateStr === today) classes.push("is-today");
+        if (collapsed) classes.push("is-collapsed");
+        const chevron = `<svg class="week-day-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
+        const label = this.escapeHtml(this._weekDayLabel(dateStr, today));
+        return `<li class="${classes.join(" ")}" data-day="${this.escapeHtml(dateStr)}" role="button" tabindex="0" aria-expanded="${collapsed ? "false" : "true"}">${chevron}<span class="week-day-label">${label}</span></li>`;
+    }
+
+    _renderWeekDayAddHtml(dateStr) {
+        const day = this.escapeHtml(dateStr);
+        if (this.weekAddDay === dateStr) {
+            return `<li class="week-day-add is-editing" data-day="${day}"><input type="text" class="week-day-add-input" data-day="${day}" placeholder="Nieuwe taak..." autocomplete="off" maxlength="280"></li>`;
+        }
+        return `<li class="week-day-add" data-day="${day}" role="button" tabindex="0"><span class="week-day-add-label">+ Taak toevoegen</span></li>`;
     }
 
     _weekDayLabel(dateStr, today) {
