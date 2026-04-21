@@ -18,6 +18,8 @@ class TodoApp {
         this.editingGoalId = null;
         this.calendarSubscriptions = [];
         this.calendarEventsByRange = new Map(); // "from|to" -> events
+        this.weekAddDay = null;
+        this.collapsedWeekDays = new Set();
         this.todayAgendaOpen = localStorage.getItem("gripTodayAgendaOpen") === "1";
         this._statusTimer = null;
         this.cacheElements();
@@ -120,7 +122,6 @@ class TodoApp {
         this.calendarUrlInput = document.getElementById("calendarUrlInput");
         this.calendarColorInput = document.getElementById("calendarColorInput");
         this.calendarModalError = document.getElementById("calendarModalError");
-        this.calendarEventsList = document.getElementById("calendarEventsList");
         this.todayAgendaToggle = document.getElementById("todayAgendaToggle");
         this.todayAgendaPanel = document.getElementById("todayAgendaPanel");
         this.todayAgendaList = document.getElementById("todayAgendaList");
@@ -202,6 +203,31 @@ class TodoApp {
         });
 
         this.todoList.addEventListener("click", (event) => {
+            const dayHeader = event.target.closest(".week-day-header");
+            if (dayHeader) {
+                const day = dayHeader.dataset.day;
+                if (day) {
+                    if (this.collapsedWeekDays.has(day)) {
+                        this.collapsedWeekDays.delete(day);
+                    } else {
+                        this.collapsedWeekDays.add(day);
+                        if (this.weekAddDay === day) this.weekAddDay = null;
+                    }
+                    this.renderTodos();
+                }
+                return;
+            }
+
+            const addRow = event.target.closest(".week-day-add");
+            if (addRow && !event.target.closest(".week-day-add-input")) {
+                const day = addRow.dataset.day;
+                if (day && this.weekAddDay !== day) {
+                    this.weekAddDay = day;
+                    this.renderTodos();
+                }
+                return;
+            }
+
             const menuButton = event.target.closest(".menu-btn");
             if (menuButton) {
                 event.stopPropagation();
@@ -264,6 +290,24 @@ class TodoApp {
                     const id = Number(item.dataset.id);
                     this.openModal(id);
                 }
+            }
+        });
+
+        this.todoList.addEventListener("keydown", (event) => {
+            const addInput = event.target.closest(".week-day-add-input");
+            if (!addInput) return;
+            if (event.key === "Enter") {
+                event.preventDefault();
+                const day = addInput.dataset.day;
+                const title = addInput.value;
+                if (day && title.trim()) {
+                    this.addTodoForDay(day, title);
+                }
+            } else if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                this.weekAddDay = null;
+                this.renderTodos();
             }
         });
 
@@ -708,7 +752,7 @@ class TodoApp {
             const offset = view.value === "next-week" ? 1 : 0;
             const range = this.getWeekRange(offset);
             this.loadCalendarEvents(range.start, range.end).then(() =>
-                this.renderWeekEvents(range)
+                this.renderTodos()
             );
         }
         if (this._isTodayView() && this.todayAgendaOpen) {
@@ -721,13 +765,7 @@ class TodoApp {
     }
 
     _applyCalendarChrome() {
-        const isWeek = this.currentView.type === "view" &&
-            (this.currentView.value === "week" || this.currentView.value === "next-week");
         const isToday = this._isTodayView();
-        if (this.calendarEventsList && !isWeek) {
-            this.calendarEventsList.hidden = true;
-            this.calendarEventsList.innerHTML = "";
-        }
         if (this.todayAgendaToggle) {
             this.todayAgendaToggle.hidden = !isToday;
             this.todayAgendaToggle.setAttribute("aria-pressed", String(this.todayAgendaOpen));
@@ -1509,6 +1547,32 @@ class TodoApp {
         }
     }
 
+    async addTodoForDay(dateStr, title) {
+        const trimmed = title.trim();
+        if (!trimmed || !dateStr) return;
+        this.setStatus("");
+        try {
+            const data = await this.request("/api/todos", {
+                method: "POST",
+                body: JSON.stringify({
+                    title: trimmed,
+                    list: "inbox",
+                    priority: "not_set",
+                    planned_date: dateStr,
+                }),
+            });
+            if (data.todo) {
+                this.todos.unshift(this.normalizeTodo(data.todo));
+                // Keep the add row open so the user can type more tasks for
+                // the same day without having to click again.
+                this.weekAddDay = dateStr;
+                this.renderTodos();
+            }
+        } catch (error) {
+            this.setStatus(error.message);
+        }
+    }
+
     async toggleTodo(id) {
         const todo = this.todos.find((item) => item.id === id);
         if (!todo) {
@@ -1906,128 +1970,290 @@ class TodoApp {
             return;
         }
 
-        this.todoList.innerHTML = todos
-            .map((todo, index) => {
-                const checked = todo.completed ? "checked" : "";
-                const completedClass = todo.completed ? "completed" : "";
-                const normalizedPriority = this.normalizePriority(
-                    todo.priority
-                );
-                const priorityClass = `priority-${normalizedPriority}`;
+        const view = this.currentView;
+        const isWeekView = view.type === "view" && (view.value === "week" || view.value === "next-week");
 
-                const alternateList =
-                    this.availableLists.find((list) => list !== todo.list) ||
-                    this.availableLists[0];
-                const moveLabel = `Verplaats naar ${this.getListLabel(alternateList)}`;
-
-                const areaLabel = this.getAreaLabel(todo.area_id);
-                const areaColor = todo.area_id ? this.getAreaColor(todo.area_id) : null;
-                const areaMarkup = areaLabel
-                    ? `<span class="todo-meta-chip todo-area"><span class="todo-area-swatch" style="background:${this.escapeHtml(areaColor || "#888")}"></span>${this.escapeHtml(areaLabel)}</span>`
-                    : "";
-
-                const projectLabel = this.currentView.type !== "project"
-                    ? this.getProjectLabel(todo.project_id)
-                    : "";
-                const projectMarkup = projectLabel
-                    ? `<span class="todo-meta-chip todo-project">${this.escapeHtml(projectLabel)}</span>`
-                    : "";
-
-                const stateMarkup = todo.state && todo.state !== "to_do"
-                    ? `<span class="todo-meta-chip todo-state-${todo.state}">${this.escapeHtml(this.getStateLabel(todo.state))}</span>`
-                    : "";
-
-                // Project tasks have list=null by invariant — skip the chip
-                // instead of rendering a misleading "Inbox" label.
-                const listLabel =
-                    this.currentView.type !== "list" && todo.list
-                        ? `<span class="todo-meta-chip">${this.escapeHtml(this.getListLabel(todo.list))}</span>`
-                        : "";
-
-                const startDateMarkup = todo.start_date
-                    ? `<span class="todo-meta-chip todo-start-date">Start: ${this.escapeHtml(todo.start_date)}</span>`
-                    : "";
-                const plannedDateMarkup = todo.planned_date
-                    ? `<span class="todo-meta-chip todo-planned-date">Gepland: ${this.escapeHtml(todo.planned_date)}</span>`
-                    : "";
-                let deadlineMarkup = "";
-                if (todo.deadline) {
-                    const todayDate = this.getToday();
-                    if (todo.deadline < todayDate) {
-                        const daysDiff = Math.round((Date.parse(todayDate) - Date.parse(todo.deadline)) / 86400000);
-                        deadlineMarkup = `<span class="todo-meta-chip todo-deadline">${daysDiff}d geleden</span>`;
-                    } else {
-                        deadlineMarkup = `<span class="todo-meta-chip todo-deadline">${this.escapeHtml(todo.deadline)}</span>`;
-                    }
-                }
-                const durationMarkup = todo.duration
-                    ? `<span class="todo-meta-chip todo-duration">${this.escapeHtml(String(todo.duration))}m</span>`
-                    : "";
-
-                const recurrenceMarkup = todo.recurrence_interval && todo.recurrence_unit
-                    ? `<span class="todo-meta-chip chip-recurrence" title="Herhaalt elke ${todo.recurrence_interval} ${todo.recurrence_unit}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>`
-                    : "";
-
-                const hasMeta =
-                    areaLabel ||
-                    projectLabel ||
-                    listLabel ||
-                    todo.start_date ||
-                    todo.planned_date ||
-                    todo.deadline ||
-                    todo.duration ||
-                    todo.recurrence_interval ||
-                    (todo.state && todo.state !== "to_do");
-                const metadataMarkup = hasMeta
-                    ? `<div class="todo-meta">${listLabel}${stateMarkup}${startDateMarkup}${plannedDateMarkup}${deadlineMarkup}${durationMarkup}${areaMarkup}${projectMarkup}${recurrenceMarkup}</div>`
-                    : "";
-
-                const activeAreas = this.areas.filter((a) => a.status === "active");
-                const areaMenuItems = activeAreas
-                    .map((a) => `<button class="todo-menu-item set-area-btn" data-id="${todo.id}" type="button" data-area-id="${a.id}" role="menuitem">Gebied: ${this.escapeHtml(a.name)}</button>`)
-                    .join("");
-                return `
-                <li class="todo-item ${completedClass} ${priorityClass}" data-id="${todo.id}" style="animation-delay: ${index * 25}ms">
-                    <input type="checkbox" class="todo-checkbox" data-id="${todo.id}" ${checked}>
-                    <div class="todo-content">
-                        <span class="todo-text ${completedClass}">${this.escapeHtml(todo.title)}</span>
-                        ${metadataMarkup}
-                    </div>
-                    <div class="todo-actions">
-                        <button class="menu-btn" data-id="${todo.id}" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Task actions">...</button>
-                        <div class="todo-menu" role="menu">
-                            <button class="todo-menu-item change-list-btn" data-id="${todo.id}" type="button" data-target-list="${alternateList}" role="menuitem">${this.escapeHtml(moveLabel)}</button>
-                            ${areaMenuItems}
-                            <button class="todo-menu-item set-area-btn" data-id="${todo.id}" type="button" data-area-id="" role="menuitem">Gebied wissen</button>
-                            <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="high" role="menuitem">Prioriteit: Hoog</button>
-                            <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="medium" role="menuitem">Prioriteit: Gemiddeld</button>
-                            <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="low" role="menuitem">Prioriteit: Laag</button>
-                            <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="not_set" role="menuitem">Prioriteit wissen</button>
-                            <label class="todo-menu-item todo-menu-date-item" role="menuitem">
-                                <span>Startdatum</span>
-                                <input type="date" class="set-date-input" data-id="${todo.id}" data-field="start_date" value="${todo.start_date || ''}">
-                            </label>
-                            <label class="todo-menu-item todo-menu-date-item" role="menuitem">
-                                <span>Geplande datum</span>
-                                <input type="date" class="set-date-input" data-id="${todo.id}" data-field="planned_date" value="${todo.planned_date || ''}">
-                            </label>
-                            <label class="todo-menu-item todo-menu-date-item" role="menuitem">
-                                <span>Deadline</span>
-                                <input type="date" class="set-date-input" data-id="${todo.id}" data-field="deadline" value="${todo.deadline || ''}">
-                            </label>
-                            <label class="todo-menu-item todo-menu-date-item" role="menuitem">
-                                <span>Duur (min)</span>
-                                <input type="number" class="set-duration-input" data-id="${todo.id}" value="${todo.duration || ''}" min="1" placeholder="—">
-                            </label>
-                            <button class="todo-menu-item delete-btn" data-id="${todo.id}" type="button" role="menuitem">Verwijderen</button>
-                        </div>
-                    </div>
-                </li>`;
-            })
-            .join("");
+        if (isWeekView) {
+            this.todoList.innerHTML = this._renderWeekGroupedHtml(todos, view.value);
+            this._focusWeekAddInputIfPending();
+        } else {
+            this.todoList.innerHTML = todos
+                .map((todo, index) => this._renderTodoItemHtml(todo, index))
+                .join("");
+        }
 
         this.updateItemCount();
         this.updateSidebarCounts();
+    }
+
+    _focusWeekAddInputIfPending() {
+        if (!this.weekAddDay) return;
+        const input = this.todoList.querySelector(
+            `.week-day-add-input[data-day="${this.weekAddDay}"]`
+        );
+        if (input) {
+            input.focus();
+            const len = input.value.length;
+            input.setSelectionRange(len, len);
+        }
+    }
+
+    _renderTodoItemHtml(todo, index) {
+        const checked = todo.completed ? "checked" : "";
+        const completedClass = todo.completed ? "completed" : "";
+        const normalizedPriority = this.normalizePriority(todo.priority);
+        const priorityClass = `priority-${normalizedPriority}`;
+
+        const alternateList =
+            this.availableLists.find((list) => list !== todo.list) ||
+            this.availableLists[0];
+        const moveLabel = `Verplaats naar ${this.getListLabel(alternateList)}`;
+
+        const areaLabel = this.getAreaLabel(todo.area_id);
+        const areaColor = todo.area_id ? this.getAreaColor(todo.area_id) : null;
+        const areaMarkup = areaLabel
+            ? `<span class="todo-meta-chip todo-area"><span class="todo-area-swatch" style="background:${this.escapeHtml(areaColor || "#888")}"></span>${this.escapeHtml(areaLabel)}</span>`
+            : "";
+
+        const projectLabel = this.currentView.type !== "project"
+            ? this.getProjectLabel(todo.project_id)
+            : "";
+        const projectMarkup = projectLabel
+            ? `<span class="todo-meta-chip todo-project">${this.escapeHtml(projectLabel)}</span>`
+            : "";
+
+        const stateMarkup = todo.state && todo.state !== "to_do"
+            ? `<span class="todo-meta-chip todo-state-${todo.state}">${this.escapeHtml(this.getStateLabel(todo.state))}</span>`
+            : "";
+
+        // Project tasks have list=null by invariant — skip the chip
+        // instead of rendering a misleading "Inbox" label.
+        const listLabel =
+            this.currentView.type !== "list" && todo.list
+                ? `<span class="todo-meta-chip">${this.escapeHtml(this.getListLabel(todo.list))}</span>`
+                : "";
+
+        const startDateMarkup = todo.start_date
+            ? `<span class="todo-meta-chip todo-start-date">Start: ${this.escapeHtml(todo.start_date)}</span>`
+            : "";
+        const plannedDateMarkup = todo.planned_date
+            ? `<span class="todo-meta-chip todo-planned-date">Gepland: ${this.escapeHtml(todo.planned_date)}</span>`
+            : "";
+        let deadlineMarkup = "";
+        if (todo.deadline) {
+            const todayDate = this.getToday();
+            if (todo.deadline < todayDate) {
+                const daysDiff = Math.round((Date.parse(todayDate) - Date.parse(todo.deadline)) / 86400000);
+                deadlineMarkup = `<span class="todo-meta-chip todo-deadline">${daysDiff}d geleden</span>`;
+            } else {
+                deadlineMarkup = `<span class="todo-meta-chip todo-deadline">${this.escapeHtml(todo.deadline)}</span>`;
+            }
+        }
+        const durationMarkup = todo.duration
+            ? `<span class="todo-meta-chip todo-duration">${this.escapeHtml(String(todo.duration))}m</span>`
+            : "";
+
+        const recurrenceMarkup = todo.recurrence_interval && todo.recurrence_unit
+            ? `<span class="todo-meta-chip chip-recurrence" title="Herhaalt elke ${todo.recurrence_interval} ${todo.recurrence_unit}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>`
+            : "";
+
+        const hasMeta =
+            areaLabel ||
+            projectLabel ||
+            listLabel ||
+            todo.start_date ||
+            todo.planned_date ||
+            todo.deadline ||
+            todo.duration ||
+            todo.recurrence_interval ||
+            (todo.state && todo.state !== "to_do");
+        const metadataMarkup = hasMeta
+            ? `<div class="todo-meta">${listLabel}${stateMarkup}${startDateMarkup}${plannedDateMarkup}${deadlineMarkup}${durationMarkup}${areaMarkup}${projectMarkup}${recurrenceMarkup}</div>`
+            : "";
+
+        const activeAreas = this.areas.filter((a) => a.status === "active");
+        const areaMenuItems = activeAreas
+            .map((a) => `<button class="todo-menu-item set-area-btn" data-id="${todo.id}" type="button" data-area-id="${a.id}" role="menuitem">Gebied: ${this.escapeHtml(a.name)}</button>`)
+            .join("");
+        return `
+        <li class="todo-item ${completedClass} ${priorityClass}" data-id="${todo.id}" style="animation-delay: ${index * 25}ms">
+            <input type="checkbox" class="todo-checkbox" data-id="${todo.id}" ${checked}>
+            <div class="todo-content">
+                <span class="todo-text ${completedClass}">${this.escapeHtml(todo.title)}</span>
+                ${metadataMarkup}
+            </div>
+            <div class="todo-actions">
+                <button class="menu-btn" data-id="${todo.id}" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Task actions">...</button>
+                <div class="todo-menu" role="menu">
+                    <button class="todo-menu-item change-list-btn" data-id="${todo.id}" type="button" data-target-list="${alternateList}" role="menuitem">${this.escapeHtml(moveLabel)}</button>
+                    ${areaMenuItems}
+                    <button class="todo-menu-item set-area-btn" data-id="${todo.id}" type="button" data-area-id="" role="menuitem">Gebied wissen</button>
+                    <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="high" role="menuitem">Prioriteit: Hoog</button>
+                    <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="medium" role="menuitem">Prioriteit: Gemiddeld</button>
+                    <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="low" role="menuitem">Prioriteit: Laag</button>
+                    <button class="todo-menu-item set-priority-btn" data-id="${todo.id}" type="button" data-priority="not_set" role="menuitem">Prioriteit wissen</button>
+                    <label class="todo-menu-item todo-menu-date-item" role="menuitem">
+                        <span>Startdatum</span>
+                        <input type="date" class="set-date-input" data-id="${todo.id}" data-field="start_date" value="${todo.start_date || ''}">
+                    </label>
+                    <label class="todo-menu-item todo-menu-date-item" role="menuitem">
+                        <span>Geplande datum</span>
+                        <input type="date" class="set-date-input" data-id="${todo.id}" data-field="planned_date" value="${todo.planned_date || ''}">
+                    </label>
+                    <label class="todo-menu-item todo-menu-date-item" role="menuitem">
+                        <span>Deadline</span>
+                        <input type="date" class="set-date-input" data-id="${todo.id}" data-field="deadline" value="${todo.deadline || ''}">
+                    </label>
+                    <label class="todo-menu-item todo-menu-date-item" role="menuitem">
+                        <span>Duur (min)</span>
+                        <input type="number" class="set-duration-input" data-id="${todo.id}" value="${todo.duration || ''}" min="1" placeholder="—">
+                    </label>
+                    <button class="todo-menu-item delete-btn" data-id="${todo.id}" type="button" role="menuitem">Verwijderen</button>
+                </div>
+            </div>
+        </li>`;
+    }
+
+    _renderWeekGroupedHtml(todos, weekValue) {
+        const offset = weekValue === "next-week" ? 1 : 0;
+        const { start, end } = this.getWeekRange(offset);
+        const today = this.getToday();
+        const days = this._weekDays(start);
+
+        const byDay = new Map();
+        for (const t of todos) {
+            const day = this._taskWeekDay(t, start, end);
+            if (!day) continue;
+            if (!byDay.has(day)) byDay.set(day, []);
+            byDay.get(day).push(t);
+        }
+
+        const eventsByDay = this._weekEventsByDay(start, end);
+
+        // Upcoming days (today and later) are shown first in chronological
+        // order. Past days in the same week collapse into an "Earlier this
+        // week" section below, so the focus stays on what's ahead.
+        const upcomingDays = days.filter((d) => d >= today);
+        const pastDays = days.filter((d) => d < today);
+
+        const fragments = [];
+        let itemIndex = 0;
+
+        const renderDay = (day) => {
+            const collapsed = this.collapsedWeekDays.has(day);
+            fragments.push(this._renderWeekDayHeader(day, today, collapsed));
+            if (collapsed) return;
+            const items = byDay.get(day) || [];
+            const events = eventsByDay.get(day) || [];
+            for (const e of events) {
+                fragments.push(this._renderWeekEventHtml(e));
+            }
+            for (const t of items) {
+                fragments.push(this._renderTodoItemHtml(t, itemIndex++));
+            }
+            if (items.length === 0 && events.length === 0) {
+                fragments.push(`<li class="week-day-empty">Geen taken</li>`);
+            }
+            fragments.push(this._renderWeekDayAddHtml(day));
+        };
+
+        for (const day of upcomingDays) {
+            renderDay(day);
+        }
+
+        const pastDaysWithContent = pastDays.filter(
+            (d) => byDay.has(d) || eventsByDay.has(d)
+        );
+        if (pastDaysWithContent.length > 0) {
+            fragments.push(`<li class="week-section-divider">Eerder deze week</li>`);
+            for (const day of pastDaysWithContent) {
+                renderDay(day);
+            }
+        }
+
+        return fragments.join("");
+    }
+
+    _weekEventsByDay(start, end) {
+        const events = this.calendarEventsByRange.get(`${start}|${end}`) || [];
+        const sorted = [...events].sort(
+            (a, b) => (Date.parse(a.start_at) || 0) - (Date.parse(b.start_at) || 0)
+        );
+        const byDay = new Map();
+        for (const e of sorted) {
+            const day = this._eventDateKey(e);
+            if (day < start || day > end) continue;
+            if (!byDay.has(day)) byDay.set(day, []);
+            byDay.get(day).push(e);
+        }
+        return byDay;
+    }
+
+    _renderWeekEventHtml(event) {
+        const color = event.subscription_color || "#0288D1";
+        const time = this._formatEventTime(event);
+        const locationMarkup = event.location
+            ? `<span class="calendar-event-location">${this.escapeHtml(event.location)}</span>`
+            : "";
+        return `
+        <li class="calendar-event-item week-day-event" style="border-left-color:${this.escapeHtml(color)}">
+            <span class="calendar-event-time">${this.escapeHtml(time)}</span>
+            <span class="calendar-event-summary">${this.escapeHtml(event.summary || "(geen titel)")}</span>
+            ${locationMarkup}
+            <span class="calendar-event-source">${this.escapeHtml(event.subscription_name || "")}</span>
+        </li>`;
+    }
+
+    _renderWeekDayHeader(dateStr, today, collapsed = false) {
+        const classes = ["week-day-header"];
+        if (dateStr === today) classes.push("is-today");
+        if (collapsed) classes.push("is-collapsed");
+        const chevron = `<svg class="week-day-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
+        const label = this.escapeHtml(this._weekDayLabel(dateStr, today));
+        return `<li class="${classes.join(" ")}" data-day="${this.escapeHtml(dateStr)}" role="button" tabindex="0" aria-expanded="${collapsed ? "false" : "true"}">${chevron}<span class="week-day-label">${label}</span></li>`;
+    }
+
+    _renderWeekDayAddHtml(dateStr) {
+        const day = this.escapeHtml(dateStr);
+        if (this.weekAddDay === dateStr) {
+            return `<li class="week-day-add is-editing" data-day="${day}"><input type="text" class="week-day-add-input" data-day="${day}" placeholder="Nieuwe taak..." autocomplete="off" maxlength="280"></li>`;
+        }
+        return `<li class="week-day-add" data-day="${day}" role="button" tabindex="0"><span class="week-day-add-label">+ Taak toevoegen</span></li>`;
+    }
+
+    _weekDayLabel(dateStr, today) {
+        const DAYS = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"];
+        const MONTHS = ["jan.", "feb.", "mrt.", "apr.", "mei", "jun.", "jul.", "aug.", "sep.", "okt.", "nov.", "dec."];
+        const [y, m, d] = dateStr.split("-").map(Number);
+        const date = new Date(y, m - 1, d);
+        const dayName = DAYS[date.getDay()];
+        const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+        const dayMonth = `${d} ${MONTHS[m - 1]}`;
+        const base = `${capitalizedDay} ${dayMonth}`;
+        return dateStr === today ? `Vandaag · ${base}` : base;
+    }
+
+    _weekDays(startDateStr) {
+        const [y, m, d] = startDateStr.split("-").map(Number);
+        const start = new Date(y, m - 1, d);
+        const days = [];
+        for (let i = 0; i < 7; i++) {
+            const day = new Date(start);
+            day.setDate(start.getDate() + i);
+            const s = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+            days.push(s);
+        }
+        return days;
+    }
+
+    _taskWeekDay(todo, start, end) {
+        if (todo.planned_date && todo.planned_date >= start && todo.planned_date <= end) {
+            return todo.planned_date;
+        }
+        if (todo.deadline && todo.deadline >= start && todo.deadline <= end) {
+            return todo.deadline;
+        }
+        return null;
     }
 
     updateItemCount() {
@@ -2401,7 +2627,7 @@ class TodoApp {
             const offset = this.currentView.value === "next-week" ? 1 : 0;
             const range = this.getWeekRange(offset);
             this.calendarEventsByRange.delete(`${range.start}|${range.end}`);
-            this.loadCalendarEvents(range.start, range.end).then(() => this.renderWeekEvents(range));
+            this.loadCalendarEvents(range.start, range.end).then(() => this.renderTodos());
         }
         if (this._isTodayView() && this.todayAgendaOpen) {
             this.refreshTodayAgenda(true);
@@ -2441,32 +2667,6 @@ class TodoApp {
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     }
 
-    renderWeekEvents(range) {
-        if (!this.calendarEventsList) return;
-        const events = this.calendarEventsByRange.get(`${range.start}|${range.end}`) || [];
-        if (events.length === 0) {
-            this.calendarEventsList.hidden = true;
-            this.calendarEventsList.innerHTML = "";
-            return;
-        }
-        this.calendarEventsList.hidden = false;
-        this.calendarEventsList.innerHTML = events
-            .map((e) => {
-                const color = e.subscription_color || "#0288D1";
-                const time = this._formatEventTime(e);
-                const date = this._eventDateKey(e);
-                return `
-                    <li class="calendar-event-item" style="border-left-color:${this.escapeHtml(color)}">
-                        <span class="calendar-event-date">${this.escapeHtml(date)}</span>
-                        <span class="calendar-event-time">${this.escapeHtml(time)}</span>
-                        <span class="calendar-event-summary">${this.escapeHtml(e.summary || "(geen titel)")}</span>
-                        ${e.location ? `<span class="calendar-event-location">${this.escapeHtml(e.location)}</span>` : ""}
-                        <span class="calendar-event-source">${this.escapeHtml(e.subscription_name || "")}</span>
-                    </li>
-                `;
-            })
-            .join("");
-    }
 
     async refreshTodayAgenda(force = false) {
         if (!this.todayAgendaList) return;
