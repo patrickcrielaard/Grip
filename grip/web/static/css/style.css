@@ -1715,6 +1715,10 @@ input.modal-field-input {
     border-top: 1px solid var(--border);
 }
 
+.week-day-event {
+    margin: 4px 0;
+}
+
 /* ===== Animations ===== */
 @keyframes floatIn {
     from {

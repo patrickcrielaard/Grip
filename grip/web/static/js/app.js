@@ -120,7 +120,6 @@ class TodoApp {
         this.calendarUrlInput = document.getElementById("calendarUrlInput");
         this.calendarColorInput = document.getElementById("calendarColorInput");
         this.calendarModalError = document.getElementById("calendarModalError");
-        this.calendarEventsList = document.getElementById("calendarEventsList");
         this.todayAgendaToggle = document.getElementById("todayAgendaToggle");
         this.todayAgendaPanel = document.getElementById("todayAgendaPanel");
         this.todayAgendaList = document.getElementById("todayAgendaList");
@@ -708,7 +707,7 @@ class TodoApp {
             const offset = view.value === "next-week" ? 1 : 0;
             const range = this.getWeekRange(offset);
             this.loadCalendarEvents(range.start, range.end).then(() =>
-                this.renderWeekEvents(range)
+                this.renderTodos()
             );
         }
         if (this._isTodayView() && this.todayAgendaOpen) {
@@ -721,13 +720,7 @@ class TodoApp {
     }
 
     _applyCalendarChrome() {
-        const isWeek = this.currentView.type === "view" &&
-            (this.currentView.value === "week" || this.currentView.value === "next-week");
         const isToday = this._isTodayView();
-        if (this.calendarEventsList && !isWeek) {
-            this.calendarEventsList.hidden = true;
-            this.calendarEventsList.innerHTML = "";
-        }
         if (this.todayAgendaToggle) {
             this.todayAgendaToggle.hidden = !isToday;
             this.todayAgendaToggle.setAttribute("aria-pressed", String(this.todayAgendaOpen));
@@ -2051,6 +2044,8 @@ class TodoApp {
             byDay.get(day).push(t);
         }
 
+        const eventsByDay = this._weekEventsByDay(start, end);
+
         // Upcoming days (today and later) are shown first in chronological
         // order. Past days in the same week collapse into an "Earlier this
         // week" section below, so the focus stays on what's ahead.
@@ -2060,29 +2055,66 @@ class TodoApp {
         const fragments = [];
         let itemIndex = 0;
 
-        for (const day of upcomingDays) {
+        const renderDay = (day) => {
             const items = byDay.get(day) || [];
+            const events = eventsByDay.get(day) || [];
             fragments.push(this._renderWeekDayHeader(day, today));
+            for (const e of events) {
+                fragments.push(this._renderWeekEventHtml(e));
+            }
             for (const t of items) {
                 fragments.push(this._renderTodoItemHtml(t, itemIndex++));
             }
-            if (items.length === 0) {
+            if (items.length === 0 && events.length === 0) {
                 fragments.push(`<li class="week-day-empty">Geen taken</li>`);
             }
+        };
+
+        for (const day of upcomingDays) {
+            renderDay(day);
         }
 
-        const pastDaysWithTasks = pastDays.filter((d) => byDay.has(d));
-        if (pastDaysWithTasks.length > 0) {
+        const pastDaysWithContent = pastDays.filter(
+            (d) => byDay.has(d) || eventsByDay.has(d)
+        );
+        if (pastDaysWithContent.length > 0) {
             fragments.push(`<li class="week-section-divider">Eerder deze week</li>`);
-            for (const day of pastDaysWithTasks) {
-                fragments.push(this._renderWeekDayHeader(day, today));
-                for (const t of byDay.get(day)) {
-                    fragments.push(this._renderTodoItemHtml(t, itemIndex++));
-                }
+            for (const day of pastDaysWithContent) {
+                renderDay(day);
             }
         }
 
         return fragments.join("");
+    }
+
+    _weekEventsByDay(start, end) {
+        const events = this.calendarEventsByRange.get(`${start}|${end}`) || [];
+        const sorted = [...events].sort(
+            (a, b) => (Date.parse(a.start_at) || 0) - (Date.parse(b.start_at) || 0)
+        );
+        const byDay = new Map();
+        for (const e of sorted) {
+            const day = this._eventDateKey(e);
+            if (day < start || day > end) continue;
+            if (!byDay.has(day)) byDay.set(day, []);
+            byDay.get(day).push(e);
+        }
+        return byDay;
+    }
+
+    _renderWeekEventHtml(event) {
+        const color = event.subscription_color || "#0288D1";
+        const time = this._formatEventTime(event);
+        const locationMarkup = event.location
+            ? `<span class="calendar-event-location">${this.escapeHtml(event.location)}</span>`
+            : "";
+        return `
+        <li class="calendar-event-item week-day-event" style="border-left-color:${this.escapeHtml(color)}">
+            <span class="calendar-event-time">${this.escapeHtml(time)}</span>
+            <span class="calendar-event-summary">${this.escapeHtml(event.summary || "(geen titel)")}</span>
+            ${locationMarkup}
+            <span class="calendar-event-source">${this.escapeHtml(event.subscription_name || "")}</span>
+        </li>`;
     }
 
     _renderWeekDayHeader(dateStr, today) {
@@ -2497,7 +2529,7 @@ class TodoApp {
             const offset = this.currentView.value === "next-week" ? 1 : 0;
             const range = this.getWeekRange(offset);
             this.calendarEventsByRange.delete(`${range.start}|${range.end}`);
-            this.loadCalendarEvents(range.start, range.end).then(() => this.renderWeekEvents(range));
+            this.loadCalendarEvents(range.start, range.end).then(() => this.renderTodos());
         }
         if (this._isTodayView() && this.todayAgendaOpen) {
             this.refreshTodayAgenda(true);
@@ -2537,32 +2569,6 @@ class TodoApp {
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     }
 
-    renderWeekEvents(range) {
-        if (!this.calendarEventsList) return;
-        const events = this.calendarEventsByRange.get(`${range.start}|${range.end}`) || [];
-        if (events.length === 0) {
-            this.calendarEventsList.hidden = true;
-            this.calendarEventsList.innerHTML = "";
-            return;
-        }
-        this.calendarEventsList.hidden = false;
-        this.calendarEventsList.innerHTML = events
-            .map((e) => {
-                const color = e.subscription_color || "#0288D1";
-                const time = this._formatEventTime(e);
-                const date = this._eventDateKey(e);
-                return `
-                    <li class="calendar-event-item" style="border-left-color:${this.escapeHtml(color)}">
-                        <span class="calendar-event-date">${this.escapeHtml(date)}</span>
-                        <span class="calendar-event-time">${this.escapeHtml(time)}</span>
-                        <span class="calendar-event-summary">${this.escapeHtml(e.summary || "(geen titel)")}</span>
-                        ${e.location ? `<span class="calendar-event-location">${this.escapeHtml(e.location)}</span>` : ""}
-                        <span class="calendar-event-source">${this.escapeHtml(e.subscription_name || "")}</span>
-                    </li>
-                `;
-            })
-            .join("");
-    }
 
     async refreshTodayAgenda(force = false) {
         if (!this.todayAgendaList) return;
