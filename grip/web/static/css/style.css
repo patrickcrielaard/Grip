@@ -1681,6 +1681,40 @@ input.modal-field-input {
     font-size: 0.95rem;
 }
 
+/* ===== Week View Day Sections ===== */
+.week-day-header {
+    list-style: none;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--ink);
+    padding: 16px 8px 6px;
+    border-bottom: 1px solid var(--border-light);
+    margin-bottom: 4px;
+}
+
+.week-day-header.is-today {
+    color: var(--accent);
+}
+
+.week-day-empty {
+    list-style: none;
+    color: var(--ink-tertiary);
+    font-size: 0.85rem;
+    padding: 6px 8px 10px;
+}
+
+.week-section-divider {
+    list-style: none;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-secondary);
+    padding: 24px 8px 4px;
+    margin-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
 /* ===== Animations ===== */
 @keyframes floatIn {
     from {
