@@ -37,6 +37,19 @@ CALENDAR_EVENT_SELECT_COLUMNS = (
     "start_at, end_at, all_day, rrule"
 )
 
+ACTIVE_SESSION_SELECT_COLUMNS = (
+    "user_id, task_id, kind, started_at, phase_seconds, cycle_index, notes"
+)
+TIME_ENTRY_SELECT_COLUMNS = (
+    "id, user_id, task_id, task_title_snapshot, kind, started_at, ended_at, "
+    "duration_seconds, interrupted, notes, created_at"
+)
+POMODORO_SETTINGS_SELECT_COLUMNS = (
+    "user_id, focus_minutes, short_break_minutes, long_break_minutes, "
+    "cycles_per_long_break, auto_start_breaks, auto_start_focus, sound_enabled, "
+    "updated_at"
+)
+
 
 class SupabaseService:
     """Service for accessing Grip data via Supabase."""
@@ -819,6 +832,362 @@ class SupabaseService:
             return rows
         except Exception as exc:
             self.logger.exception("list_calendar_events failed: %s", exc)
+            return []
+
+    # ── Timer: active sessions, time entries, pomodoro settings ─────────────
+
+    def get_active_session(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Return the user's currently active session row, or None."""
+        try:
+            result = (
+                self.supabase.table("active_sessions")
+                .select(ACTIVE_SESSION_SELECT_COLUMNS)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if not result.data:
+                return None
+            return cast(Dict[str, Any], result.data[0])
+        except Exception as exc:
+            self.logger.exception("get_active_session failed: %s", exc)
+            return None
+
+    def upsert_active_session(
+        self,
+        user_id: str,
+        task_id: int | None,
+        kind: str,
+        started_at: str,
+        phase_seconds: int | None,
+        cycle_index: int,
+    ) -> Optional[Dict[str, Any]]:
+        """Create or replace the user's active session."""
+        try:
+            payload: Dict[str, Any] = {
+                "user_id": user_id,
+                "task_id": task_id,
+                "kind": kind,
+                "started_at": started_at,
+                "phase_seconds": phase_seconds,
+                "cycle_index": cycle_index,
+            }
+            result = (
+                self.supabase.table("active_sessions")
+                .upsert(payload, on_conflict="user_id")
+                .execute()
+            )
+            if not result.data:
+                return None
+            if isinstance(result.data, list):
+                return cast(Dict[str, Any], result.data[0])
+            return cast(Dict[str, Any], result.data)
+        except Exception as exc:
+            self.logger.exception("upsert_active_session failed: %s", exc)
+            return None
+
+    def clear_active_session(self, user_id: str) -> None:
+        """Remove the user's active session row, if any."""
+        try:
+            self.supabase.table("active_sessions").delete().eq(
+                "user_id", user_id
+            ).execute()
+        except Exception as exc:
+            self.logger.warning("clear_active_session failed: %s", exc)
+
+    def insert_time_entry(
+        self,
+        user_id: str,
+        task_id: int | None,
+        kind: str,
+        started_at: str,
+        ended_at: str,
+        interrupted: bool = False,
+        notes: str | None = None,
+        task_title_snapshot: str | None = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Insert a completed time entry."""
+        try:
+            payload: Dict[str, Any] = {
+                "user_id": user_id,
+                "task_id": task_id,
+                "task_title_snapshot": task_title_snapshot,
+                "kind": kind,
+                "started_at": started_at,
+                "ended_at": ended_at,
+                "interrupted": interrupted,
+                "notes": notes,
+            }
+            result = self.supabase.table("time_entries").insert(payload).execute()
+            if not result.data:
+                return None
+            if isinstance(result.data, list):
+                return cast(Dict[str, Any], result.data[0])
+            return cast(Dict[str, Any], result.data)
+        except Exception as exc:
+            self.logger.exception("insert_time_entry failed: %s", exc)
+            return None
+
+    def list_time_entries(
+        self,
+        user_id: str,
+        task_id: int | None = None,
+        start: str | None = None,
+        end: str | None = None,
+        limit: int | None = None,
+    ) -> List[Dict[str, Any]]:
+        """List time entries for a user, optionally filtered by task and date range."""
+        try:
+            query = (
+                self.supabase.table("time_entries")
+                .select(TIME_ENTRY_SELECT_COLUMNS)
+                .eq("user_id", user_id)
+            )
+            if task_id is not None:
+                query = query.eq("task_id", task_id)
+            if start is not None:
+                query = query.gte("started_at", start)
+            if end is not None:
+                query = query.lte("started_at", end)
+            query = query.order("started_at", desc=True)
+            if limit is not None:
+                query = query.limit(limit)
+            result = query.execute()
+            return [cast(Dict[str, Any], row) for row in (result.data or [])]
+        except Exception as exc:
+            self.logger.exception("list_time_entries failed: %s", exc)
+            return []
+
+    def get_time_entry(self, user_id: str, entry_id: int) -> Optional[Dict[str, Any]]:
+        """Return a single time entry owned by the user."""
+        try:
+            result = (
+                self.supabase.table("time_entries")
+                .select(TIME_ENTRY_SELECT_COLUMNS)
+                .eq("id", entry_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if not result.data:
+                return None
+            return cast(Dict[str, Any], result.data[0])
+        except Exception as exc:
+            self.logger.exception("get_time_entry failed: %s", exc)
+            return None
+
+    def update_time_entry(
+        self, user_id: str, entry_id: int, updates: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Update a time entry's mutable fields (started_at, ended_at, notes)."""
+        try:
+            result = (
+                self.supabase.table("time_entries")
+                .update(updates)
+                .eq("id", entry_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if not result.data:
+                return None
+            if isinstance(result.data, list):
+                return cast(Dict[str, Any], result.data[0])
+            return cast(Dict[str, Any], result.data)
+        except Exception as exc:
+            self.logger.exception("update_time_entry failed: %s", exc)
+            return None
+
+    def delete_time_entry(self, user_id: str, entry_id: int) -> bool:
+        """Delete a time entry owned by the user."""
+        try:
+            result = (
+                self.supabase.table("time_entries")
+                .delete()
+                .eq("id", entry_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            return bool(result.data)
+        except Exception as exc:
+            self.logger.exception("delete_time_entry failed: %s", exc)
+            return False
+
+    def get_pomodoro_settings(self, user_id: str) -> Dict[str, Any]:
+        """Return the user's pomodoro settings, creating defaults on first read."""
+        try:
+            result = (
+                self.supabase.table("pomodoro_settings")
+                .select(POMODORO_SETTINGS_SELECT_COLUMNS)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if result.data:
+                return cast(Dict[str, Any], result.data[0])
+            # First-time user — insert defaults so subsequent reads are stable.
+            insert_payload: Dict[str, Any] = {"user_id": user_id}
+            inserted = (
+                self.supabase.table("pomodoro_settings")
+                .insert(insert_payload)
+                .execute()
+            )
+            if inserted.data:
+                if isinstance(inserted.data, list):
+                    return cast(Dict[str, Any], inserted.data[0])
+                return cast(Dict[str, Any], inserted.data)
+        except Exception as exc:
+            self.logger.exception("get_pomodoro_settings failed: %s", exc)
+        # Fallback: return an in-memory default so the API never 500s.
+        return {
+            "user_id": user_id,
+            "focus_minutes": 25,
+            "short_break_minutes": 5,
+            "long_break_minutes": 15,
+            "cycles_per_long_break": 4,
+            "auto_start_breaks": True,
+            "auto_start_focus": False,
+            "sound_enabled": True,
+        }
+
+    def update_pomodoro_settings(
+        self, user_id: str, updates: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Update the user's pomodoro settings (creates row if missing)."""
+        try:
+            payload = {"user_id": user_id, **updates}
+            result = (
+                self.supabase.table("pomodoro_settings")
+                .upsert(payload, on_conflict="user_id")
+                .execute()
+            )
+            if not result.data:
+                return None
+            if isinstance(result.data, list):
+                return cast(Dict[str, Any], result.data[0])
+            return cast(Dict[str, Any], result.data)
+        except Exception as exc:
+            self.logger.exception("update_pomodoro_settings failed: %s", exc)
+            return None
+
+    def time_summary(
+        self,
+        user_id: str,
+        start: str,
+        end: str,
+        group_by: str,
+    ) -> List[Dict[str, Any]]:
+        """Aggregate time entries in [start, end] by the given grouping.
+
+        Returns rows of {key, label, total_seconds, pomodoro_count}. The
+        actual aggregation is done in Python after fetching the entries —
+        Supabase's REST surface doesn't expose GROUP BY directly. The
+        time_entries.user_started_idx index keeps the read fast.
+        """
+        try:
+            entries = self.list_time_entries(user_id, start=start, end=end)
+            if not entries:
+                return []
+            # Build label maps for grouping that needs joins.
+            tasks_by_id: Dict[int, Dict[str, Any]] = {}
+            projects_by_id: Dict[int, Dict[str, Any]] = {}
+            areas_by_id: Dict[int, Dict[str, Any]] = {}
+            if group_by in {"task", "project", "area"}:
+                tasks = self.list_tasks(user_id)
+                tasks_by_id = {int(t["id"]): t for t in tasks if t.get("id")}
+                if group_by in {"project", "area"}:
+                    project_result = (
+                        self.supabase.table("projects")
+                        .select("id, name, area_id")
+                        .eq("user_id", user_id)
+                        .execute()
+                    )
+                    project_rows = [
+                        cast(Dict[str, Any], r) for r in (project_result.data or [])
+                    ]
+                    projects_by_id = {int(p["id"]): p for p in project_rows}
+                if group_by == "area":
+                    area_result = (
+                        self.supabase.table("areas")
+                        .select("id, name, color")
+                        .eq("user_id", user_id)
+                        .execute()
+                    )
+                    area_rows = [
+                        cast(Dict[str, Any], r) for r in (area_result.data or [])
+                    ]
+                    areas_by_id = {int(a["id"]): a for a in area_rows}
+
+            buckets: Dict[str, Dict[str, Any]] = {}
+
+            def bump(key: str, label: str, seconds: int, is_focus: bool) -> None:
+                bucket = buckets.setdefault(
+                    key,
+                    {
+                        "key": key,
+                        "label": label,
+                        "total_seconds": 0,
+                        "pomodoro_count": 0,
+                    },
+                )
+                bucket["total_seconds"] += seconds
+                if is_focus:
+                    bucket["pomodoro_count"] += 1
+
+            for entry in entries:
+                seconds = int(entry.get("duration_seconds") or 0)
+                is_focus = entry.get("kind") == "pomodoro_focus"
+                kind = entry.get("kind") or "stopwatch"
+                started = str(entry.get("started_at") or "")[:10]
+                task_id = entry.get("task_id")
+
+                if group_by == "day":
+                    bump(started, started, seconds, is_focus)
+                elif group_by == "kind":
+                    bump(kind, kind, seconds, is_focus)
+                elif group_by == "task":
+                    if task_id is not None and int(task_id) in tasks_by_id:
+                        t = tasks_by_id[int(task_id)]
+                        bump(str(task_id), str(t.get("title", "?")), seconds, is_focus)
+                    else:
+                        label = entry.get("task_title_snapshot") or "(verwijderd)"
+                        bump(f"deleted:{task_id}", str(label), seconds, is_focus)
+                elif group_by == "project":
+                    project_id = None
+                    if task_id is not None and int(task_id) in tasks_by_id:
+                        project_id = tasks_by_id[int(task_id)].get("project_id")
+                    if project_id is not None and int(project_id) in projects_by_id:
+                        p = projects_by_id[int(project_id)]
+                        bump(
+                            str(project_id),
+                            str(p.get("name", "?")),
+                            seconds,
+                            is_focus,
+                        )
+                    else:
+                        bump("none", "Geen project", seconds, is_focus)
+                elif group_by == "area":
+                    area_id = None
+                    if task_id is not None and int(task_id) in tasks_by_id:
+                        area_id = tasks_by_id[int(task_id)].get("area_id")
+                        if area_id is None:
+                            project_id = tasks_by_id[int(task_id)].get("project_id")
+                            if (
+                                project_id is not None
+                                and int(project_id) in projects_by_id
+                            ):
+                                area_id = projects_by_id[int(project_id)].get("area_id")
+                    if area_id is not None and int(area_id) in areas_by_id:
+                        a = areas_by_id[int(area_id)]
+                        bump(str(area_id), str(a.get("name", "?")), seconds, is_focus)
+                    else:
+                        bump("none", "Geen gebied", seconds, is_focus)
+                else:
+                    raise ValueError(f"unknown group_by: {group_by}")
+
+            ordered = sorted(
+                buckets.values(),
+                key=lambda b: (b["key"] if group_by == "day" else -b["total_seconds"]),
+            )
+            return ordered
+        except Exception as exc:
+            self.logger.exception("time_summary failed: %s", exc)
             return []
 
 

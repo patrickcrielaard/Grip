@@ -776,5 +776,329 @@ def delete_goal(goal_id: int) -> dict[str, Any]:
     return {"deleted": True}
 
 
+# ── Timer / pomodoro / time analytics ───────────────────────────────────────
+
+
+from datetime import datetime, timedelta, timezone  # noqa: E402
+
+from grip.pomodoro_service import (  # noqa: E402
+    KIND_FOCUS,
+    KIND_STOPWATCH,
+    POMODORO_KINDS,
+    is_phase_elapsed,
+    is_pomodoro_session_stale,
+    is_stopwatch_stale,
+    next_phase,
+    phase_seconds_for,
+    remaining_seconds,
+)
+
+_VALID_GROUP_BY = {"day", "kind", "task", "project", "area"}
+_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _parse_started_iso(value: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        if value.endswith("Z"):
+            value = value[:-1] + "+00:00"
+        dt = datetime.fromisoformat(value)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        return None
+
+
+def _close_active_to_entry(
+    user_id: str, active: dict[str, Any], ended_at: str, interrupted: bool
+) -> None:
+    task_id = active.get("task_id")
+    title_snapshot: str | None = None
+    if task_id is not None:
+        task = supabase_service.get_task(user_id, int(task_id))
+        if task:
+            title_snapshot = task.get("title")
+    supabase_service.insert_time_entry(
+        user_id=user_id,
+        task_id=task_id,
+        kind=str(active["kind"]),
+        started_at=str(active["started_at"]),
+        ended_at=ended_at,
+        interrupted=interrupted,
+        task_title_snapshot=title_snapshot,
+    )
+    supabase_service.clear_active_session(user_id)
+
+
+def _reap_stale_or_keep(user_id: str, active: dict[str, Any]) -> dict[str, Any] | None:
+    started = _parse_started_iso(str(active.get("started_at") or ""))
+    if started is None:
+        supabase_service.clear_active_session(user_id)
+        return None
+    kind = str(active.get("kind") or "")
+    if kind == KIND_STOPWATCH:
+        if is_stopwatch_stale(started):
+            from grip.pomodoro_service import STOPWATCH_STALE_SECONDS
+
+            ended = started + timedelta(seconds=STOPWATCH_STALE_SECONDS)
+            _close_active_to_entry(user_id, active, ended.isoformat(), True)
+            return None
+        return active
+    if kind in POMODORO_KINDS:
+        phase_seconds = int(active.get("phase_seconds") or 0)
+        if phase_seconds > 0 and is_pomodoro_session_stale(started, phase_seconds):
+            ended = started + timedelta(seconds=phase_seconds)
+            _close_active_to_entry(user_id, active, ended.isoformat(), False)
+            return None
+        return active
+    supabase_service.clear_active_session(user_id)
+    return None
+
+
+def _serialize_active_session(active: dict[str, Any]) -> dict[str, Any]:
+    started = _parse_started_iso(str(active.get("started_at") or ""))
+    out = dict(active)
+    if started is None:
+        return out
+    phase_seconds = active.get("phase_seconds")
+    if phase_seconds:
+        out["remaining_seconds"] = remaining_seconds(started, int(phase_seconds))
+        out["phase_elapsed"] = is_phase_elapsed(started, int(phase_seconds))
+    else:
+        out["elapsed_seconds"] = int(
+            (datetime.now(timezone.utc) - started).total_seconds()
+        )
+    return out
+
+
+def _bump_to_in_progress(user_id: str, task: dict[str, Any]) -> None:
+    if task.get("state") == "to_do":
+        supabase_service.update_task(user_id, int(task["id"]), {"state": "in_progress"})
+
+
+@mcp.tool()
+def get_active_timer() -> dict[str, Any]:
+    """Return the currently active timer session for the user, or null if none."""
+    user_id = _user_id()
+    active = supabase_service.get_active_session(user_id)
+    if not active:
+        return {"active": None}
+    active = _reap_stale_or_keep(user_id, active)
+    if not active:
+        return {"active": None}
+    return {"active": _serialize_active_session(active)}
+
+
+@mcp.tool()
+def start_stopwatch(task_id: int) -> dict[str, Any]:
+    """
+    Start a free-form stopwatch on a task. Closes any existing active session
+    first (recording it as a time entry).
+    """
+    user_id = _user_id()
+    task = supabase_service.get_task(user_id, task_id)
+    if not task:
+        raise RuntimeError(f"Task {task_id} not found")
+
+    existing = supabase_service.get_active_session(user_id)
+    if existing:
+        _close_active_to_entry(user_id, existing, _now_iso(), True)
+
+    active = supabase_service.upsert_active_session(
+        user_id=user_id,
+        task_id=int(task["id"]),
+        kind=KIND_STOPWATCH,
+        started_at=_now_iso(),
+        phase_seconds=None,
+        cycle_index=1,
+    )
+    if not active:
+        raise RuntimeError("Unable to start stopwatch")
+    _bump_to_in_progress(user_id, task)
+    return {"active": _serialize_active_session(active)}
+
+
+@mcp.tool()
+def stop_stopwatch() -> dict[str, Any]:
+    """Stop the active stopwatch and record a time entry."""
+    user_id = _user_id()
+    active = supabase_service.get_active_session(user_id)
+    if not active or active.get("kind") != KIND_STOPWATCH:
+        raise RuntimeError("No active stopwatch")
+    _close_active_to_entry(user_id, active, _now_iso(), False)
+    return {"active": None}
+
+
+@mcp.tool()
+def start_pomodoro(task_id: int) -> dict[str, Any]:
+    """Start a pomodoro focus phase on a task using the user's settings."""
+    user_id = _user_id()
+    task = supabase_service.get_task(user_id, task_id)
+    if not task:
+        raise RuntimeError(f"Task {task_id} not found")
+
+    existing = supabase_service.get_active_session(user_id)
+    if existing:
+        _close_active_to_entry(user_id, existing, _now_iso(), True)
+
+    settings = supabase_service.get_pomodoro_settings(user_id)
+    focus_seconds = phase_seconds_for(KIND_FOCUS, settings)
+    active = supabase_service.upsert_active_session(
+        user_id=user_id,
+        task_id=int(task["id"]),
+        kind=KIND_FOCUS,
+        started_at=_now_iso(),
+        phase_seconds=focus_seconds,
+        cycle_index=1,
+    )
+    if not active:
+        raise RuntimeError("Unable to start pomodoro")
+    _bump_to_in_progress(user_id, task)
+    return {"active": _serialize_active_session(active), "settings": settings}
+
+
+@mcp.tool()
+def stop_pomodoro() -> dict[str, Any]:
+    """End the entire pomodoro session (no auto-advance)."""
+    user_id = _user_id()
+    active = supabase_service.get_active_session(user_id)
+    if not active or str(active.get("kind")) not in POMODORO_KINDS:
+        raise RuntimeError("No active pomodoro")
+    _close_active_to_entry(user_id, active, _now_iso(), True)
+    return {"active": None}
+
+
+@mcp.tool()
+def skip_pomodoro_phase() -> dict[str, Any]:
+    """End the current pomodoro phase early and advance to the next one."""
+    user_id = _user_id()
+    active = supabase_service.get_active_session(user_id)
+    if not active or str(active.get("kind")) not in POMODORO_KINDS:
+        raise RuntimeError("No active pomodoro")
+    settings = supabase_service.get_pomodoro_settings(user_id)
+    cycle_index = int(active.get("cycle_index") or 1)
+    nxt = next_phase(str(active["kind"]), cycle_index, settings)
+    _close_active_to_entry(user_id, active, _now_iso(), True)
+    auto = (
+        bool(settings.get("auto_start_breaks", True))
+        if nxt.kind != KIND_FOCUS
+        else bool(settings.get("auto_start_focus", False))
+    )
+    if not auto:
+        return {"active": None, "next_phase": nxt.__dict__}
+    new_active = supabase_service.upsert_active_session(
+        user_id=user_id,
+        task_id=active.get("task_id"),
+        kind=nxt.kind,
+        started_at=_now_iso(),
+        phase_seconds=nxt.phase_seconds,
+        cycle_index=nxt.cycle_index,
+    )
+    return {"active": _serialize_active_session(new_active) if new_active else None}
+
+
+@mcp.tool()
+def list_time_entries(
+    task_id: int | None = None,
+    range_from: str | None = None,
+    range_to: str | None = None,
+    limit: int | None = 50,
+) -> dict[str, Any]:
+    """
+    List recorded time entries. Optionally filter by task_id and a YYYY-MM-DD
+    date range. Default limit is 50, max 500.
+    """
+    user_id = _user_id()
+    if range_from and not _DATE_PATTERN.match(range_from):
+        raise ValueError("range_from must be YYYY-MM-DD")
+    if range_to and not _DATE_PATTERN.match(range_to):
+        raise ValueError("range_to must be YYYY-MM-DD")
+    capped_limit = max(1, min(int(limit or 50), 500))
+    start_iso = f"{range_from}T00:00:00+00:00" if range_from else None
+    end_iso = f"{range_to}T23:59:59+00:00" if range_to else None
+    entries = supabase_service.list_time_entries(
+        user_id,
+        task_id=task_id,
+        start=start_iso,
+        end=end_iso,
+        limit=capped_limit,
+    )
+    return {"entries": entries, "count": len(entries)}
+
+
+@mcp.tool()
+def get_time_summary(
+    range_from: str, range_to: str, group_by: str = "day"
+) -> dict[str, Any]:
+    """
+    Aggregate time entries between range_from and range_to (YYYY-MM-DD)
+    grouped by one of: day, kind, task, project, area.
+    Returns a list of {key, label, total_seconds, pomodoro_count} rows.
+    """
+    user_id = _user_id()
+    if not _DATE_PATTERN.match(range_from) or not _DATE_PATTERN.match(range_to):
+        raise ValueError("range_from / range_to must be YYYY-MM-DD")
+    if range_from > range_to:
+        raise ValueError("range_from must be <= range_to")
+    if group_by not in _VALID_GROUP_BY:
+        raise ValueError(f"group_by must be one of {sorted(_VALID_GROUP_BY)}")
+    rows = supabase_service.time_summary(
+        user_id,
+        start=f"{range_from}T00:00:00+00:00",
+        end=f"{range_to}T23:59:59+00:00",
+        group_by=group_by,
+    )
+    return {"rows": rows, "from": range_from, "to": range_to, "group_by": group_by}
+
+
+@mcp.tool()
+def update_pomodoro_settings(
+    focus_minutes: int | None = None,
+    short_break_minutes: int | None = None,
+    long_break_minutes: int | None = None,
+    cycles_per_long_break: int | None = None,
+    auto_start_breaks: bool | None = None,
+    auto_start_focus: bool | None = None,
+    sound_enabled: bool | None = None,
+) -> dict[str, Any]:
+    """Update one or more pomodoro settings for the current user."""
+    user_id = _user_id()
+    updates: dict[str, Any] = {}
+    if focus_minutes is not None:
+        if focus_minutes < 1 or focus_minutes > 180:
+            raise ValueError("focus_minutes must be between 1 and 180")
+        updates["focus_minutes"] = focus_minutes
+    if short_break_minutes is not None:
+        if short_break_minutes < 1 or short_break_minutes > 60:
+            raise ValueError("short_break_minutes must be between 1 and 60")
+        updates["short_break_minutes"] = short_break_minutes
+    if long_break_minutes is not None:
+        if long_break_minutes < 1 or long_break_minutes > 120:
+            raise ValueError("long_break_minutes must be between 1 and 120")
+        updates["long_break_minutes"] = long_break_minutes
+    if cycles_per_long_break is not None:
+        if cycles_per_long_break < 1 or cycles_per_long_break > 12:
+            raise ValueError("cycles_per_long_break must be between 1 and 12")
+        updates["cycles_per_long_break"] = cycles_per_long_break
+    if auto_start_breaks is not None:
+        updates["auto_start_breaks"] = bool(auto_start_breaks)
+    if auto_start_focus is not None:
+        updates["auto_start_focus"] = bool(auto_start_focus)
+    if sound_enabled is not None:
+        updates["sound_enabled"] = bool(sound_enabled)
+    if not updates:
+        raise ValueError("No changes provided")
+    settings = supabase_service.update_pomodoro_settings(user_id, updates)
+    if not settings:
+        raise RuntimeError("Unable to update pomodoro settings")
+    return {"settings": settings}
+
+
 if __name__ == "__main__":
     mcp.run()

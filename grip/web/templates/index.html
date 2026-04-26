@@ -92,6 +92,14 @@
                     <span class="sidebar-label">Wachten op</span>
                     <span class="sidebar-count" data-count-view="waiting"></span>
                 </button>
+                <button class="sidebar-item" type="button" data-view="stats" aria-pressed="false">
+                    <svg class="sidebar-icon" viewBox="0 0 24 24">
+                        <line x1="18" y1="20" x2="18" y2="10"/>
+                        <line x1="12" y1="20" x2="12" y2="4"/>
+                        <line x1="6" y1="20" x2="6" y2="14"/>
+                    </svg>
+                    <span class="sidebar-label">Statistieken</span>
+                </button>
             </nav>
         </div>
 
@@ -213,62 +221,13 @@
                     </svg>
                     Afronden
                 </button>
-                <button class="project-complete-btn" id="reviveProjectBtn" type="button" title="Project heropenen" hidden>
+                <button class="project-complete-btn" id="reviveProjectBtn" type="button" title="Project heractiveren" hidden>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="1 4 1 10 7 10"/>
-                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                        <path d="M3 12a9 9 0 1 0 3-6.7"/>
+                        <polyline points="3 4 3 10 9 10"/>
                     </svg>
-                    Heropenen
+                    Heractiveren
                 </button>
-            </div>
-        </div>
-
-        <div class="add-task-row" id="addTaskRow" hidden>
-            <div class="add-task-input-group">
-                <input type="text" id="todoInput" placeholder="Nieuwe taak..." class="add-task-input" autocomplete="off">
-                <select id="areaSelect" class="add-task-select" aria-label="Task area">
-                    <option value="">Geen gebied</option>
-                </select>
-                <select id="prioritySelect" class="add-task-select" aria-label="Task priority">
-                    <option value="not_set">Geen prioriteit</option>
-                    <option value="low">Laag</option>
-                    <option value="medium">Gemiddeld</option>
-                    <option value="high">Hoog</option>
-                </select>
-                <select id="projectSelect" class="add-task-select" aria-label="Task project">
-                    <option value="">Geen project</option>
-                </select>
-                <button id="addBtn" class="add-task-submit" type="button">Toevoegen</button>
-            </div>
-            <div class="add-task-input-group add-task-dates">
-                <label class="add-task-date-label">
-                    <span>Start</span>
-                    <input type="date" id="startDateInput" class="add-task-date" aria-label="Start date">
-                </label>
-                <label class="add-task-date-label">
-                    <span>Gepland</span>
-                    <input type="date" id="plannedDateInput" class="add-task-date" aria-label="Planned date">
-                </label>
-                <label class="add-task-date-label">
-                    <span>Deadline</span>
-                    <input type="date" id="deadlineInput" class="add-task-date" aria-label="Deadline">
-                </label>
-                <label class="add-task-date-label">
-                    <span>Duur</span>
-                    <input type="number" id="durationInput" class="add-task-date add-task-duration" aria-label="Duration in minutes" placeholder="min" min="1">
-                </label>
-            </div>
-            <div class="add-task-input-group add-task-recurrence">
-                <label class="add-task-date-label"><span>Herhalen</span></label>
-                <select id="recurrenceUnit" class="add-task-select" aria-label="Recurrence unit">
-                    <option value="">Niet</option>
-                    <option value="day">dag(en)</option>
-                    <option value="week">week/weken</option>
-                    <option value="month">maand(en)</option>
-                </select>
-                <input type="number" id="recurrenceInterval" class="add-task-recurrence-interval" placeholder="1" min="1" value="1" aria-label="Recurrence interval" hidden>
-                <label class="add-task-date-label" id="recurrenceEndLabel" hidden><span>Tot</span></label>
-                <input type="date" id="recurrenceEnd" class="add-task-date" aria-label="Recurrence end date" hidden>
             </div>
         </div>
 
@@ -277,6 +236,62 @@
         <ul id="todoList" class="task-list">
             <!-- Todo items injected by JS -->
         </ul>
+
+        <section class="stats-view" id="statsView" hidden aria-label="Statistieken">
+            <header class="stats-header">
+                <div class="stats-week-nav">
+                    <button type="button" class="stats-nav-btn" id="statsPrevWeek" aria-label="Vorige week">&#8249;</button>
+                    <span class="stats-range-label" id="statsRangeLabel">—</span>
+                    <button type="button" class="stats-nav-btn" id="statsNextWeek" aria-label="Volgende week">&#8250;</button>
+                    <button type="button" class="stats-nav-btn stats-today-btn" id="statsTodayBtn">Deze week</button>
+                </div>
+                <div class="stats-kind-toggle" role="tablist" aria-label="Filter">
+                    <button type="button" class="stats-kind-btn is-active" data-kind="all">Alles</button>
+                    <button type="button" class="stats-kind-btn" data-kind="stopwatch">Stopwatch</button>
+                    <button type="button" class="stats-kind-btn" data-kind="pomodoro">Pomodoro</button>
+                </div>
+                <button type="button" class="stats-settings-btn" id="openPomodoroSettings" title="Pomodoro instellingen">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                    Pomodoro
+                </button>
+            </header>
+            <div class="stats-totals" id="statsTotals">
+                <div class="stats-total-card">
+                    <span class="stats-total-label">Totale tijd</span>
+                    <span class="stats-total-value" id="statsTotalTime">0u 0m</span>
+                </div>
+                <div class="stats-total-card">
+                    <span class="stats-total-label">Pomodoros</span>
+                    <span class="stats-total-value" id="statsTotalPomodoros">0</span>
+                </div>
+                <div class="stats-total-card">
+                    <span class="stats-total-label">Sessies</span>
+                    <span class="stats-total-value" id="statsTotalSessions">0</span>
+                </div>
+            </div>
+            <div class="stats-chart-wrap">
+                <h3 class="stats-section-title">Per dag</h3>
+                <svg class="stats-chart" id="statsChart" viewBox="0 0 700 200" preserveAspectRatio="none"></svg>
+                <div class="stats-chart-legend" id="statsChartLegend"></div>
+            </div>
+            <div class="stats-breakdown-grid">
+                <div class="stats-breakdown">
+                    <h3 class="stats-section-title">Per gebied</h3>
+                    <ul class="stats-breakdown-list" id="statsByArea"></ul>
+                </div>
+                <div class="stats-breakdown">
+                    <h3 class="stats-section-title">Per project</h3>
+                    <ul class="stats-breakdown-list" id="statsByProject"></ul>
+                </div>
+                <div class="stats-breakdown">
+                    <h3 class="stats-section-title">Top taken</h3>
+                    <ul class="stats-breakdown-list" id="statsByTask"></ul>
+                </div>
+            </div>
+        </section>
 
     </main>
 
@@ -288,6 +303,37 @@
             <!-- rendered by JS -->
         </ul>
     </aside>
+
+    <!-- Floating timer pill (stopwatch / pomodoro) -->
+    <div class="timer-pill" id="timerPill" hidden role="status" aria-live="polite">
+        <button type="button" class="timer-pill-body" id="timerPillBody" title="Open taak">
+            <span class="timer-pill-icon" id="timerPillIcon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+            </span>
+            <span class="timer-pill-text">
+                <span class="timer-pill-phase" id="timerPillPhase">Stopwatch</span>
+                <span class="timer-pill-task" id="timerPillTask">—</span>
+            </span>
+            <span class="timer-pill-clock" id="timerPillClock">00:00</span>
+            <span class="timer-pill-cycles" id="timerPillCycles" hidden></span>
+        </button>
+        <button type="button" class="timer-pill-action" id="timerPillSkip" hidden title="Volgende fase">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="5 4 15 12 5 20 5 4"/>
+                <line x1="19" y1="5" x2="19" y2="19"/>
+            </svg>
+        </button>
+        <button type="button" class="timer-pill-action timer-pill-stop" id="timerPillStop" title="Stoppen">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="6" y="6" width="12" height="12" rx="1"/>
+            </svg>
+        </button>
+    </div>
+
+    <audio id="timerChime" preload="auto" src="/static/audio/chime.mp3"></audio>
 
     <!-- Floating action button -->
     <button class="fab-add-btn" id="addTaskToggle" type="button" aria-label="Taak toevoegen">
@@ -320,7 +366,7 @@
                     </div>
                     <div class="modal-title-row">
                         <input type="checkbox" class="todo-checkbox modal-checkbox" id="modalCheckbox">
-                        <input type="text" class="modal-title-input" id="modalTitleInput" placeholder="Taaknaam">
+                        <textarea class="modal-title-input" id="modalTitleInput" placeholder="Taaknaam" rows="1"></textarea>
                     </div>
                 </div>
                 <div class="task-modal-right">
@@ -338,6 +384,43 @@
                                 <option value="waiting">Wachten op</option>
                                 <option value="someday">Ooit | Misschien</option>
                             </select>
+                        </div>
+                    </div>
+                    <div class="modal-field is-set modal-time-field" id="modalTimeField">
+                        <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                        <div class="modal-field-body">
+                            <span class="modal-field-label">Tijd</span>
+                            <div class="modal-time-summary">
+                                <span class="modal-time-total" id="modalTimeTotal">0 min</span>
+                                <span class="modal-time-pomodoros" id="modalTimePomodoros"></span>
+                            </div>
+                            <div class="modal-time-actions">
+                                <button type="button" class="modal-time-btn modal-time-stopwatch" id="modalStartStopwatch">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polygon points="6 4 20 12 6 20 6 4"/>
+                                    </svg>
+                                    Stopwatch
+                                </button>
+                                <button type="button" class="modal-time-btn modal-time-pomodoro" id="modalStartPomodoro">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="12" cy="13" r="8"/>
+                                        <line x1="12" y1="9" x2="12" y2="13"/>
+                                        <line x1="12" y1="13" x2="15" y2="15"/>
+                                        <line x1="10" y1="2" x2="14" y2="2"/>
+                                    </svg>
+                                    Pomodoro
+                                </button>
+                                <button type="button" class="modal-time-btn modal-time-stop" id="modalStopTimer" hidden>
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="6" y="6" width="12" height="12" rx="1"/>
+                                    </svg>
+                                    Stoppen
+                                </button>
+                            </div>
+                            <ul class="modal-time-entries" id="modalTimeEntries"></ul>
                         </div>
                     </div>
                     <div class="modal-field">
@@ -575,6 +658,125 @@
     </div>
 </div>
 
+<!-- Pomodoro settings modal -->
+<div class="task-modal-overlay entity-modal-overlay" id="pomodoroSettingsModal" hidden role="dialog" aria-modal="true" aria-labelledby="pomodoroSettingsTitle">
+    <div class="entity-modal">
+        <div class="entity-modal-header">
+            <h2 id="pomodoroSettingsTitle">Pomodoro instellingen</h2>
+            <button type="button" class="modal-close-btn" id="pomodoroSettingsClose" aria-label="Sluiten">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="entity-modal-body">
+            <div class="entity-modal-field-row">
+                <label class="entity-modal-field">
+                    <span>Focus (minuten)</span>
+                    <input type="number" id="pomoFocusMinutes" min="1" max="180" value="25">
+                </label>
+                <label class="entity-modal-field">
+                    <span>Korte pauze</span>
+                    <input type="number" id="pomoShortBreakMinutes" min="1" max="60" value="5">
+                </label>
+            </div>
+            <div class="entity-modal-field-row">
+                <label class="entity-modal-field">
+                    <span>Lange pauze</span>
+                    <input type="number" id="pomoLongBreakMinutes" min="1" max="120" value="15">
+                </label>
+                <label class="entity-modal-field">
+                    <span>Cycli per lange pauze</span>
+                    <input type="number" id="pomoCyclesPerLongBreak" min="1" max="12" value="4">
+                </label>
+            </div>
+            <label class="entity-modal-field entity-modal-checkbox">
+                <input type="checkbox" id="pomoAutoStartBreaks" checked>
+                <span>Pauze automatisch starten na focus</span>
+            </label>
+            <label class="entity-modal-field entity-modal-checkbox">
+                <input type="checkbox" id="pomoAutoStartFocus">
+                <span>Focus automatisch starten na pauze</span>
+            </label>
+            <label class="entity-modal-field entity-modal-checkbox">
+                <input type="checkbox" id="pomoSoundEnabled" checked>
+                <span>Geluid bij fase-overgang</span>
+            </label>
+        </div>
+        <div class="entity-modal-actions">
+            <button type="button" class="entity-modal-cancel" id="pomodoroSettingsCancel">Sluiten</button>
+            <button type="button" class="entity-modal-save" id="pomodoroSettingsSave">Opslaan</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add task modal -->
+<div class="task-modal-overlay entity-modal-overlay" id="addTaskModal" hidden role="dialog" aria-modal="true" aria-labelledby="addTaskModalTitle">
+    <div class="entity-modal add-task-entity-modal">
+        <div class="entity-modal-header">
+            <h2 id="addTaskModalTitle">Nieuwe taak</h2>
+            <button type="button" class="modal-close-btn" id="addTaskModalClose" aria-label="Sluiten">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="entity-modal-body add-task-modal-body">
+            <input type="text" id="todoInput" placeholder="Taaknaam..." class="add-task-modal-title-input" autocomplete="off">
+            <div class="add-task-modal-selects">
+                <select id="areaSelect" class="add-task-select" aria-label="Task area">
+                    <option value="">Geen gebied</option>
+                </select>
+                <select id="prioritySelect" class="add-task-select" aria-label="Task priority">
+                    <option value="not_set">Geen prioriteit</option>
+                    <option value="low">Laag</option>
+                    <option value="medium">Gemiddeld</option>
+                    <option value="high">Hoog</option>
+                </select>
+                <select id="projectSelect" class="add-task-select" aria-label="Task project">
+                    <option value="">Geen project</option>
+                </select>
+            </div>
+            <div class="add-task-modal-dates">
+                <label class="add-task-date-label">
+                    <span>Start</span>
+                    <input type="date" id="startDateInput" class="add-task-date" aria-label="Start date">
+                </label>
+                <label class="add-task-date-label">
+                    <span>Gepland</span>
+                    <input type="date" id="plannedDateInput" class="add-task-date" aria-label="Planned date">
+                </label>
+                <label class="add-task-date-label">
+                    <span>Deadline</span>
+                    <input type="date" id="deadlineInput" class="add-task-date" aria-label="Deadline">
+                </label>
+                <label class="add-task-date-label">
+                    <span>Duur</span>
+                    <input type="number" id="durationInput" class="add-task-date add-task-duration" aria-label="Duration in minutes" placeholder="min" min="1">
+                </label>
+            </div>
+            <div class="add-task-modal-recurrence">
+                <label class="add-task-date-label"><span>Herhalen</span></label>
+                <select id="recurrenceUnit" class="add-task-select" aria-label="Recurrence unit">
+                    <option value="">Niet</option>
+                    <option value="day">dag(en)</option>
+                    <option value="week">week/weken</option>
+                    <option value="month">maand(en)</option>
+                </select>
+                <input type="number" id="recurrenceInterval" class="add-task-recurrence-interval" placeholder="1" min="1" value="1" aria-label="Recurrence interval" hidden>
+                <label class="add-task-date-label" id="recurrenceEndLabel" hidden><span>Tot</span></label>
+                <input type="date" id="recurrenceEnd" class="add-task-date" aria-label="Recurrence end date" hidden>
+            </div>
+        </div>
+        <div class="entity-modal-actions">
+            <button type="button" class="entity-modal-cancel" id="addTaskModalCancel">Annuleren</button>
+            <button id="addBtn" class="entity-modal-save" type="button">Toevoegen</button>
+        </div>
+    </div>
+</div>
+
 <!-- Custom date picker (singleton, shared across modal date fields) -->
 <div class="date-picker" id="datePicker" hidden>
     <div class="dp-manual-row">
@@ -611,5 +813,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=17"></script>
+<script src="/static/js/app.js?v=19"></script>
 {% endblock %}

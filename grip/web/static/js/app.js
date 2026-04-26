@@ -22,6 +22,17 @@ class TodoApp {
         this.collapsedWeekDays = new Set();
         this.todayAgendaOpen = localStorage.getItem("gripTodayAgendaOpen") === "1";
         this._statusTimer = null;
+
+        // Timer / pomodoro state
+        this.activeSession = null;       // { kind, task_id, started_at, phase_seconds, cycle_index, ... }
+        this.pomodoroSettings = null;    // server-loaded; null means defaults
+        this._pillTickHandle = null;
+        this._chimeAudioCtx = null;      // lazy WebAudio fallback when no MP3
+        this._notifyAsked = false;
+        this.timeEntriesByTask = new Map();  // task_id -> array (cached for modal)
+        this.statsRangeOffset = 0;       // 0 = current week, -1 = previous, +1 = next
+        this.statsKindFilter = "all";    // all | stopwatch | pomodoro
+
         this.cacheElements();
         this.bindEvents();
         this.boot();
@@ -35,13 +46,18 @@ class TodoApp {
         this._populateAreaSelects();
         await Promise.all([this.loadProjects(), this.loadCompletedProjects(), this.loadTodos()]);
         this.loadCalendarSubscriptions();
+        // Timer state — load and start the pill if a session is active.
+        this.loadPomodoroSettings();
+        this.refreshActiveSession();
     }
 
     cacheElements() {
         this.todoInput = document.getElementById("todoInput");
         this.addButton = document.getElementById("addBtn");
         this.addTaskToggle = document.getElementById("addTaskToggle");
-        this.addTaskRow = document.getElementById("addTaskRow");
+        this.addTaskModal = document.getElementById("addTaskModal");
+        this.addTaskModalClose = document.getElementById("addTaskModalClose");
+        this.addTaskModalCancel = document.getElementById("addTaskModalCancel");
         this.areaSelect = document.getElementById("areaSelect");
         this.prioritySelect = document.getElementById("prioritySelect");
         this.startDateInput = document.getElementById("startDateInput");
@@ -128,6 +144,53 @@ class TodoApp {
         this.todayAgendaPanel = document.getElementById("todayAgendaPanel");
         this.todayAgendaList = document.getElementById("todayAgendaList");
         this.todayAgendaTitle = document.getElementById("todayAgendaTitle");
+        // Timer pill
+        this.timerPill = document.getElementById("timerPill");
+        this.timerPillBody = document.getElementById("timerPillBody");
+        this.timerPillIcon = document.getElementById("timerPillIcon");
+        this.timerPillPhase = document.getElementById("timerPillPhase");
+        this.timerPillTask = document.getElementById("timerPillTask");
+        this.timerPillClock = document.getElementById("timerPillClock");
+        this.timerPillCycles = document.getElementById("timerPillCycles");
+        this.timerPillSkip = document.getElementById("timerPillSkip");
+        this.timerPillStop = document.getElementById("timerPillStop");
+        this.timerChime = document.getElementById("timerChime");
+        // Modal Tijd section
+        this.modalTimeField = document.getElementById("modalTimeField");
+        this.modalTimeTotal = document.getElementById("modalTimeTotal");
+        this.modalTimePomodoros = document.getElementById("modalTimePomodoros");
+        this.modalTimeEntries = document.getElementById("modalTimeEntries");
+        this.modalStartStopwatch = document.getElementById("modalStartStopwatch");
+        this.modalStartPomodoro = document.getElementById("modalStartPomodoro");
+        this.modalStopTimer = document.getElementById("modalStopTimer");
+        // Stats view
+        this.statsView = document.getElementById("statsView");
+        this.statsRangeLabel = document.getElementById("statsRangeLabel");
+        this.statsPrevWeek = document.getElementById("statsPrevWeek");
+        this.statsNextWeek = document.getElementById("statsNextWeek");
+        this.statsTodayBtn = document.getElementById("statsTodayBtn");
+        this.statsTotalTime = document.getElementById("statsTotalTime");
+        this.statsTotalPomodoros = document.getElementById("statsTotalPomodoros");
+        this.statsTotalSessions = document.getElementById("statsTotalSessions");
+        this.statsChart = document.getElementById("statsChart");
+        this.statsChartLegend = document.getElementById("statsChartLegend");
+        this.statsByArea = document.getElementById("statsByArea");
+        this.statsByProject = document.getElementById("statsByProject");
+        this.statsByTask = document.getElementById("statsByTask");
+        this.statsKindButtons = Array.from(document.querySelectorAll(".stats-kind-btn"));
+        this.openPomodoroSettings = document.getElementById("openPomodoroSettings");
+        // Pomodoro settings modal
+        this.pomodoroSettingsModal = document.getElementById("pomodoroSettingsModal");
+        this.pomodoroSettingsClose = document.getElementById("pomodoroSettingsClose");
+        this.pomodoroSettingsCancel = document.getElementById("pomodoroSettingsCancel");
+        this.pomodoroSettingsSave = document.getElementById("pomodoroSettingsSave");
+        this.pomoFocusMinutes = document.getElementById("pomoFocusMinutes");
+        this.pomoShortBreakMinutes = document.getElementById("pomoShortBreakMinutes");
+        this.pomoLongBreakMinutes = document.getElementById("pomoLongBreakMinutes");
+        this.pomoCyclesPerLongBreak = document.getElementById("pomoCyclesPerLongBreak");
+        this.pomoAutoStartBreaks = document.getElementById("pomoAutoStartBreaks");
+        this.pomoAutoStartFocus = document.getElementById("pomoAutoStartFocus");
+        this.pomoSoundEnabled = document.getElementById("pomoSoundEnabled");
         // Date picker
         this.datePicker = document.getElementById("datePicker");
         this.dpTextInput = document.getElementById("dpTextInput");
@@ -147,6 +210,19 @@ class TodoApp {
         this.addTaskToggle.addEventListener("click", () =>
             this.toggleAddTask()
         );
+
+        // Add task modal close / cancel / overlay click
+        if (this.addTaskModalClose) {
+            this.addTaskModalClose.addEventListener("click", () => this.hideAddTask());
+        }
+        if (this.addTaskModalCancel) {
+            this.addTaskModalCancel.addEventListener("click", () => this.hideAddTask());
+        }
+        if (this.addTaskModal) {
+            this.addTaskModal.addEventListener("click", (event) => {
+                if (event.target === this.addTaskModal) this.hideAddTask();
+            });
+        }
 
         // Add task submit
         this.addButton.addEventListener("click", () => this.addTodo());
@@ -320,12 +396,12 @@ class TodoApp {
             }
         });
 
-        // Escape to close menus, modal, and hide add-task row
+        // Escape to close menus, modals, and hide add-task modal
         document.addEventListener("keydown", (event) => {
             if (event.key === "Escape") {
                 this.closeAllMenus();
-                this.closeModal();
-                this.hideAddTask();
+                if (!this.taskModal.hidden) { this.closeModal(); return; }
+                if (!this.addTaskModal.hidden) { this.hideAddTask(); return; }
             }
         });
 
@@ -348,11 +424,12 @@ class TodoApp {
             if (this.openTodoId) this.toggleTodo(this.openTodoId);
         });
 
-        // Modal title auto-save on blur
+        // Modal title auto-save on blur + textarea auto-resize
         this.modalTitleInput.addEventListener("blur", () => this.saveModalTitle());
         this.modalTitleInput.addEventListener("keydown", (event) => {
-            if (event.key === "Enter") this.modalTitleInput.blur();
+            if (event.key === "Enter") { event.preventDefault(); this.modalTitleInput.blur(); }
         });
+        this.modalTitleInput.addEventListener("input", () => this._autoResizeTextarea(this.modalTitleInput));
 
         // Modal field auto-save on change + immediate visual state sync
         // (date fields are handled by the custom date picker, not change events)
@@ -526,15 +603,6 @@ class TodoApp {
         if (this.reviveProjectBtn) {
             this.reviveProjectBtn.addEventListener("click", () => this.reviveProject());
         }
-        if (this.projectArchivedNav) {
-            this.projectArchivedNav.addEventListener("click", (e) => {
-                const item = e.target.closest("[data-project-filter]");
-                if (item) {
-                    this.setView({ type: "project", value: Number(item.dataset.projectFilter) });
-                    if (window.innerWidth <= 768) this.closeMobileSidebar();
-                }
-            });
-        }
 
         // Area tree delegation: expand/collapse, selection, add buttons
         if (this.areaNav) {
@@ -665,14 +733,100 @@ class TodoApp {
             this.sidebarOverlay.addEventListener("click", () => this.closeMobileSidebar());
         }
         this._initSwipeGesture();
+
+        // ── Timer pill ──────────────────────────────────────────────────
+        if (this.timerPillBody) {
+            this.timerPillBody.addEventListener("click", () => {
+                if (this.activeSession?.task_id) {
+                    this.openModal(Number(this.activeSession.task_id));
+                }
+            });
+        }
+        if (this.timerPillStop) {
+            this.timerPillStop.addEventListener("click", (e) => {
+                e.stopPropagation();
+                this.stopActiveTimer();
+            });
+        }
+        if (this.timerPillSkip) {
+            this.timerPillSkip.addEventListener("click", (e) => {
+                e.stopPropagation();
+                this.skipPomodoroPhase();
+            });
+        }
+
+        // ── Modal Tijd actions ──────────────────────────────────────────
+        if (this.modalStartStopwatch) {
+            this.modalStartStopwatch.addEventListener("click", () => {
+                if (this.openTodoId) this.startStopwatch(this.openTodoId);
+            });
+        }
+        if (this.modalStartPomodoro) {
+            this.modalStartPomodoro.addEventListener("click", () => {
+                if (this.openTodoId) this.startPomodoro(this.openTodoId);
+            });
+        }
+        if (this.modalStopTimer) {
+            this.modalStopTimer.addEventListener("click", () => this.stopActiveTimer());
+        }
+
+        // ── Stats view controls ─────────────────────────────────────────
+        if (this.statsPrevWeek) {
+            this.statsPrevWeek.addEventListener("click", () => {
+                this.statsRangeOffset -= 1;
+                this.renderStats();
+            });
+        }
+        if (this.statsNextWeek) {
+            this.statsNextWeek.addEventListener("click", () => {
+                this.statsRangeOffset += 1;
+                this.renderStats();
+            });
+        }
+        if (this.statsTodayBtn) {
+            this.statsTodayBtn.addEventListener("click", () => {
+                this.statsRangeOffset = 0;
+                this.renderStats();
+            });
+        }
+        this.statsKindButtons.forEach((btn) => {
+            btn.addEventListener("click", () => {
+                this.statsKindFilter = btn.dataset.kind || "all";
+                this.statsKindButtons.forEach((b) =>
+                    b.classList.toggle("is-active", b === btn)
+                );
+                this.renderStats();
+            });
+        });
+
+        // ── Pomodoro settings modal ─────────────────────────────────────
+        if (this.openPomodoroSettings) {
+            this.openPomodoroSettings.addEventListener("click", () => this.openPomodoroSettingsModal());
+        }
+        if (this.pomodoroSettingsClose) {
+            this.pomodoroSettingsClose.addEventListener("click", () => this.closePomodoroSettingsModal());
+        }
+        if (this.pomodoroSettingsCancel) {
+            this.pomodoroSettingsCancel.addEventListener("click", () => this.closePomodoroSettingsModal());
+        }
+        if (this.pomodoroSettingsModal) {
+            this.pomodoroSettingsModal.addEventListener("click", (e) => {
+                if (e.target === this.pomodoroSettingsModal) this.closePomodoroSettingsModal();
+            });
+        }
+        if (this.pomodoroSettingsSave) {
+            this.pomodoroSettingsSave.addEventListener("click", () => this.savePomodoroSettings());
+        }
     }
 
     // --- Add task toggle ---
 
     toggleAddTask() {
-        this.addTaskVisible = !this.addTaskVisible;
-        this.addTaskRow.hidden = !this.addTaskVisible;
         if (this.addTaskVisible) {
+            this.hideAddTask();
+        } else {
+            this.addTaskVisible = true;
+            this.addTaskModal.hidden = false;
             if (this.projectSelect && this.currentView.type === "project") {
                 this.projectSelect.value = String(this.currentView.value);
             }
@@ -682,7 +836,7 @@ class TodoApp {
 
     hideAddTask() {
         this.addTaskVisible = false;
-        this.addTaskRow.hidden = true;
+        this.addTaskModal.hidden = true;
     }
 
     // --- Mobile sidebar ---
@@ -753,19 +907,41 @@ class TodoApp {
         // Update header title
         this.activeListLabel.textContent = this.getViewLabel();
 
-        // Show archive button for active projects, revive button for completed ones
+        // Show archive/revive button depending on the project's state
         if (this.projectActionsEl) {
             const isProject = view.type === "project";
             const isActiveProject = isProject &&
                 this.projects.some(p => p.id === view.value && (p.status === undefined || p.status === "active"));
-            const isCompletedProject = isProject &&
+            const isCompletedProject = view.type === "project" &&
                 this.completedProjects.some(p => p.id === view.value);
             this.projectActionsEl.hidden = !(isActiveProject || isCompletedProject);
             if (this.archiveProjectBtn) this.archiveProjectBtn.hidden = !isActiveProject;
             if (this.reviveProjectBtn) this.reviveProjectBtn.hidden = !isCompletedProject;
         }
+        // Hide the "add task" affordance for archived projects
+        if (this.addTaskToggle) {
+            const isCompletedProjectView = view.type === "project" &&
+                this.completedProjects.some(p => p.id === view.value);
+            this.addTaskToggle.hidden = isCompletedProjectView;
+            if (isCompletedProjectView) this.hideAddTask();
+        }
 
         this._applyCalendarChrome();
+
+        // Toggle between the regular task list and the stats view.
+        const isStats = view.type === "view" && view.value === "stats";
+        if (this.statsView) this.statsView.hidden = !isStats;
+        if (this.todoList) this.todoList.hidden = isStats;
+        if (isStats) {
+            if (this.addTaskToggle) {
+                this.addTaskToggle.hidden = true;
+                this.hideAddTask();
+            }
+            if (this.itemCount) this.itemCount.textContent = "";
+            this.renderStats();
+            return;
+        }
+
         this.renderTodos();
         if (view.type === "view" && (view.value === "week" || view.value === "next-week")) {
             const offset = view.value === "next-week" ? 1 : 0;
@@ -806,6 +982,7 @@ class TodoApp {
                 if (this.currentView.value === "week") return "Deze week";
                 if (this.currentView.value === "next-week") return "Volgende week";
                 if (this.currentView.value === "waiting") return "Wachten op";
+                if (this.currentView.value === "stats") return "Statistieken";
                 return "Voltooid";
             case "area": {
                 const area = this.getAreaById(this.currentView.value);
@@ -1491,6 +1668,7 @@ class TodoApp {
             this.renderProjectsSidebar();
             this.renderAreaTree();
             this._populateProjectSelects();
+            // Re-apply view so the header actions refresh to the active-project set.
             this.setView({ type: "project", value: projectId });
         } catch (error) {
             this.setStatus(error.message);
@@ -1580,7 +1758,7 @@ class TodoApp {
                     this.projectSelect.value = "";
                 }
                 this.renderTodos();
-                this.todoInput.focus();
+                this.hideAddTask();
             }
         } catch (error) {
             this.setStatus(error.message);
@@ -1831,6 +2009,7 @@ class TodoApp {
     populateModal(todo) {
         this.modalCheckbox.checked = todo.completed;
         this.modalTitleInput.value = todo.title;
+        this._autoResizeTextarea(this.modalTitleInput);
         if (this.modalState) this.modalState.value = todo.state || "to_do";
         // Project tasks have list=NULL by invariant; show the empty placeholder
         // option so the modal doesn't misleadingly claim the task is in "Inbox".
@@ -1849,6 +2028,7 @@ class TodoApp {
             this._syncModalRecurrenceVisibility();
         }
         this._syncModalFieldStates();
+        this._renderModalTimeSection(todo);
     }
 
     _syncModalFieldStates() {
@@ -1990,10 +2170,14 @@ class TodoApp {
                     (todo) => !todo.completed && todo.project_id && projectIdsInGoal.has(todo.project_id)
                 );
             }
-            case "project":
+            case "project": {
+                // For archived projects, include completed tasks so the user can
+                // review everything that was inside before reviving.
+                const isCompleted = this.completedProjects.some(p => p.id === view.value);
                 return this.todos.filter(
-                    (todo) => !todo.completed && todo.project_id === view.value
+                    (todo) => todo.project_id === view.value && (isCompleted || !todo.completed)
                 );
+            }
             default:
                 return this.todos;
         }
@@ -2709,6 +2893,525 @@ class TodoApp {
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     }
 
+
+    // ── Timer / pomodoro ────────────────────────────────────────────────
+
+    async refreshActiveSession() {
+        try {
+            const data = await this.request("/api/timer/active");
+            this._setActiveSession(data.active);
+        } catch (error) {
+            // Silent — timer is non-critical at boot.
+            console.warn("refreshActiveSession failed", error);
+        }
+    }
+
+    async loadPomodoroSettings() {
+        try {
+            const data = await this.request("/api/pomodoro/settings");
+            this.pomodoroSettings = data.settings || null;
+        } catch (error) {
+            console.warn("loadPomodoroSettings failed", error);
+        }
+    }
+
+    _setActiveSession(active) {
+        this.activeSession = active || null;
+        this._renderTimerPill();
+        this._startPillTickIfNeeded();
+        // If the modal is open for the active task, refresh its action buttons.
+        if (this.openTodoId) {
+            const todo = this.todos.find((t) => t.id === this.openTodoId);
+            if (todo) this._renderModalTimeSection(todo);
+        }
+    }
+
+    _startPillTickIfNeeded() {
+        if (this._pillTickHandle) {
+            clearInterval(this._pillTickHandle);
+            this._pillTickHandle = null;
+        }
+        if (!this.activeSession) return;
+        this._pillTickHandle = setInterval(() => this._onPillTick(), 1000);
+    }
+
+    _onPillTick() {
+        if (!this.activeSession) return;
+        const startedMs = Date.parse(this.activeSession.started_at);
+        if (Number.isNaN(startedMs)) return;
+        const elapsed = Math.floor((Date.now() - startedMs) / 1000);
+        const phase = this.activeSession.phase_seconds;
+        if (phase) {
+            const remaining = phase - elapsed;
+            this.timerPillClock.textContent = this._formatClock(Math.max(0, remaining));
+            if (remaining <= 0) {
+                // Pause ticker until server confirms transition (avoids spamming /advance).
+                clearInterval(this._pillTickHandle);
+                this._pillTickHandle = null;
+                this._chime();
+                this._notify("Fase voltooid", this._phaseLabel(this.activeSession.kind));
+                this.advancePomodoro();
+            }
+        } else {
+            this.timerPillClock.textContent = this._formatClock(elapsed);
+        }
+    }
+
+    _renderTimerPill() {
+        if (!this.timerPill) return;
+        if (!this.activeSession) {
+            this.timerPill.hidden = true;
+            return;
+        }
+        const a = this.activeSession;
+        const taskTitle = (() => {
+            const t = this.todos.find((td) => Number(td.id) === Number(a.task_id));
+            return t ? t.title : "(geen taak)";
+        })();
+        this.timerPill.hidden = false;
+        this.timerPill.classList.remove(
+            "is-stopwatch", "is-focus", "is-short-break", "is-long-break"
+        );
+        let phaseLabel = "Stopwatch";
+        let kindClass = "is-stopwatch";
+        let showSkip = false;
+        let showCycles = false;
+        if (a.kind === "pomodoro_focus") {
+            phaseLabel = "Focus"; kindClass = "is-focus"; showSkip = true; showCycles = true;
+        } else if (a.kind === "pomodoro_short_break") {
+            phaseLabel = "Korte pauze"; kindClass = "is-short-break"; showSkip = true;
+        } else if (a.kind === "pomodoro_long_break") {
+            phaseLabel = "Lange pauze"; kindClass = "is-long-break"; showSkip = true;
+        }
+        this.timerPill.classList.add(kindClass);
+        this.timerPillPhase.textContent = phaseLabel;
+        this.timerPillTask.textContent = taskTitle;
+        this.timerPillSkip.hidden = !showSkip;
+
+        if (showCycles && this.pomodoroSettings) {
+            const total = Number(this.pomodoroSettings.cycles_per_long_break || 4);
+            const idx = Number(a.cycle_index || 1);
+            let dots = "";
+            for (let i = 1; i <= total; i++) {
+                dots += i <= idx ? "●" : "○";
+            }
+            this.timerPillCycles.textContent = dots;
+            this.timerPillCycles.hidden = false;
+        } else {
+            this.timerPillCycles.hidden = true;
+        }
+
+        // Initial clock paint
+        const startedMs = Date.parse(a.started_at);
+        const elapsed = Math.floor((Date.now() - startedMs) / 1000);
+        if (a.phase_seconds) {
+            const remaining = Math.max(0, a.phase_seconds - elapsed);
+            this.timerPillClock.textContent = this._formatClock(remaining);
+        } else {
+            this.timerPillClock.textContent = this._formatClock(Math.max(0, elapsed));
+        }
+    }
+
+    _formatClock(totalSeconds) {
+        const s = Math.max(0, Math.floor(totalSeconds));
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        const pad = (n) => String(n).padStart(2, "0");
+        if (h > 0) return `${h}:${pad(m)}:${pad(sec)}`;
+        return `${pad(m)}:${pad(sec)}`;
+    }
+
+    _phaseLabel(kind) {
+        switch (kind) {
+            case "pomodoro_focus": return "Focus";
+            case "pomodoro_short_break": return "Korte pauze";
+            case "pomodoro_long_break": return "Lange pauze";
+            default: return "Stopwatch";
+        }
+    }
+
+    async startStopwatch(taskId) {
+        try {
+            const data = await this.request("/api/timer/stopwatch/start", {
+                method: "POST",
+                body: JSON.stringify({ task_id: taskId }),
+            });
+            this._setActiveSession(data.active);
+            this.setStatus("Stopwatch gestart");
+        } catch (error) {
+            this.setStatus(error.message);
+        }
+    }
+
+    async startPomodoro(taskId) {
+        try {
+            const data = await this.request("/api/timer/pomodoro/start", {
+                method: "POST",
+                body: JSON.stringify({ task_id: taskId }),
+            });
+            if (data.settings) this.pomodoroSettings = data.settings;
+            this._setActiveSession(data.active);
+            this._maybeRequestNotificationPermission();
+            this.setStatus("Pomodoro gestart");
+        } catch (error) {
+            this.setStatus(error.message);
+        }
+    }
+
+    async stopActiveTimer() {
+        if (!this.activeSession) return;
+        const isPomodoro = this.activeSession.kind !== "stopwatch";
+        const url = isPomodoro
+            ? "/api/timer/pomodoro/stop"
+            : "/api/timer/stopwatch/stop";
+        try {
+            await this.request(url, { method: "POST" });
+            const taskId = this.activeSession.task_id;
+            this._setActiveSession(null);
+            // Refresh entries cache for the task that was being timed.
+            if (taskId) this.timeEntriesByTask.delete(Number(taskId));
+            this.setStatus("Timer gestopt");
+            // If modal open on the same task, refresh its time section + total.
+            if (this.openTodoId) {
+                const todo = this.todos.find((t) => t.id === this.openTodoId);
+                if (todo) this._renderModalTimeSection(todo);
+            }
+        } catch (error) {
+            this.setStatus(error.message);
+        }
+    }
+
+    async skipPomodoroPhase() {
+        if (!this.activeSession) return;
+        try {
+            const data = await this.request("/api/timer/pomodoro/skip", {
+                method: "POST",
+            });
+            if (data.settings) this.pomodoroSettings = data.settings;
+            this._setActiveSession(data.active);
+        } catch (error) {
+            this.setStatus(error.message);
+        }
+    }
+
+    async advancePomodoro() {
+        try {
+            const data = await this.request("/api/timer/pomodoro/advance", {
+                method: "POST",
+            });
+            if (data.settings) this.pomodoroSettings = data.settings;
+            this._setActiveSession(data.active);
+        } catch (error) {
+            console.warn("advancePomodoro failed", error);
+        }
+    }
+
+    async _renderModalTimeSection(todo) {
+        if (!this.modalTimeField || !todo) return;
+        const taskId = Number(todo.id);
+        const isActive = Number(this.activeSession?.task_id) === taskId;
+
+        // Action button visibility
+        if (isActive) {
+            this.modalStartStopwatch.hidden = true;
+            this.modalStartPomodoro.hidden = true;
+            this.modalStopTimer.hidden = false;
+        } else {
+            this.modalStartStopwatch.hidden = false;
+            this.modalStartPomodoro.hidden = false;
+            this.modalStopTimer.hidden = true;
+        }
+
+        // Fetch entries (cached per task)
+        let entries = this.timeEntriesByTask.get(taskId);
+        if (!entries) {
+            try {
+                const data = await this.request(`/api/timer/entries?task_id=${taskId}&limit=10`);
+                entries = data.entries || [];
+                this.timeEntriesByTask.set(taskId, entries);
+            } catch (error) {
+                entries = [];
+            }
+        }
+        // Aggregate
+        let totalSec = 0;
+        let pomodoros = 0;
+        entries.forEach((e) => {
+            totalSec += Number(e.duration_seconds || 0);
+            if (e.kind === "pomodoro_focus") pomodoros += 1;
+        });
+        this.modalTimeTotal.textContent = this._formatTotal(totalSec);
+        this.modalTimePomodoros.textContent =
+            pomodoros > 0 ? `· ${pomodoros} pomodoro${pomodoros === 1 ? "" : "s"}` : "";
+
+        // Recent entries list (last 5)
+        if (entries.length === 0) {
+            this.modalTimeEntries.innerHTML = "";
+        } else {
+            this.modalTimeEntries.innerHTML = entries.slice(0, 5).map((e) => {
+                const startDt = new Date(e.started_at);
+                const dateStr = startDt.toLocaleDateString("nl-NL", {
+                    day: "2-digit", month: "short",
+                });
+                const timeStr = startDt.toLocaleTimeString("nl-NL", {
+                    hour: "2-digit", minute: "2-digit",
+                });
+                const dur = this._formatTotal(Number(e.duration_seconds || 0));
+                const icon = e.kind === "stopwatch" ? "⏱" :
+                             e.kind === "pomodoro_focus" ? "🍅" :
+                             e.kind === "pomodoro_short_break" ? "☕" : "🌴";
+                return `<li class="modal-time-entry">
+                    <span class="modal-time-entry-icon" aria-hidden="true">${icon}</span>
+                    <span class="modal-time-entry-when">${this.escapeHtml(dateStr)} ${this.escapeHtml(timeStr)}</span>
+                    <span class="modal-time-entry-dur">${this.escapeHtml(dur)}</span>
+                </li>`;
+            }).join("");
+        }
+    }
+
+    _autoResizeTextarea(el) {
+        el.style.height = "auto";
+        el.style.height = el.scrollHeight + "px";
+    }
+
+    _formatTotal(totalSeconds) {
+        const s = Math.max(0, Math.floor(totalSeconds));
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        if (h > 0) return `${h}u ${m}m`;
+        return `${m} min`;
+    }
+
+    // ── Notifications + chime ───────────────────────────────────────────
+
+    _maybeRequestNotificationPermission() {
+        if (this._notifyAsked) return;
+        this._notifyAsked = true;
+        if ("Notification" in window && Notification.permission === "default") {
+            try { Notification.requestPermission(); } catch { /* ignore */ }
+        }
+    }
+
+    _notify(title, body) {
+        if (!("Notification" in window)) return;
+        if (Notification.permission !== "granted") return;
+        try {
+            new Notification(title, { body, silent: false });
+        } catch { /* ignore */ }
+    }
+
+    _chime() {
+        const enabled = this.pomodoroSettings?.sound_enabled !== false;
+        if (!enabled) return;
+        // Try the bundled MP3 first; fall back to a WebAudio beep if missing.
+        if (this.timerChime && this.timerChime.src) {
+            this.timerChime.currentTime = 0;
+            const playPromise = this.timerChime.play();
+            if (playPromise && typeof playPromise.catch === "function") {
+                playPromise.catch(() => this._chimeBeep());
+            }
+            return;
+        }
+        this._chimeBeep();
+    }
+
+    _chimeBeep() {
+        try {
+            if (!this._chimeAudioCtx) {
+                const Ctx = window.AudioContext || window.webkitAudioContext;
+                if (!Ctx) return;
+                this._chimeAudioCtx = new Ctx();
+            }
+            const ctx = this._chimeAudioCtx;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain).connect(ctx.destination);
+            osc.frequency.value = 880;
+            gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.5);
+        } catch { /* ignore */ }
+    }
+
+    // ── Pomodoro settings modal ─────────────────────────────────────────
+
+    openPomodoroSettingsModal() {
+        if (!this.pomodoroSettingsModal) return;
+        const s = this.pomodoroSettings || {};
+        this.pomoFocusMinutes.value = s.focus_minutes ?? 25;
+        this.pomoShortBreakMinutes.value = s.short_break_minutes ?? 5;
+        this.pomoLongBreakMinutes.value = s.long_break_minutes ?? 15;
+        this.pomoCyclesPerLongBreak.value = s.cycles_per_long_break ?? 4;
+        this.pomoAutoStartBreaks.checked = s.auto_start_breaks !== false;
+        this.pomoAutoStartFocus.checked = s.auto_start_focus === true;
+        this.pomoSoundEnabled.checked = s.sound_enabled !== false;
+        this.pomodoroSettingsModal.hidden = false;
+    }
+
+    closePomodoroSettingsModal() {
+        if (this.pomodoroSettingsModal) this.pomodoroSettingsModal.hidden = true;
+    }
+
+    async savePomodoroSettings() {
+        const payload = {
+            focus_minutes: Number(this.pomoFocusMinutes.value) || 25,
+            short_break_minutes: Number(this.pomoShortBreakMinutes.value) || 5,
+            long_break_minutes: Number(this.pomoLongBreakMinutes.value) || 15,
+            cycles_per_long_break: Number(this.pomoCyclesPerLongBreak.value) || 4,
+            auto_start_breaks: this.pomoAutoStartBreaks.checked,
+            auto_start_focus: this.pomoAutoStartFocus.checked,
+            sound_enabled: this.pomoSoundEnabled.checked,
+        };
+        try {
+            const data = await this.request("/api/pomodoro/settings", {
+                method: "PATCH",
+                body: JSON.stringify(payload),
+            });
+            this.pomodoroSettings = data.settings || payload;
+            this.closePomodoroSettingsModal();
+            this.setStatus("Instellingen opgeslagen");
+        } catch (error) {
+            this.setStatus(error.message);
+        }
+    }
+
+    // ── Stats view ──────────────────────────────────────────────────────
+
+    async renderStats() {
+        if (!this.statsView) return;
+        const { start, end } = this.getStatsRange();
+        // Update header label
+        if (this.statsRangeLabel) {
+            const fmt = (s) => {
+                const d = new Date(`${s}T00:00:00`);
+                return d.toLocaleDateString("nl-NL", { day: "2-digit", month: "short" });
+            };
+            this.statsRangeLabel.textContent = `${fmt(start)} – ${fmt(end)}`;
+        }
+        // Fetch the four summaries in parallel.
+        let day, area, project, task;
+        try {
+            [day, area, project, task] = await Promise.all([
+                this._fetchSummary(start, end, "day"),
+                this._fetchSummary(start, end, "area"),
+                this._fetchSummary(start, end, "project"),
+                this._fetchSummary(start, end, "task"),
+            ]);
+        } catch (error) {
+            this.setStatus(error.message);
+            return;
+        }
+        // Filter rows by kind if needed (server returns all kinds).
+        // For chart by day we use the day breakdown directly; for kind-filter
+        // we re-fetch entries — but a simpler approach: fetch entries once and
+        // aggregate client-side. Keep the simple server-aggregate path for now;
+        // the kind filter just hides pomodoro_count vs total_seconds where appropriate.
+        const totalSec = day.reduce((s, r) => s + Number(r.total_seconds || 0), 0);
+        const totalPomo = day.reduce((s, r) => s + Number(r.pomodoro_count || 0), 0);
+        // Rough session count: use task summary length as a stand-in.
+        let totalSessions = 0;
+        try {
+            const entriesData = await this.request(`/api/timer/entries?from=${start}&to=${end}&limit=500`);
+            const entries = entriesData.entries || [];
+            const filtered = entries.filter((e) => {
+                if (this.statsKindFilter === "all") return true;
+                if (this.statsKindFilter === "stopwatch") return e.kind === "stopwatch";
+                return e.kind && e.kind.startsWith("pomodoro_");
+            });
+            totalSessions = filtered.length;
+        } catch {
+            totalSessions = 0;
+        }
+        this.statsTotalTime.textContent = this._formatTotal(totalSec);
+        this.statsTotalPomodoros.textContent = String(totalPomo);
+        this.statsTotalSessions.textContent = String(totalSessions);
+
+        this._renderStatsChart(day, start, end);
+        this._renderStatsBreakdown(this.statsByArea, area, totalSec);
+        this._renderStatsBreakdown(this.statsByProject, project, totalSec);
+        this._renderStatsBreakdown(this.statsByTask, task.slice(0, 10), totalSec);
+    }
+
+    async _fetchSummary(from, to, groupBy) {
+        const data = await this.request(
+            `/api/timer/summary?from=${from}&to=${to}&group_by=${groupBy}`
+        );
+        return data.rows || [];
+    }
+
+    getStatsRange() {
+        const { start, end } = this.getWeekRange(this.statsRangeOffset);
+        return { start, end };
+    }
+
+    _renderStatsChart(dayRows, start, end) {
+        if (!this.statsChart) return;
+        // Build a 7-day array spanning [start, end] so empty days show a baseline.
+        const days = [];
+        const cursor = new Date(`${start}T00:00:00`);
+        const endDate = new Date(`${end}T00:00:00`);
+        while (cursor <= endDate) {
+            const key = cursor.toISOString().split("T")[0];
+            const row = dayRows.find((r) => r.key === key);
+            days.push({
+                key,
+                label: cursor.toLocaleDateString("nl-NL", { weekday: "short" }),
+                total: row ? Number(row.total_seconds || 0) : 0,
+            });
+            cursor.setDate(cursor.getDate() + 1);
+        }
+        const maxSec = Math.max(1, ...days.map((d) => d.total));
+        const W = 700, H = 200, paddingLeft = 36, paddingBottom = 24, paddingTop = 8;
+        const innerW = W - paddingLeft - 8;
+        const innerH = H - paddingBottom - paddingTop;
+        const barWidth = innerW / days.length * 0.65;
+        const slot = innerW / days.length;
+        const yAxisLabel = (sec) => {
+            if (sec >= 3600) return `${Math.round(sec / 3600)}u`;
+            return `${Math.round(sec / 60)}m`;
+        };
+        const baseY = paddingTop + innerH;
+        let svg = "";
+        // Y-axis ticks (3 ticks)
+        for (let i = 0; i <= 2; i++) {
+            const y = paddingTop + (innerH * (1 - i / 2));
+            const v = (maxSec * i) / 2;
+            svg += `<line x1="${paddingLeft}" y1="${y}" x2="${W - 4}" y2="${y}" class="stats-grid-line"/>`;
+            svg += `<text x="${paddingLeft - 6}" y="${y + 3}" class="stats-axis-label" text-anchor="end">${yAxisLabel(v)}</text>`;
+        }
+        // Bars
+        days.forEach((d, i) => {
+            const x = paddingLeft + slot * i + (slot - barWidth) / 2;
+            const h = innerH * (d.total / maxSec);
+            const y = baseY - h;
+            svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${Math.max(2, h)}" rx="3" class="stats-bar"><title>${this._formatTotal(d.total)}</title></rect>`;
+            svg += `<text x="${x + barWidth / 2}" y="${baseY + 16}" class="stats-axis-label" text-anchor="middle">${d.label}</text>`;
+        });
+        this.statsChart.innerHTML = svg;
+        if (this.statsChartLegend) this.statsChartLegend.textContent = "";
+    }
+
+    _renderStatsBreakdown(container, rows, totalSec) {
+        if (!container) return;
+        if (!rows || rows.length === 0) {
+            container.innerHTML = `<li class="stats-empty">Geen data.</li>`;
+            return;
+        }
+        container.innerHTML = rows.map((r) => {
+            const sec = Number(r.total_seconds || 0);
+            const pct = totalSec > 0 ? Math.round((sec / totalSec) * 100) : 0;
+            return `<li class="stats-row">
+                <div class="stats-row-head">
+                    <span class="stats-row-label">${this.escapeHtml(r.label || "?")}</span>
+                    <span class="stats-row-value">${this.escapeHtml(this._formatTotal(sec))} · ${pct}%</span>
+                </div>
+                <div class="stats-row-bar"><div class="stats-row-bar-fill" style="width:${pct}%"></div></div>
+            </li>`;
+        }).join("");
+    }
 
     async refreshTodayAgenda(force = false) {
         if (!this.todayAgendaList) return;

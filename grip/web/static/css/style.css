@@ -1076,6 +1076,10 @@ button.sidebar-section-label {
     padding: 2px 0;
     line-height: 1.4;
     background: transparent;
+    resize: none;
+    overflow: hidden;
+    min-height: 1.68em;
+    word-break: break-word;
 }
 
 /* Right panel */
@@ -2199,4 +2203,439 @@ body.auth-page {
     color: #d32f2f;
     font-size: 13px;
     margin: 0;
+}
+
+/* ===== Timer pill ===== */
+.timer-pill {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    box-shadow: var(--shadow-menu);
+    padding: 4px;
+    z-index: 60;
+    font-family: var(--font-body);
+    color: var(--ink);
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.timer-pill[hidden] { display: none; }
+.timer-pill.is-stopwatch { border-color: #007aff; }
+.timer-pill.is-focus { border-color: #ff3b30; background: #fff5f5; }
+.timer-pill.is-short-break { border-color: #34c759; background: #f1fbf3; }
+.timer-pill.is-long-break { border-color: #1a8f3a; background: #e8f6ec; }
+
+.timer-pill-body {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: transparent;
+    border: 0;
+    padding: 4px 12px 4px 8px;
+    cursor: pointer;
+    border-radius: 999px;
+    color: inherit;
+    font: inherit;
+}
+.timer-pill-body:hover { background: var(--hover-bg); }
+
+.timer-pill-icon {
+    display: inline-flex;
+    align-items: center;
+    color: var(--ink-secondary);
+}
+.timer-pill.is-focus .timer-pill-icon { color: #ff3b30; }
+.timer-pill.is-short-break .timer-pill-icon,
+.timer-pill.is-long-break .timer-pill-icon { color: #34c759; }
+
+.timer-pill-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    line-height: 1.1;
+    text-align: left;
+}
+.timer-pill-phase {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ink-secondary);
+}
+.timer-pill.is-focus .timer-pill-phase { color: #ff3b30; }
+.timer-pill.is-short-break .timer-pill-phase,
+.timer-pill.is-long-break .timer-pill-phase { color: #1a8f3a; }
+.timer-pill-task {
+    font-size: 13px;
+    font-weight: 500;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.timer-pill-clock {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    font-size: 15px;
+}
+.timer-pill-cycles {
+    font-size: 11px;
+    color: var(--ink-tertiary);
+    letter-spacing: 2px;
+    padding-right: 4px;
+}
+
+.timer-pill-action {
+    background: transparent;
+    border: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--ink-secondary);
+}
+.timer-pill-action:hover { background: var(--hover-bg); color: var(--ink); }
+.timer-pill-stop:hover { color: #d32f2f; }
+
+/* Timer field body stacks vertically */
+.modal-time-field .modal-field-body {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+}
+
+/* ===== Add Task Modal ===== */
+.add-task-entity-modal {
+    width: min(580px, 100%);
+}
+
+.add-task-modal-body {
+    gap: 10px !important;
+}
+
+.add-task-modal-title-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 1rem;
+    font-family: var(--font-body);
+    color: var(--ink);
+    background: #fff;
+    transition: border-color 0.15s ease;
+    outline: none;
+}
+
+.add-task-modal-title-input:focus {
+    border-color: var(--accent);
+}
+
+.add-task-modal-selects {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.add-task-modal-dates {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.add-task-modal-recurrence {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+/* ===== Modal Tijd section ===== */
+.modal-time-summary {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 13px;
+}
+.modal-time-total {
+    font-weight: 600;
+    color: var(--ink);
+}
+.modal-time-pomodoros {
+    color: var(--ink-secondary);
+    font-size: 12px;
+}
+.modal-time-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+.modal-time-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink);
+}
+.modal-time-btn:hover { background: var(--hover-bg); }
+.modal-time-btn[hidden] { display: none; }
+.modal-time-stopwatch:hover { border-color: #007aff; color: #007aff; }
+.modal-time-pomodoro:hover { border-color: #ff3b30; color: #ff3b30; }
+.modal-time-stop:hover { border-color: #d32f2f; color: #d32f2f; }
+
+.modal-time-entries {
+    list-style: none;
+    margin: 8px 0 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.modal-time-entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--ink-secondary);
+    padding: 2px 0;
+}
+.modal-time-entry-icon { width: 14px; text-align: center; }
+.modal-time-entry-when { flex: 1; }
+.modal-time-entry-dur {
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+}
+
+/* ===== Stats view ===== */
+.stats-view {
+    padding: 16px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+.stats-view[hidden] { display: none; }
+
+.stats-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.stats-week-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 4px;
+}
+.stats-nav-btn {
+    background: transparent;
+    border: 0;
+    padding: 4px 10px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    color: var(--ink);
+    font: inherit;
+    font-size: 14px;
+}
+.stats-nav-btn:hover { background: var(--hover-bg); }
+.stats-today-btn { font-weight: 500; padding: 4px 12px; }
+.stats-range-label {
+    padding: 0 8px;
+    font-weight: 500;
+    color: var(--ink);
+    font-size: 13px;
+    min-width: 130px;
+    text-align: center;
+}
+.stats-kind-toggle {
+    display: inline-flex;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 3px;
+}
+.stats-kind-btn {
+    background: transparent;
+    border: 0;
+    padding: 4px 12px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    color: var(--ink-secondary);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+}
+.stats-kind-btn.is-active {
+    background: var(--accent);
+    color: #fff;
+}
+.stats-settings-btn {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 6px 12px;
+    cursor: pointer;
+    color: var(--ink);
+    font: inherit;
+    font-size: 13px;
+}
+.stats-settings-btn:hover { background: var(--hover-bg); }
+
+.stats-totals {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+}
+.stats-total-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.stats-total-label {
+    font-size: 12px;
+    color: var(--ink-secondary);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.stats-total-value {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+}
+
+.stats-chart-wrap {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 16px;
+}
+.stats-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+    color: var(--ink);
+}
+.stats-chart {
+    width: 100%;
+    height: 220px;
+    display: block;
+}
+.stats-bar { fill: var(--accent); }
+.stats-bar:hover { fill: #0058cc; }
+.stats-grid-line { stroke: var(--border-light); stroke-width: 1; }
+.stats-axis-label { fill: var(--ink-secondary); font-size: 11px; }
+.stats-chart-legend {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--ink-secondary);
+}
+
+.stats-breakdown-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
+}
+.stats-breakdown {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 16px;
+}
+.stats-breakdown-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.stats-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.stats-row-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+}
+.stats-row-label {
+    font-size: 13px;
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.stats-row-value {
+    font-size: 12px;
+    color: var(--ink-secondary);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+.stats-row-bar {
+    height: 4px;
+    background: var(--border-light);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.stats-row-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.2s ease;
+}
+.stats-empty {
+    color: var(--ink-tertiary);
+    font-size: 13px;
+}
+
+/* ===== Pomodoro settings modal ===== */
+.entity-modal-checkbox {
+    flex-direction: row !important;
+    align-items: center;
+    gap: 8px !important;
+}
+.entity-modal-checkbox input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+}
+
+@media (max-width: 768px) {
+    .timer-pill {
+        top: 8px;
+        right: 8px;
+    }
+    .timer-pill-task { max-width: 110px; }
+    .stats-header { flex-direction: column; align-items: stretch; }
+    .stats-settings-btn { margin-left: 0; }
 }
