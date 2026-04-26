@@ -104,6 +104,7 @@ class TodoApp {
         this.archiveProjectBtn = document.getElementById("archiveProjectBtn");
         this.reviveProjectBtn = document.getElementById("reviveProjectBtn");
         this.projectNav = document.getElementById("projectNav");
+        this.projectArchivedNav = document.getElementById("projectArchivedNav");
         this.addProjectBtn = document.getElementById("addProjectBtn");
         this.newProjectForm = document.getElementById("newProjectForm");
         this.newProjectInput = document.getElementById("newProjectInput");
@@ -908,7 +909,8 @@ class TodoApp {
 
         // Show archive/revive button depending on the project's state
         if (this.projectActionsEl) {
-            const isActiveProject = view.type === "project" &&
+            const isProject = view.type === "project";
+            const isActiveProject = isProject &&
                 this.projects.some(p => p.id === view.value && (p.status === undefined || p.status === "active"));
             const isCompletedProject = view.type === "project" &&
                 this.completedProjects.some(p => p.id === view.value);
