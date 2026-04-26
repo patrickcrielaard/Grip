@@ -1076,6 +1076,10 @@ button.sidebar-section-label {
     padding: 2px 0;
     line-height: 1.4;
     background: transparent;
+    resize: none;
+    overflow: hidden;
+    min-height: 1.68em;
+    word-break: break-word;
 }
 
 /* Right panel */
@@ -2299,6 +2303,59 @@ body.auth-page {
 }
 .timer-pill-action:hover { background: var(--hover-bg); color: var(--ink); }
 .timer-pill-stop:hover { color: #d32f2f; }
+
+/* Timer field body stacks vertically */
+.modal-time-field .modal-field-body {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+}
+
+/* ===== Add Task Modal ===== */
+.add-task-entity-modal {
+    width: min(580px, 100%);
+}
+
+.add-task-modal-body {
+    gap: 10px !important;
+}
+
+.add-task-modal-title-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 1rem;
+    font-family: var(--font-body);
+    color: var(--ink);
+    background: #fff;
+    transition: border-color 0.15s ease;
+    outline: none;
+}
+
+.add-task-modal-title-input:focus {
+    border-color: var(--accent);
+}
+
+.add-task-modal-selects {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.add-task-modal-dates {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.add-task-modal-recurrence {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
 
 /* ===== Modal Tijd section ===== */
 .modal-time-summary {

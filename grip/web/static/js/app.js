@@ -55,7 +55,9 @@ class TodoApp {
         this.todoInput = document.getElementById("todoInput");
         this.addButton = document.getElementById("addBtn");
         this.addTaskToggle = document.getElementById("addTaskToggle");
-        this.addTaskRow = document.getElementById("addTaskRow");
+        this.addTaskModal = document.getElementById("addTaskModal");
+        this.addTaskModalClose = document.getElementById("addTaskModalClose");
+        this.addTaskModalCancel = document.getElementById("addTaskModalCancel");
         this.areaSelect = document.getElementById("areaSelect");
         this.prioritySelect = document.getElementById("prioritySelect");
         this.startDateInput = document.getElementById("startDateInput");
@@ -207,6 +209,19 @@ class TodoApp {
         this.addTaskToggle.addEventListener("click", () =>
             this.toggleAddTask()
         );
+
+        // Add task modal close / cancel / overlay click
+        if (this.addTaskModalClose) {
+            this.addTaskModalClose.addEventListener("click", () => this.hideAddTask());
+        }
+        if (this.addTaskModalCancel) {
+            this.addTaskModalCancel.addEventListener("click", () => this.hideAddTask());
+        }
+        if (this.addTaskModal) {
+            this.addTaskModal.addEventListener("click", (event) => {
+                if (event.target === this.addTaskModal) this.hideAddTask();
+            });
+        }
 
         // Add task submit
         this.addButton.addEventListener("click", () => this.addTodo());
@@ -380,12 +395,12 @@ class TodoApp {
             }
         });
 
-        // Escape to close menus, modal, and hide add-task row
+        // Escape to close menus, modals, and hide add-task modal
         document.addEventListener("keydown", (event) => {
             if (event.key === "Escape") {
                 this.closeAllMenus();
-                this.closeModal();
-                this.hideAddTask();
+                if (!this.taskModal.hidden) { this.closeModal(); return; }
+                if (!this.addTaskModal.hidden) { this.hideAddTask(); return; }
             }
         });
 
@@ -408,11 +423,12 @@ class TodoApp {
             if (this.openTodoId) this.toggleTodo(this.openTodoId);
         });
 
-        // Modal title auto-save on blur
+        // Modal title auto-save on blur + textarea auto-resize
         this.modalTitleInput.addEventListener("blur", () => this.saveModalTitle());
         this.modalTitleInput.addEventListener("keydown", (event) => {
-            if (event.key === "Enter") this.modalTitleInput.blur();
+            if (event.key === "Enter") { event.preventDefault(); this.modalTitleInput.blur(); }
         });
+        this.modalTitleInput.addEventListener("input", () => this._autoResizeTextarea(this.modalTitleInput));
 
         // Modal field auto-save on change + immediate visual state sync
         // (date fields are handled by the custom date picker, not change events)
@@ -805,9 +821,11 @@ class TodoApp {
     // --- Add task toggle ---
 
     toggleAddTask() {
-        this.addTaskVisible = !this.addTaskVisible;
-        this.addTaskRow.hidden = !this.addTaskVisible;
         if (this.addTaskVisible) {
+            this.hideAddTask();
+        } else {
+            this.addTaskVisible = true;
+            this.addTaskModal.hidden = false;
             if (this.projectSelect && this.currentView.type === "project") {
                 this.projectSelect.value = String(this.currentView.value);
             }
@@ -817,7 +835,7 @@ class TodoApp {
 
     hideAddTask() {
         this.addTaskVisible = false;
-        this.addTaskRow.hidden = true;
+        this.addTaskModal.hidden = true;
     }
 
     // --- Mobile sidebar ---
@@ -1738,7 +1756,7 @@ class TodoApp {
                     this.projectSelect.value = "";
                 }
                 this.renderTodos();
-                this.todoInput.focus();
+                this.hideAddTask();
             }
         } catch (error) {
             this.setStatus(error.message);
@@ -1989,6 +2007,7 @@ class TodoApp {
     populateModal(todo) {
         this.modalCheckbox.checked = todo.completed;
         this.modalTitleInput.value = todo.title;
+        this._autoResizeTextarea(this.modalTitleInput);
         if (this.modalState) this.modalState.value = todo.state || "to_do";
         // Project tasks have list=NULL by invariant; show the empty placeholder
         // option so the modal doesn't misleadingly claim the task is in "Inbox".
@@ -3147,6 +3166,11 @@ class TodoApp {
                 </li>`;
             }).join("");
         }
+    }
+
+    _autoResizeTextarea(el) {
+        el.style.height = "auto";
+        el.style.height = el.scrollHeight + "px";
     }
 
     _formatTotal(totalSeconds) {
