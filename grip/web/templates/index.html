@@ -7,10 +7,19 @@
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 <div class="app-layout">
     <aside class="sidebar">
-        <div class="sidebar-profile">
-            <div class="profile-avatar">{{ username[0] | upper }}</div>
-            <span class="profile-name">{{ username }}</span>
+        <div class="sidebar-brand">
+            <div class="brand-mark">G</div>
+            <div class="brand-name">Grip</div>
         </div>
+
+        <button type="button" class="sidebar-search" id="sidebarSearch" aria-label="Zoeken">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <span class="sidebar-search-text">Zoeken…</span>
+            <span class="kbd">⌘K</span>
+        </button>
 
         <div class="sidebar-section">
             <button class="sidebar-section-label sidebar-section-toggle" type="button"
@@ -21,28 +30,28 @@
                 </svg>
             </button>
             <nav class="sidebar-nav" id="todoNav" aria-label="Primary">
-                <button class="sidebar-item active" type="button" data-list="inbox" aria-pressed="true">
+                <button class="sidebar-item active" type="button" data-list="today" aria-pressed="true">
+                    <svg class="sidebar-icon" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="4"/>
+                        <line x1="12" y1="3" x2="12" y2="5"/>
+                        <line x1="12" y1="19" x2="12" y2="21"/>
+                        <line x1="3" y1="12" x2="5" y2="12"/>
+                        <line x1="19" y1="12" x2="21" y2="12"/>
+                        <line x1="5.6" y1="5.6" x2="7" y2="7"/>
+                        <line x1="17" y1="17" x2="18.4" y2="18.4"/>
+                        <line x1="5.6" y1="18.4" x2="7" y2="17"/>
+                        <line x1="17" y1="7" x2="18.4" y2="5.6"/>
+                    </svg>
+                    <span class="sidebar-label">Vandaag</span>
+                    <span class="sidebar-count" data-count-list="today"></span>
+                </button>
+                <button class="sidebar-item" type="button" data-list="inbox" aria-pressed="false">
                     <svg class="sidebar-icon" viewBox="0 0 24 24">
                         <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
                         <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
                     </svg>
                     <span class="sidebar-label">Inbox</span>
                     <span class="sidebar-count" data-count-list="inbox"></span>
-                </button>
-                <button class="sidebar-item" type="button" data-list="today" aria-pressed="false">
-                    <svg class="sidebar-icon" viewBox="0 0 24 24">
-                        <circle cx="12" cy="12" r="5"/>
-                        <line x1="12" y1="1" x2="12" y2="3"/>
-                        <line x1="12" y1="21" x2="12" y2="23"/>
-                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
-                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-                        <line x1="1" y1="12" x2="3" y2="12"/>
-                        <line x1="21" y1="12" x2="23" y2="12"/>
-                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
-                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-                    </svg>
-                    <span class="sidebar-label">Vandaag</span>
-                    <span class="sidebar-count" data-count-list="today"></span>
                 </button>
                 <button class="sidebar-item" type="button" data-view="week" aria-pressed="false">
                     <svg class="sidebar-icon" viewBox="0 0 24 24">
@@ -54,35 +63,17 @@
                     <span class="sidebar-label">Deze week</span>
                     <span class="sidebar-count" data-count-view="week"></span>
                 </button>
-                <button class="sidebar-item" type="button" data-view="next-week" aria-pressed="false">
-                    <svg class="sidebar-icon" viewBox="0 0 24 24">
-                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                        <line x1="16" y1="2" x2="16" y2="6"/>
-                        <line x1="8" y1="2" x2="8" y2="6"/>
-                        <line x1="3" y1="10" x2="21" y2="10"/>
-                    </svg>
-                    <span class="sidebar-label">Volgende week</span>
-                    <span class="sidebar-count" data-count-view="next-week"></span>
-                </button>
                 <button class="sidebar-item" type="button" data-view="all" aria-pressed="false">
                     <svg class="sidebar-icon" viewBox="0 0 24 24">
                         <line x1="8" y1="6" x2="21" y2="6"/>
                         <line x1="8" y1="12" x2="21" y2="12"/>
                         <line x1="8" y1="18" x2="21" y2="18"/>
-                        <line x1="3" y1="6" x2="3.01" y2="6"/>
-                        <line x1="3" y1="12" x2="3.01" y2="12"/>
-                        <line x1="3" y1="18" x2="3.01" y2="18"/>
+                        <circle cx="3.5" cy="6" r="0.7" fill="currentColor"/>
+                        <circle cx="3.5" cy="12" r="0.7" fill="currentColor"/>
+                        <circle cx="3.5" cy="18" r="0.7" fill="currentColor"/>
                     </svg>
                     <span class="sidebar-label">Alle taken</span>
                     <span class="sidebar-count" data-count-view="all"></span>
-                </button>
-                <button class="sidebar-item" type="button" data-view="completed" aria-pressed="false">
-                    <svg class="sidebar-icon" viewBox="0 0 24 24">
-                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                        <polyline points="22 4 12 14.01 9 11.01"/>
-                    </svg>
-                    <span class="sidebar-label">Voltooid</span>
-                    <span class="sidebar-count" data-count-view="completed"></span>
                 </button>
                 <button class="sidebar-item" type="button" data-view="waiting" aria-pressed="false">
                     <svg class="sidebar-icon" viewBox="0 0 24 24">
@@ -92,35 +83,6 @@
                     <span class="sidebar-label">Wachten op</span>
                     <span class="sidebar-count" data-count-view="waiting"></span>
                 </button>
-                <button class="sidebar-item" type="button" data-view="stats" aria-pressed="false">
-                    <svg class="sidebar-icon" viewBox="0 0 24 24">
-                        <line x1="18" y1="20" x2="18" y2="10"/>
-                        <line x1="12" y1="20" x2="12" y2="4"/>
-                        <line x1="6" y1="20" x2="6" y2="14"/>
-                    </svg>
-                    <span class="sidebar-label">Statistieken</span>
-                </button>
-            </nav>
-        </div>
-
-        <div class="sidebar-section">
-            <div class="sidebar-section-header">
-                <button class="sidebar-section-label sidebar-section-toggle" type="button"
-                        aria-expanded="true" data-toggle-section="calendarNav">
-                    Agenda's
-                    <svg class="collapse-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="6 9 12 15 18 9"/>
-                    </svg>
-                </button>
-                <button class="sidebar-section-add-btn" id="addCalendarBtn" type="button" title="Agenda toevoegen" aria-label="Agenda toevoegen">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="12" y1="5" x2="12" y2="19"/>
-                        <line x1="5" y1="12" x2="19" y2="12"/>
-                    </svg>
-                </button>
-            </div>
-            <nav class="sidebar-nav" id="calendarNav" aria-label="Agenda's">
-                <!-- rendered by JS -->
             </nav>
         </div>
 
@@ -149,7 +111,7 @@
             <div class="sidebar-section-header">
                 <button class="sidebar-section-label sidebar-section-toggle" type="button"
                         aria-expanded="true" data-toggle-section="projectNav">
-                    Losse projecten
+                    Projecten
                     <svg class="collapse-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="6 9 12 15 18 9"/>
                     </svg>
@@ -161,7 +123,7 @@
                     </svg>
                 </button>
             </div>
-            <nav class="sidebar-nav" id="projectNav" aria-label="Losse projecten">
+            <nav class="sidebar-nav" id="projectNav" aria-label="Projecten">
                 <!-- rendered by JS -->
             </nav>
             <div id="newProjectForm" class="sidebar-add-project-form" hidden>
@@ -169,27 +131,39 @@
             </div>
         </div>
 
-        <div class="sidebar-section" id="projectsArchivedSection" style="display: none;">
-            <button class="sidebar-section-label sidebar-section-toggle" type="button"
-                    aria-expanded="false" data-toggle-section="projectArchivedNav">
-                Archief
-                <svg class="collapse-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"/>
+        <div class="sidebar-foot">
+            <button type="button" class="sidebar-item sidebar-foot-link" data-view="stats" aria-pressed="false">
+                <svg class="sidebar-icon" viewBox="0 0 24 24">
+                    <line x1="18" y1="20" x2="18" y2="10"/>
+                    <line x1="12" y1="20" x2="12" y2="4"/>
+                    <line x1="6" y1="20" x2="6" y2="14"/>
                 </svg>
+                <span class="sidebar-label">Statistieken</span>
             </button>
-            <nav class="sidebar-nav" id="projectArchivedNav" aria-label="Gearchiveerde projecten">
-                <!-- rendered by JS -->
-            </nav>
+            <button type="button" class="sidebar-item sidebar-foot-link" id="sidebarSettingsBtn">
+                <svg class="sidebar-icon" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+                <span class="sidebar-label">Instellingen</span>
+            </button>
+            <div class="sidebar-foot-divider" role="separator" aria-hidden="true"></div>
+            <div class="sidebar-foot-row">
+                <div class="sidebar-foot-user">
+                    <div class="profile-avatar">{{ username[0] | upper }}</div>
+                    <span class="profile-name">{{ username }}</span>
+                </div>
+                <form class="sidebar-logout-form" action="/logout" method="post">
+                    <button class="sidebar-logout-btn" type="submit" aria-label="Uitloggen" title="Uitloggen">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                            <polyline points="16 17 21 12 16 7"/>
+                            <line x1="21" y1="12" x2="9" y2="12"/>
+                        </svg>
+                    </button>
+                </form>
+            </div>
         </div>
-
-        <form class="sidebar-logout-form" action="/logout" method="post">
-            <button class="sidebar-logout-btn" type="submit">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-                </svg>
-                <span>Uitloggen</span>
-            </button>
-        </form>
     </aside>
 
     <main class="main-content">
@@ -202,7 +176,10 @@
                         <line x1="3" y1="18" x2="21" y2="18"/>
                     </svg>
                 </button>
-                <h1 class="content-title" id="activeListLabel">Inbox</h1>
+                <div class="content-title-block">
+                    <h1 class="content-title" id="activeListLabel">Inbox</h1>
+                    <span class="content-subtitle" id="contentSubtitle"></span>
+                </div>
                 <span class="content-task-count" id="itemCount">0 tasks</span>
             </div>
             <button class="today-agenda-toggle" id="todayAgendaToggle" type="button" hidden aria-pressed="false" title="Agenda van vandaag">
@@ -777,6 +754,78 @@
     </div>
 </div>
 
+<!-- Settings modal (theme + density + agendas) -->
+<div class="task-modal-overlay entity-modal-overlay" id="settingsModal" hidden role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+    <div class="entity-modal settings-entity-modal">
+        <div class="entity-modal-header">
+            <h2 id="settingsModalTitle">Instellingen</h2>
+            <button type="button" class="modal-close-btn" id="settingsModalClose" aria-label="Sluiten">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="entity-modal-body settings-modal-body">
+            <div class="entity-modal-field">
+                <span>Thema</span>
+                <p class="settings-card-help">Kies een accentkleur. Klik om te bekijken — opslaan om te bewaren.</p>
+                <div class="theme-picker" id="themePicker" role="radiogroup" aria-label="Thema kleur">
+                    <button type="button" class="theme-swatch" data-theme="ink" role="radio" aria-checked="true" aria-label="Ink">
+                        <span class="theme-swatch-chip" style="background:#111111;"></span>
+                        <span class="theme-swatch-label">Ink</span>
+                    </button>
+                    <button type="button" class="theme-swatch" data-theme="forest" role="radio" aria-checked="false" aria-label="Forest">
+                        <span class="theme-swatch-chip" style="background:#1F3D2A;"></span>
+                        <span class="theme-swatch-label">Forest</span>
+                    </button>
+                    <button type="button" class="theme-swatch" data-theme="plum" role="radio" aria-checked="false" aria-label="Plum">
+                        <span class="theme-swatch-chip" style="background:#3A1F3D;"></span>
+                        <span class="theme-swatch-label">Plum</span>
+                    </button>
+                    <button type="button" class="theme-swatch" data-theme="ochre" role="radio" aria-checked="false" aria-label="Ochre">
+                        <span class="theme-swatch-chip" style="background:#4A3220;"></span>
+                        <span class="theme-swatch-label">Ochre</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="entity-modal-field">
+                <span>Dichtheid</span>
+                <p class="settings-card-help">Hoeveel ruimte rond elementen.</p>
+                <div class="density-picker" id="densityPicker" role="radiogroup" aria-label="Dichtheid">
+                    <button type="button" class="density-option" data-density="compact" role="radio" aria-checked="false">Compact</button>
+                    <button type="button" class="density-option is-active" data-density="cozy" role="radio" aria-checked="true">Cozy</button>
+                    <button type="button" class="density-option" data-density="roomy" role="radio" aria-checked="false">Roomy</button>
+                </div>
+            </div>
+
+            <div class="entity-modal-field">
+                <div class="settings-card-head">
+                    <div>
+                        <span>Agenda's</span>
+                        <p class="settings-card-help">iCloud-deelbare agendalinks. Worden alleen-lezen getoond.</p>
+                    </div>
+                    <button type="button" class="btn-ghost" id="addCalendarBtn">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <line x1="12" y1="5" x2="12" y2="19"/>
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        Agenda toevoegen
+                    </button>
+                </div>
+                <div class="settings-calendar-list" id="calendarNav" aria-label="Agenda's">
+                    <!-- rendered by JS -->
+                </div>
+            </div>
+        </div>
+        <div class="entity-modal-actions">
+            <button type="button" class="entity-modal-cancel" id="settingsModalCancel">Annuleren</button>
+            <button type="button" class="entity-modal-save" id="settingsModalSave">Opslaan</button>
+        </div>
+    </div>
+</div>
+
 <!-- Custom date picker (singleton, shared across modal date fields) -->
 <div class="date-picker" id="datePicker" hidden>
     <div class="dp-manual-row">
@@ -813,5 +862,30 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=19"></script>
+<script>
+(function () {
+    var sub = document.getElementById('contentSubtitle');
+    if (!sub) return;
+    var weekdays = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
+    var months = ['januari', 'februari', 'maart', 'april', 'mei', 'juni',
+                  'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
+    function isoWeek(d) {
+        var date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+        var dayNum = date.getUTCDay() || 7;
+        date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+        var yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+        return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+    }
+    function season(m) {
+        if (m >= 2 && m <= 4) return 'Lente';
+        if (m >= 5 && m <= 7) return 'Zomer';
+        if (m >= 8 && m <= 10) return 'Herfst';
+        return 'Winter';
+    }
+    var now = new Date();
+    sub.textContent = weekdays[now.getDay()] + ' ' + now.getDate() + ' ' + months[now.getMonth()] +
+                      ' · Week ' + isoWeek(now) + ' · ' + season(now.getMonth());
+})();
+</script>
+<script src="/static/js/app.js?v=21"></script>
 {% endblock %}

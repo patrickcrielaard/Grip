@@ -7,7 +7,7 @@ class TodoApp {
         this.completedProjects = [];
         this.areas = [];
         this.goals = [];
-        this.currentView = { type: "list", value: "inbox" };
+        this.currentView = { type: "list", value: "today" };
         this.availableLists = ["inbox", "today"];
         this.availablePriorities = ["not_set", "low", "medium", "high"];
         this.addTaskVisible = false;
@@ -163,6 +163,15 @@ class TodoApp {
         this.modalStartStopwatch = document.getElementById("modalStartStopwatch");
         this.modalStartPomodoro = document.getElementById("modalStartPomodoro");
         this.modalStopTimer = document.getElementById("modalStopTimer");
+        // Settings modal
+        this.settingsModal = document.getElementById("settingsModal");
+        this.settingsModalClose = document.getElementById("settingsModalClose");
+        this.settingsModalCancel = document.getElementById("settingsModalCancel");
+        this.settingsModalSave = document.getElementById("settingsModalSave");
+        this.themePicker = document.getElementById("themePicker");
+        this.densityPicker = document.getElementById("densityPicker");
+        this.sidebarSettingsBtn = document.getElementById("sidebarSettingsBtn");
+        this._settingsSnapshot = null;
         // Stats view
         this.statsView = document.getElementById("statsView");
         this.statsRangeLabel = document.getElementById("statsRangeLabel");
@@ -249,6 +258,46 @@ class TodoApp {
                 if (window.innerWidth <= 768) this.closeMobileSidebar();
             });
         });
+
+        // Settings modal: open via sidebar foot link; preview theme/density
+        // on click; commit on Save; revert on Cancel/Close.
+        if (this.sidebarSettingsBtn) {
+            this.sidebarSettingsBtn.addEventListener("click", () => {
+                this.openSettingsModal();
+                if (window.innerWidth <= 768) this.closeMobileSidebar();
+            });
+        }
+        if (this.themePicker) {
+            this.themePicker.addEventListener("click", (event) => {
+                const btn = event.target.closest("[data-theme]");
+                if (!btn) return;
+                this.applyTheme(btn.dataset.theme, false);
+            });
+        }
+        if (this.densityPicker) {
+            this.densityPicker.addEventListener("click", (event) => {
+                const btn = event.target.closest("[data-density]");
+                if (!btn) return;
+                this.applyDensity(btn.dataset.density, false);
+            });
+        }
+        if (this.settingsModalClose) {
+            this.settingsModalClose.addEventListener("click", () => this.closeSettingsModal(true));
+        }
+        if (this.settingsModalCancel) {
+            this.settingsModalCancel.addEventListener("click", () => this.closeSettingsModal(true));
+        }
+        if (this.settingsModalSave) {
+            this.settingsModalSave.addEventListener("click", () => this.saveSettingsModal());
+        }
+        if (this.settingsModal) {
+            this.settingsModal.addEventListener("click", (event) => {
+                if (event.target === this.settingsModal) this.closeSettingsModal(true);
+            });
+        }
+        // Restore persisted theme/density on load
+        this.applyTheme(localStorage.getItem("gripTheme") || "ink", false);
+        this.applyDensity(localStorage.getItem("gripDensity") || "cozy", false);
 
         // Clear completed
         if (this.clearCompletedButton) {
@@ -971,6 +1020,81 @@ class TodoApp {
         document.body.classList.toggle("with-today-agenda", showPanel);
     }
 
+    applyTheme(theme, persist) {
+        const allowed = ["ink", "forest", "plum", "ochre"];
+        const value = allowed.includes(theme) ? theme : "ink";
+        if (value === "ink") {
+            document.body.removeAttribute("data-theme");
+        } else {
+            document.body.setAttribute("data-theme", value);
+        }
+        if (persist) {
+            localStorage.setItem("gripTheme", value);
+        }
+        if (this.themePicker) {
+            this.themePicker.querySelectorAll("[data-theme]").forEach((btn) => {
+                const isActive = btn.dataset.theme === value;
+                btn.classList.toggle("is-active", isActive);
+                btn.setAttribute("aria-checked", isActive ? "true" : "false");
+            });
+        }
+    }
+
+    applyDensity(density, persist) {
+        const allowed = ["compact", "cozy", "roomy"];
+        const value = allowed.includes(density) ? density : "cozy";
+        document.body.setAttribute("data-density", value);
+        if (persist) {
+            localStorage.setItem("gripDensity", value);
+        }
+        if (this.densityPicker) {
+            this.densityPicker.querySelectorAll("[data-density]").forEach((btn) => {
+                const isActive = btn.dataset.density === value;
+                btn.classList.toggle("is-active", isActive);
+                btn.setAttribute("aria-checked", isActive ? "true" : "false");
+            });
+        }
+    }
+
+    openSettingsModal() {
+        if (!this.settingsModal) return;
+        // Snapshot current persisted theme/density so Cancel can revert.
+        this._settingsSnapshot = {
+            theme: localStorage.getItem("gripTheme") || "ink",
+            density: localStorage.getItem("gripDensity") || "cozy",
+        };
+        // Sync the picker UI to the current state.
+        this.applyTheme(this._settingsSnapshot.theme, false);
+        this.applyDensity(this._settingsSnapshot.density, false);
+        // Render the calendar list inside the modal.
+        if (typeof this.renderCalendarSidebar === "function") {
+            this.renderCalendarSidebar();
+        }
+        this.settingsModal.hidden = false;
+    }
+
+    closeSettingsModal(revert) {
+        if (!this.settingsModal) return;
+        if (revert && this._settingsSnapshot) {
+            // Roll back any preview changes to the persisted snapshot.
+            this.applyTheme(this._settingsSnapshot.theme, false);
+            this.applyDensity(this._settingsSnapshot.density, false);
+        }
+        this._settingsSnapshot = null;
+        this.settingsModal.hidden = true;
+    }
+
+    saveSettingsModal() {
+        // Read whichever theme/density is currently previewed and persist it.
+        const theme = document.body.getAttribute("data-theme") || "ink";
+        const density = document.body.getAttribute("data-density") || "cozy";
+        localStorage.setItem("gripTheme", theme);
+        localStorage.setItem("gripDensity", density);
+        this._settingsSnapshot = null;
+        if (this.settingsModal) this.settingsModal.hidden = true;
+        this.setStatus("Instellingen opgeslagen");
+    }
+
     getViewLabel() {
         switch (this.currentView.type) {
             case "list":
@@ -1238,48 +1362,23 @@ class TodoApp {
         );
 
         const renderArea = (area, extraClass = "") => {
-            const expanded = this.expandedAreaIds.has(area.id);
-            const goalsInArea = this.goals.filter(
-                (g) => g.area_id === area.id && g.status !== "archived"
-            );
-            const projectsInArea = activeProjects.filter(
-                (p) => p.area_id === area.id && !p.goal_id
-            );
-            const hasChildren = goalsInArea.length > 0 || projectsInArea.length > 0;
+            const areaTodos = this.todos.filter((t) => t.area_id === area.id);
+            const totalAreaTodos = areaTodos.length;
+            const doneAreaTodos = areaTodos.filter((t) => t.completed).length;
+            const progressPct = totalAreaTodos > 0
+                ? Math.round((doneAreaTodos / totalAreaTodos) * 100)
+                : 0;
+            const safeColor = this.escapeHtml(area.color || "#666");
 
-            const chevron = hasChildren
-                ? `<button class="tree-toggle" type="button" data-kind="area" data-id="${area.id}" aria-expanded="${expanded}" aria-label="Toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="${expanded ? "6 9 12 15 18 9" : "9 18 15 12 9 6"}"/></svg></button>`
-                : `<span class="tree-toggle tree-toggle-placeholder"></span>`;
-
-            let html = `
+            // Per design: a flat area row — swatch + name + thin colored
+            // progress bar. No chevron, no nested goals/projects, no count,
+            // no inline action buttons.
+            return `
                 <div class="tree-node tree-area ${extraClass}" data-tree-node="area" data-id="${area.id}" role="button" aria-pressed="false">
-                    ${chevron}
-                    <span class="area-swatch" style="background:${this.escapeHtml(area.color)}"></span>
+                    <span class="area-swatch" style="background:${safeColor}"></span>
                     <span class="tree-label">${this.escapeHtml(area.name)}</span>
-                    <span class="tree-actions">
-                        <button class="tree-action add-goal-btn" type="button" title="Nieuw doel" data-area-id="${area.id}" aria-label="Nieuw doel">+ Doel</button>
-                        <button class="tree-action add-project-btn" type="button" title="Nieuw project" data-area-id="${area.id}" aria-label="Nieuw project">+</button>
-                    </span>
-                    <span class="sidebar-count tree-count" data-count-area="${area.id}"></span>
+                    <span class="tree-area-bar" aria-hidden="true"><i style="width:${progressPct}%; background:${safeColor};"></i></span>
                 </div>`;
-
-            if (expanded && hasChildren) {
-                html += `<div class="tree-children">`;
-                goalsInArea.forEach((goal) => {
-                    html += renderGoal(goal);
-                });
-                projectsInArea.forEach((project) => {
-                    html += `
-                        <div class="tree-node tree-project" data-tree-node="project" data-id="${project.id}" role="button" aria-pressed="false">
-                            <span class="tree-toggle tree-toggle-placeholder"></span>
-                            <svg class="tree-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                            <span class="tree-label">${this.escapeHtml(project.name)}</span>
-                            <span class="sidebar-count tree-count" data-count-project="${project.id}"></span>
-                        </div>`;
-                });
-                html += `</div>`;
-            }
-            return html;
         };
 
         const renderGoal = (goal) => {
@@ -1549,25 +1648,12 @@ class TodoApp {
                 </button>`)
             .join("");
 
-        // Render completed projects in archive section
+        // Archive section was removed from the sidebar by design — completed
+        // projects are reachable from project routing only.
         const archivedSection = document.getElementById("projectsArchivedSection");
         const archivedNav = document.getElementById("projectArchivedNav");
-        if (completedProjects.length > 0) {
-            archivedSection.style.display = "block";
-            archivedNav.innerHTML = completedProjects
-                .map(project => `
-                    <button class="sidebar-item project-completed" type="button" data-project-filter="${project.id}" aria-pressed="false">
-                        <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                        </svg>
-                        <span class="sidebar-label">${this.escapeHtml(project.name)}</span>
-                        <span class="sidebar-count" data-count-project="${project.id}"></span>
-                    </button>`)
-                .join("");
-        } else {
-            archivedSection.style.display = "none";
-            archivedNav.innerHTML = "";
-        }
+        if (archivedSection) archivedSection.style.display = "none";
+        if (archivedNav) archivedNav.innerHTML = "";
 
         // Re-apply active state if currently viewing this project
         if (this.currentView.type === "project") {
