@@ -140,10 +140,42 @@ class TodoApp {
         this.calendarUrlInput = document.getElementById("calendarUrlInput");
         this.calendarColorInput = document.getElementById("calendarColorInput");
         this.calendarModalError = document.getElementById("calendarModalError");
-        this.todayAgendaToggle = document.getElementById("todayAgendaToggle");
-        this.todayAgendaPanel = document.getElementById("todayAgendaPanel");
         this.todayAgendaList = document.getElementById("todayAgendaList");
         this.todayAgendaTitle = document.getElementById("todayAgendaTitle");
+        this.agendaNowLabel = document.getElementById("agendaNowLabel");
+        // Today view (integrated)
+        this.todayView = document.getElementById("todayView");
+        this.todayHeadline = document.getElementById("todayHeadline");
+        this.todaySub = document.getElementById("todaySub");
+        this.todayGoals = document.getElementById("todayGoals");
+        this.todayTasks = document.getElementById("todayTasks");
+        this.todayTaskCount = document.getElementById("todayTaskCount");
+        this.todayHeaderTools = document.getElementById("todayHeaderTools");
+        this.todayFocusBtn = document.getElementById("todayFocusBtn");
+        this.todayBellBtn = document.getElementById("todayBellBtn");
+        this.todayNewTaskBtn = document.getElementById("todayNewTaskBtn");
+        // Streaks panel
+        this.streakDaysNum = document.getElementById("streakDaysNum");
+        this.streakTodayCount = document.getElementById("streakTodayCount");
+        this.streakWeek = document.getElementById("streakWeek");
+        // Focus widget
+        this.focusClock = document.getElementById("focusClock");
+        this.focusTask = document.getElementById("focusTask");
+        this.focusProgress = document.getElementById("focusProgress");
+        this.focusPauseBtn = document.getElementById("focusPauseBtn");
+        this.focusStopBtn = document.getElementById("focusStopBtn");
+        this.focusCycles = document.getElementById("focusCycles");
+        this.focusCycleLabel = document.getElementById("focusCycleLabel");
+        this.focusCyclePips = document.getElementById("focusCyclePips");
+        this.focusPanelLabel = document.getElementById("focusPanelLabel");
+        // Search modal
+        this.sidebarSearchBtn = document.getElementById("sidebarSearch");
+        this.searchModal = document.getElementById("searchModal");
+        this.searchModalInput = document.getElementById("searchModalInput");
+        this.searchResults = document.getElementById("searchResults");
+        this.searchModalEmpty = document.getElementById("searchModalEmpty");
+        this._searchActiveIndex = 0;
+        this._searchHits = [];
         // Timer pill
         this.timerPill = document.getElementById("timerPill");
         this.timerPillBody = document.getElementById("timerPillBody");
@@ -532,15 +564,85 @@ class TodoApp {
                 }
             });
         }
-        // Today agenda panel toggle
-        if (this.todayAgendaToggle) {
-            this.todayAgendaToggle.addEventListener("click", () => {
-                this.todayAgendaOpen = !this.todayAgendaOpen;
-                localStorage.setItem("gripTodayAgendaOpen", this.todayAgendaOpen ? "1" : "0");
-                this._applyCalendarChrome();
-                if (this.todayAgendaOpen) this.refreshTodayAgenda();
+        // Today header action buttons
+        if (this.todayNewTaskBtn) {
+            this.todayNewTaskBtn.addEventListener("click", () => this.toggleAddTask());
+        }
+        if (this.todayFocusBtn) {
+            this.todayFocusBtn.addEventListener("click", () => {
+                if (this.activeSession) {
+                    if (this.activeSession.task_id) this.openModal(Number(this.activeSession.task_id));
+                    return;
+                }
+                // No active session — pick first incomplete today task as focus target.
+                const target = this.todos.find((t) => !t.completed && this._isTodoForToday(t));
+                if (target) this.startPomodoro(target.id);
+                else this.setStatus("Geen taken voor vandaag om mee te starten");
             });
         }
+        if (this.todayBellBtn) {
+            this.todayBellBtn.addEventListener("click", () => this.setStatus("Geen nieuwe meldingen"));
+        }
+        if (this.todayTasks) {
+            this.todayTasks.addEventListener("click", (e) => this._onTodayTaskClick(e));
+        }
+        // Tab pill (visual-only for now)
+        const todayTabPill = this.todayTaskCount?.closest(".today-tasks-panel")?.querySelector(".tab-pill");
+        if (todayTabPill) {
+            todayTabPill.addEventListener("click", (e) => {
+                const btn = e.target.closest("button");
+                if (!btn) return;
+                todayTabPill.querySelectorAll("button").forEach((b) => b.classList.remove("on"));
+                btn.classList.add("on");
+            });
+        }
+
+        // Focus widget actions
+        if (this.focusPauseBtn) {
+            this.focusPauseBtn.addEventListener("click", () => this.skipPomodoroPhase());
+        }
+        if (this.focusStopBtn) {
+            this.focusStopBtn.addEventListener("click", () => this.stopActiveTimer());
+        }
+
+        // Sidebar search → modal
+        if (this.sidebarSearchBtn) {
+            this.sidebarSearchBtn.addEventListener("click", () => this.openSearchModal());
+        }
+        if (this.searchModal) {
+            this.searchModal.addEventListener("click", (e) => {
+                if (e.target === this.searchModal) this.closeSearchModal();
+            });
+        }
+        if (this.searchModalInput) {
+            this.searchModalInput.addEventListener("input", () => this._renderSearchResults());
+            this.searchModalInput.addEventListener("keydown", (e) => this._onSearchKey(e));
+        }
+        if (this.searchResults) {
+            this.searchResults.addEventListener("click", (e) => {
+                const item = e.target.closest(".search-result-item");
+                if (!item) return;
+                const idx = Number(item.dataset.idx);
+                this._activateSearchHit(idx);
+            });
+            this.searchResults.addEventListener("mouseover", (e) => {
+                const item = e.target.closest(".search-result-item");
+                if (!item) return;
+                const idx = Number(item.dataset.idx);
+                if (Number.isFinite(idx)) this._setSearchActive(idx);
+            });
+        }
+        document.addEventListener("keydown", (e) => {
+            const isCmdK = (e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K");
+            if (isCmdK) {
+                e.preventDefault();
+                this.openSearchModal();
+                return;
+            }
+            if (e.key === "Escape" && this.searchModal && !this.searchModal.hidden) {
+                this.closeSearchModal();
+            }
+        });
 
         // Date picker internal events
         if (this.datePicker) {
@@ -977,10 +1079,14 @@ class TodoApp {
 
         this._applyCalendarChrome();
 
-        // Toggle between the regular task list and the stats view.
+        const isToday = this._isTodayView();
         const isStats = view.type === "view" && view.value === "stats";
+
+        // Toggle between today view, stats view, and regular task list.
         if (this.statsView) this.statsView.hidden = !isStats;
-        if (this.todoList) this.todoList.hidden = isStats;
+        if (this.todayView) this.todayView.hidden = !isToday;
+        if (this.todoList) this.todoList.hidden = isStats || isToday;
+
         if (isStats) {
             if (this.addTaskToggle) {
                 this.addTaskToggle.hidden = true;
@@ -988,6 +1094,17 @@ class TodoApp {
             }
             if (this.itemCount) this.itemCount.textContent = "";
             this.renderStats();
+            return;
+        }
+
+        if (isToday) {
+            // Hide the FAB on today view; the header has its own "Nieuwe taak" button.
+            if (this.addTaskToggle) {
+                this.addTaskToggle.hidden = true;
+                this.hideAddTask();
+            }
+            this.renderTodayView();
+            this.refreshTodayAgenda();
             return;
         }
 
@@ -999,9 +1116,6 @@ class TodoApp {
                 this.renderTodos()
             );
         }
-        if (this._isTodayView() && this.todayAgendaOpen) {
-            this.refreshTodayAgenda();
-        }
     }
 
     _isTodayView() {
@@ -1010,14 +1124,7 @@ class TodoApp {
 
     _applyCalendarChrome() {
         const isToday = this._isTodayView();
-        if (this.todayAgendaToggle) {
-            this.todayAgendaToggle.hidden = !isToday;
-            this.todayAgendaToggle.setAttribute("aria-pressed", String(this.todayAgendaOpen));
-            this.todayAgendaToggle.classList.toggle("is-active", isToday && this.todayAgendaOpen);
-        }
-        const showPanel = isToday && this.todayAgendaOpen;
-        if (this.todayAgendaPanel) this.todayAgendaPanel.hidden = !showPanel;
-        document.body.classList.toggle("with-today-agenda", showPanel);
+        if (this.todayHeaderTools) this.todayHeaderTools.hidden = !isToday;
     }
 
     applyTheme(theme, persist) {
@@ -1106,7 +1213,7 @@ class TodoApp {
                 if (this.currentView.value === "week") return "Deze week";
                 if (this.currentView.value === "next-week") return "Volgende week";
                 if (this.currentView.value === "waiting") return "Wachten op";
-                if (this.currentView.value === "stats") return "Statistieken";
+                if (this.currentView.value === "stats") return "Inzichten";
                 return "Voltooid";
             case "area": {
                 const area = this.getAreaById(this.currentView.value);
@@ -2272,6 +2379,14 @@ class TodoApp {
     // --- Rendering ---
 
     renderTodos() {
+        // The today view has its own dedicated rendering path.
+        if (this._isTodayView()) {
+            this.renderTodayView();
+            this.updateItemCount();
+            this.updateSidebarCounts();
+            return;
+        }
+
         const todos = this.getFilteredTodos();
 
         if (todos.length === 0) {
@@ -3004,6 +3119,7 @@ class TodoApp {
     _setActiveSession(active) {
         this.activeSession = active || null;
         this._renderTimerPill();
+        this._renderFocusWidget();
         this._startPillTickIfNeeded();
         // If the modal is open for the active task, refresh its action buttons.
         if (this.openTodoId) {
@@ -3030,6 +3146,13 @@ class TodoApp {
         if (phase) {
             const remaining = phase - elapsed;
             this.timerPillClock.textContent = this._formatClock(Math.max(0, remaining));
+            if (this.focusClock) {
+                this.focusClock.textContent = this._formatClock(Math.max(0, remaining));
+                if (this.focusProgress) {
+                    const pct = Math.min(100, Math.round((elapsed / phase) * 100));
+                    this.focusProgress.querySelector("i").style.width = `${pct}%`;
+                }
+            }
             if (remaining <= 0) {
                 // Pause ticker until server confirms transition (avoids spamming /advance).
                 clearInterval(this._pillTickHandle);
@@ -3040,6 +3163,7 @@ class TodoApp {
             }
         } else {
             this.timerPillClock.textContent = this._formatClock(elapsed);
+            if (this.focusClock) this.focusClock.textContent = this._formatClock(elapsed);
         }
     }
 
@@ -3504,27 +3628,514 @@ class TodoApp {
         const today = this.getToday();
         if (force) this.calendarEventsByRange.delete(`${today}|${today}`);
         const events = await this.loadCalendarEvents(today, today);
-        const sameDay = events.filter((e) => this._eventDateKey(e) === today);
+        const sameDay = events
+            .filter((e) => this._eventDateKey(e) === today)
+            .sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at));
+
         if (this.todayAgendaTitle) {
             this.todayAgendaTitle.textContent = this._dpFormatDisplay(today);
         }
+        this._renderAgendaNow();
+
         if (sameDay.length === 0) {
-            this.todayAgendaList.innerHTML = `<li class="today-agenda-empty">Geen afspraken vandaag.</li>`;
-            return;
-        }
-        this.todayAgendaList.innerHTML = sameDay
-            .map((e) => {
-                const color = e.subscription_color || "#0288D1";
+            this.todayAgendaList.innerHTML = `<li class="agenda-empty">Geen afspraken vandaag.</li>`;
+        } else {
+            const now = Date.now();
+            this.todayAgendaList.innerHTML = sameDay.map((e) => {
+                const color = e.subscription_color || "var(--ink-tertiary)";
+                const start = Date.parse(e.start_at);
+                const end = Date.parse(e.end_at);
+                const isNow = !e.all_day && now >= start && now < end;
+                const time = e.all_day
+                    ? `<b>Hele</b>dag`
+                    : `<b>${this._fmtHm(start)}</b>${this._fmtHm(end)}`;
+                const subtitle = e.location || e.subscription_name || "";
                 return `
-                    <li class="calendar-event-item today-agenda-item" style="border-left-color:${this.escapeHtml(color)}">
-                        <span class="calendar-event-time">${this.escapeHtml(this._formatEventTime(e))}</span>
-                        <span class="calendar-event-summary">${this.escapeHtml(e.summary || "(geen titel)")}</span>
-                        ${e.location ? `<span class="calendar-event-location">${this.escapeHtml(e.location)}</span>` : ""}
-                        <span class="calendar-event-source">${this.escapeHtml(e.subscription_name || "")}</span>
+                    <li class="agenda-item${isNow ? " is-now" : ""}">
+                        <div class="agenda-time">${time}</div>
+                        <div class="agenda-bar" style="background:${this.escapeHtml(color)}"></div>
+                        <div class="agenda-info">
+                            <div class="t">${this.escapeHtml(e.summary || "(geen titel)")}</div>
+                            ${subtitle ? `<div class="s">${this.escapeHtml(subtitle)}</div>` : ""}
+                        </div>
                     </li>
                 `;
-            })
-            .join("");
+            }).join("");
+        }
+
+        this._renderStreaks();
+        this._renderFocusWidget();
+    }
+
+    _fmtHm(ms) {
+        const d = new Date(ms);
+        return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    }
+
+    _renderAgendaNow() {
+        if (!this.agendaNowLabel) return;
+        const d = new Date();
+        this.agendaNowLabel.textContent = `Nu · ${this._fmtHm(d.getTime())}`;
+    }
+
+    // ── Streaks ─────────────────────────────────────────────────────────
+    _renderStreaks() {
+        if (!this.streakWeek) return;
+        const today = new Date();
+        // Monday-based week index (0..6 = Mon..Sun)
+        const todayIdx = (today.getDay() + 6) % 7;
+        const weekStart = new Date(today);
+        weekStart.setHours(0, 0, 0, 0);
+        weekStart.setDate(weekStart.getDate() - todayIdx);
+
+        // Set of YYYY-MM-DD strings for days with at least one completed todo this week.
+        const doneByDay = new Set();
+        let todayDoneCount = 0;
+        for (const t of this.todos) {
+            if (!t.completed) continue;
+            const ts = t.completed_at || t.updated_at;
+            if (!ts) continue;
+            const dt = new Date(ts);
+            if (dt < weekStart) continue;
+            const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+            doneByDay.add(key);
+            if (key === this.getToday()) todayDoneCount++;
+        }
+
+        // Current streak: consecutive completed days ending at today (or yesterday if today not done yet).
+        let streak = 0;
+        const cursor = new Date(today);
+        cursor.setHours(0, 0, 0, 0);
+        const todayKey = this.getToday();
+        if (!doneByDay.has(todayKey)) cursor.setDate(cursor.getDate() - 1);
+        while (true) {
+            const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+            if (this._dayHasCompleted(key)) {
+                streak++;
+                cursor.setDate(cursor.getDate() - 1);
+            } else {
+                break;
+            }
+        }
+
+        if (this.streakDaysNum) {
+            this.streakDaysNum.innerHTML = `${streak}<small>${streak === 1 ? "DAG" : "DAGEN"}</small>`;
+        }
+        if (this.streakTodayCount) {
+            this.streakTodayCount.textContent = `${todayDoneCount} ${todayDoneCount === 1 ? "taak" : "taken"}`;
+        }
+
+        const labels = ["M", "D", "W", "D", "V", "Z", "Z"];
+        const checkSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+        this.streakWeek.innerHTML = labels.map((label, i) => {
+            const d = new Date(weekStart);
+            d.setDate(weekStart.getDate() + i);
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+            const isFuture = d > today && key !== todayKey;
+            const isDone = doneByDay.has(key);
+            const isToday = i === todayIdx;
+            const cls = ["streak-day"];
+            if (isDone && !isFuture) cls.push("is-done");
+            if (isToday) cls.push("is-today");
+            return `<div class="${cls.join(" ")}"><div class="pip">${isDone ? checkSvg : ""}</div>${label}</div>`;
+        }).join("");
+    }
+
+    _dayHasCompleted(key) {
+        return this.todos.some((t) => {
+            if (!t.completed) return false;
+            const ts = t.completed_at || t.updated_at;
+            if (!ts) return false;
+            const dt = new Date(ts);
+            const k = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+            return k === key;
+        });
+    }
+
+    // ── Focus widget ────────────────────────────────────────────────────
+    _renderFocusWidget() {
+        if (!this.focusClock) return;
+        const a = this.activeSession;
+        if (!a) {
+            this.focusClock.textContent = "00:00";
+            this.focusTask.textContent = "Geen actieve sessie";
+            if (this.focusProgress) this.focusProgress.querySelector("i").style.width = "0%";
+            if (this.focusPanelLabel) this.focusPanelLabel.textContent = "Focus";
+            this.focusPauseBtn.hidden = true;
+            this.focusStopBtn.hidden = true;
+            this.focusCycles.hidden = true;
+            return;
+        }
+        const phaseLabel = this._phaseLabel(a.kind);
+        if (this.focusPanelLabel) this.focusPanelLabel.textContent = `Focus · ${phaseLabel}`;
+        const taskTitle = (() => {
+            const t = this.todos.find((td) => Number(td.id) === Number(a.task_id));
+            return t ? t.title : "(geen taak)";
+        })();
+        this.focusTask.innerHTML = `Bezig met <b>${this.escapeHtml(taskTitle)}</b>`;
+
+        const startedMs = Date.parse(a.started_at);
+        const elapsed = Math.max(0, Math.floor((Date.now() - startedMs) / 1000));
+        let pct = 0;
+        if (a.phase_seconds) {
+            const remaining = Math.max(0, a.phase_seconds - elapsed);
+            this.focusClock.textContent = this._formatClock(remaining);
+            pct = Math.min(100, Math.round((elapsed / a.phase_seconds) * 100));
+        } else {
+            this.focusClock.textContent = this._formatClock(elapsed);
+            pct = 0;
+        }
+        if (this.focusProgress) this.focusProgress.querySelector("i").style.width = `${pct}%`;
+
+        const isPomodoro = a.kind !== "stopwatch";
+        this.focusPauseBtn.hidden = !isPomodoro;
+        this.focusStopBtn.hidden = false;
+
+        if (isPomodoro && this.pomodoroSettings && a.kind === "pomodoro_focus") {
+            const total = Number(this.pomodoroSettings.cycles_per_long_break || 4);
+            const idx = Number(a.cycle_index || 1);
+            this.focusCycleLabel.textContent = `Cyclus ${Math.min(idx, total)} / ${total}`;
+            let pips = "";
+            for (let i = 1; i <= total; i++) {
+                pips += `<span class="pip${i <= idx ? " is-on" : ""}"></span>`;
+            }
+            this.focusCyclePips.innerHTML = pips;
+            this.focusCycles.hidden = false;
+        } else {
+            this.focusCycles.hidden = true;
+        }
+    }
+
+    // ── Search modal ───────────────────────────────────────────────────
+    openSearchModal() {
+        if (!this.searchModal) return;
+        this.searchModal.hidden = false;
+        this.searchModalInput.value = "";
+        this._searchActiveIndex = 0;
+        this._renderSearchResults();
+        setTimeout(() => this.searchModalInput.focus(), 0);
+    }
+
+    closeSearchModal() {
+        if (!this.searchModal) return;
+        this.searchModal.hidden = true;
+    }
+
+    _onSearchKey(e) {
+        if (e.key === "Escape") {
+            e.preventDefault();
+            this.closeSearchModal();
+            return;
+        }
+        if (e.key === "ArrowDown") {
+            e.preventDefault();
+            this._setSearchActive(this._searchActiveIndex + 1);
+            return;
+        }
+        if (e.key === "ArrowUp") {
+            e.preventDefault();
+            this._setSearchActive(this._searchActiveIndex - 1);
+            return;
+        }
+        if (e.key === "Enter") {
+            e.preventDefault();
+            this._activateSearchHit(this._searchActiveIndex);
+        }
+    }
+
+    _setSearchActive(idx) {
+        if (!this._searchHits.length) return;
+        const max = this._searchHits.length;
+        const next = ((idx % max) + max) % max;
+        this._searchActiveIndex = next;
+        this.searchResults.querySelectorAll(".search-result-item").forEach((el) => {
+            el.classList.toggle("is-active", Number(el.dataset.idx) === next);
+        });
+        const activeEl = this.searchResults.querySelector(`.search-result-item[data-idx="${next}"]`);
+        if (activeEl && activeEl.scrollIntoView) {
+            activeEl.scrollIntoView({ block: "nearest" });
+        }
+    }
+
+    _renderSearchResults() {
+        if (!this.searchResults) return;
+        const q = (this.searchModalInput.value || "").trim().toLowerCase();
+        const hits = [];
+        const matches = (s) => s && s.toLowerCase().includes(q);
+
+        if (q.length === 0) {
+            // Default suggestions: show first few todos
+            for (const t of this.todos.slice(0, 8)) {
+                if (t.completed) continue;
+                hits.push({ kind: "todo", id: t.id, label: t.title, meta: this._areaName(t.area_id) });
+            }
+        } else {
+            for (const t of this.todos) {
+                if (matches(t.title)) {
+                    hits.push({ kind: "todo", id: t.id, label: t.title, meta: this._areaName(t.area_id), completed: !!t.completed });
+                }
+            }
+            for (const p of this.projects) {
+                if (matches(p.name)) hits.push({ kind: "project", id: p.id, label: p.name, meta: this._areaName(p.area_id) });
+            }
+            for (const a of this.areas) {
+                if (matches(a.name)) hits.push({ kind: "area", id: a.id, label: a.name, color: a.color, meta: "Gebied" });
+            }
+            for (const g of this.goals) {
+                if (matches(g.name)) hits.push({ kind: "goal", id: g.id, label: g.name, meta: this._areaName(g.area_id) });
+            }
+        }
+
+        const limited = hits.slice(0, 30);
+        this._searchHits = limited;
+        this._searchActiveIndex = 0;
+
+        if (this.searchModalEmpty) this.searchModalEmpty.hidden = limited.length > 0 || q.length === 0;
+
+        if (limited.length === 0) {
+            this.searchResults.innerHTML = "";
+            return;
+        }
+        this.searchResults.innerHTML = limited.map((h, idx) => {
+            let icon = "";
+            if (h.kind === "todo") {
+                icon = `<span class="sr-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/></svg></span>`;
+            } else if (h.kind === "project") {
+                icon = `<span class="sr-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>`;
+            } else if (h.kind === "area") {
+                icon = `<span class="sr-dot" style="background:${this.escapeHtml(h.color || "var(--ink-tertiary)")}"></span>`;
+            } else if (h.kind === "goal") {
+                icon = `<span class="sr-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg></span>`;
+            }
+            const kindLabel = { todo: "Taak", project: "Project", area: "Gebied", goal: "Doel" }[h.kind] || "";
+            const meta = h.meta || kindLabel;
+            return `
+                <li class="search-result-item${idx === 0 ? " is-active" : ""}" role="option" data-idx="${idx}">
+                    ${icon}
+                    <span class="sr-title">${this.escapeHtml(h.label || "(naamloos)")}</span>
+                    <span class="sr-meta">${this.escapeHtml(meta)}</span>
+                </li>
+            `;
+        }).join("");
+    }
+
+    _activateSearchHit(idx) {
+        const hit = this._searchHits[idx];
+        if (!hit) return;
+        this.closeSearchModal();
+        if (hit.kind === "todo") {
+            this.openModal(hit.id);
+        } else if (hit.kind === "project") {
+            this.setView({ type: "project", value: hit.id });
+        } else if (hit.kind === "area") {
+            this.setView({ type: "area", value: hit.id });
+        } else if (hit.kind === "goal") {
+            this.setView({ type: "goal", value: hit.id });
+        }
+    }
+
+    _areaName(areaId) {
+        if (!areaId) return "";
+        const a = this.areas.find((x) => x.id === areaId);
+        return a ? a.name : "";
+    }
+
+    // ── Today view ─────────────────────────────────────────────────────
+    _isTodoForToday(t) {
+        if (t.completed) return false;
+        const today = this.getToday();
+        return t.list === "today" || t.planned_date === today;
+    }
+
+    renderTodayView() {
+        if (!this.todayView) return;
+        const todays = this.todos.filter((t) => this._isTodoForToday(t));
+        const open = todays.filter((t) => !t.completed);
+
+        this._renderTodayHeadline(open.length, todays);
+        this._renderTodayGoals();
+        this._renderTodayTasksList(todays);
+
+        if (this.todayTaskCount) {
+            this.todayTaskCount.textContent = `${open.length} over`;
+        }
+    }
+
+    _renderTodayHeadline(openCount, todays) {
+        if (!this.todayHeadline) return;
+        const goalsThisWeek = this._countActiveGoals();
+        const minutes = todays.reduce((sum, t) => sum + (Number(t.duration_minutes) || 0), 0);
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        const focusLabel = hours > 0 ? `${hours}u ${mins}m` : `${mins}m`;
+        const username = (document.querySelector(".profile-name")?.textContent || "").trim();
+        const greet = this._greeting();
+
+        this.todayHeadline.innerHTML = `<em>${openCount}</em>${openCount === 1 ? "ding" : "dingen"}<br>op je <i>radar.</i>`;
+        if (this.todaySub) {
+            const greetText = username ? `${greet} ${this.escapeHtml(username)}.` : `${greet}.`;
+            this.todaySub.innerHTML = `${greetText} <b>${goalsThisWeek} ${goalsThisWeek === 1 ? "doel" : "doelen"}</b> staan deze week op scherp en je hebt <b>${focusLabel}</b> aan focus-werk gepland. Begin klein.`;
+        }
+    }
+
+    _greeting() {
+        const h = new Date().getHours();
+        if (h < 6) return "Goedenacht";
+        if (h < 12) return "Goedemorgen";
+        if (h < 18) return "Goedemiddag";
+        return "Goedenavond";
+    }
+
+    _countActiveGoals() {
+        const today = this.getToday();
+        return this.goals.filter((g) => {
+            if (g.archived) return false;
+            if (g.end_date && g.end_date < today) return false;
+            return true;
+        }).length;
+    }
+
+    _renderTodayGoals() {
+        if (!this.todayGoals) return;
+        const today = this.getToday();
+        const active = this.goals.filter((g) => !g.archived && (!g.end_date || g.end_date >= today));
+        // Sort by urgency: closest end_date first.
+        active.sort((a, b) => {
+            const ax = a.end_date || "9999-12-31";
+            const bx = b.end_date || "9999-12-31";
+            return ax.localeCompare(bx);
+        });
+        const top = active.slice(0, 3);
+
+        if (top.length === 0) {
+            this.todayGoals.innerHTML = `<div class="goal-card" style="grid-column: 1 / -1; justify-content:center; color: var(--ink-tertiary); cursor: default;">Geen actieve doelen.</div>`;
+            return;
+        }
+
+        this.todayGoals.innerHTML = top.map((g, idx) => {
+            const pct = this._goalProgress(g);
+            const area = this.areas.find((a) => a.id === g.area_id);
+            const areaName = area ? area.name.toUpperCase() : "DOEL";
+            const due = this._formatGoalDue(g.end_date);
+            const featuredCls = idx === 0 ? " is-featured" : "";
+            return `
+                <div class="goal-card${featuredCls}" data-goal-id="${g.id}" role="button" tabindex="0">
+                    <div class="ring" style="--p: ${pct};"><span>${pct}%</span></div>
+                    <div class="goal-meta">
+                        <span class="area">${this.escapeHtml(areaName)}</span>
+                        <span class="name">${this.escapeHtml(g.name || "(naamloos)")}</span>
+                        <span class="due">${due}</span>
+                    </div>
+                </div>
+            `;
+        }).join("");
+
+        this.todayGoals.querySelectorAll(".goal-card[data-goal-id]").forEach((card) => {
+            card.addEventListener("click", () => {
+                this.setView({ type: "goal", value: Number(card.dataset.goalId) });
+            });
+        });
+    }
+
+    _goalProgress(goal) {
+        // Percentage based on completed vs total tasks across all projects within the goal.
+        const projectIds = new Set(this.projects.filter((p) => p.goal_id === goal.id).map((p) => p.id));
+        if (projectIds.size === 0) return 0;
+        const tasks = this.todos.filter((t) => t.project_id && projectIds.has(t.project_id));
+        if (tasks.length === 0) return 0;
+        const done = tasks.filter((t) => t.completed).length;
+        return Math.round((done / tasks.length) * 100);
+    }
+
+    _formatGoalDue(endDate) {
+        if (!endDate) return "geen einddatum";
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const target = new Date(endDate + "T00:00:00");
+        const days = Math.round((target - today) / 86400000);
+        if (days < 0) return `<b>verlopen</b>`;
+        if (days === 0) return `<b>vandaag</b>`;
+        if (days === 1) return `nog <b>1 dag</b>`;
+        if (days <= 60) return `nog <b>${days} dagen</b>`;
+        const months = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
+        const m = months[target.getMonth()];
+        return `eind <b>${m}</b>`;
+    }
+
+    _renderTodayTasksList(todays) {
+        if (!this.todayTasks) return;
+        if (todays.length === 0) {
+            this.todayTasks.innerHTML = `<div class="today-empty">Niets gepland voor vandaag. Tijd om iets toe te voegen.</div>`;
+            return;
+        }
+        // Group by Ochtend / Middag / Avond based on planned_date or planned time fallback.
+        const groups = { ochtend: [], middag: [], avond: [], leeg: [] };
+        for (const t of todays) {
+            const slot = this._taskTimeSlot(t);
+            groups[slot].push(t);
+        }
+        const slotLabels = { ochtend: "Ochtend", middag: "Middag", avond: "Avond", leeg: "Geen tijd" };
+        const order = ["ochtend", "middag", "avond", "leeg"];
+        let html = "";
+        for (const k of order) {
+            const items = groups[k];
+            if (items.length === 0) continue;
+            html += `<div class="task-group-head">${slotLabels[k]} <span class="line"></span><span class="gcount">${items.length}</span></div>`;
+            html += items.map((t) => this._renderTodayTask(t)).join("");
+        }
+        this.todayTasks.innerHTML = html;
+    }
+
+    _taskTimeSlot(todo) {
+        // Try to find an associated calendar/agenda time. If todo.planned_date has time hidden in
+        // a related event we'd need to cross-reference. For now use a heuristic: if the title
+        // contains a time hint or duration, we still bucket by "leeg" — agenda events drive Ochtend/Middag/Avond.
+        // Default: place uncategorized tasks in current period of the day.
+        const hour = new Date().getHours();
+        if (hour < 12) return "ochtend";
+        if (hour < 18) return "middag";
+        return "avond";
+    }
+
+    _renderTodayTask(todo) {
+        const area = this.areas.find((a) => a.id === this.resolveTaskAreaId(todo));
+        const project = this.projects.find((p) => p.id === todo.project_id);
+        const areaTag = area
+            ? `<span class="today-task-tag"><span class="dot" style="background:${this.escapeHtml(area.color || "var(--ink-tertiary)")}"></span>${this.escapeHtml(area.name)}${project ? " · " + this.escapeHtml(project.name) : ""}</span>`
+            : (project ? `<span class="today-task-tag"><span class="dot" style="background:var(--ink-tertiary)"></span>${this.escapeHtml(project.name)}</span>` : "");
+        const dur = Number(todo.duration_minutes) || 0;
+        const timeChip = dur > 0
+            ? `<span class="today-task-time"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${dur} min</span>`
+            : "";
+        const priorityCls = todo.priority && todo.priority !== "not_set" ? ` priority-${todo.priority}` : "";
+        const checkedCls = todo.completed ? " is-checked" : "";
+        const doneCls = todo.completed ? " is-done" : "";
+        return `
+            <div class="today-task${doneCls}" data-id="${todo.id}">
+                <button type="button" class="today-task-check${priorityCls}${checkedCls}" data-action="toggle-complete" aria-label="Markeer als ${todo.completed ? "open" : "afgerond"}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </button>
+                <div class="today-task-body" data-action="open">
+                    <div class="today-task-title">${this.escapeHtml(todo.title || "")}</div>
+                    <div class="today-task-meta">${areaTag}</div>
+                </div>
+                ${timeChip}
+                <span></span>
+            </div>
+        `;
+    }
+
+    _onTodayTaskClick(e) {
+        const taskEl = e.target.closest(".today-task");
+        if (!taskEl) return;
+        const id = Number(taskEl.dataset.id);
+        if (!id) return;
+        const action = e.target.closest("[data-action]")?.dataset.action;
+        if (action === "toggle-complete") {
+            this.toggleTodo(id);
+            return;
+        }
+        this.openModal(id);
     }
 
 }
