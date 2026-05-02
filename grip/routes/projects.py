@@ -33,6 +33,7 @@ class ProjectUpdate(BaseModel):
     end_date: str | None = None
     area_id: int | None = None
     goal_id: int | None = None
+    show_on_today: bool | None = None
 
 
 class ProjectStatusUpdate(BaseModel):
@@ -172,6 +173,9 @@ async def update_project(
         if payload.area_id is not None:
             _require_area(user["id"], payload.area_id)
         updates["area_id"] = payload.area_id
+
+    if "show_on_today" in payload.model_fields_set:
+        updates["show_on_today"] = bool(payload.show_on_today)
 
     if not updates:
         raise HTTPException(status_code=400, detail="No changes provided")

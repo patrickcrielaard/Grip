@@ -309,8 +309,16 @@
             </div>
         </div>
 
+        <!-- Project view (kanban: Inbox / Bezig / Wachten / Voltooid) -->
+        <div class="project-view" id="projectView" hidden>
+            <div class="proj-page">
+                <div class="proj-head" id="projHead"></div>
+                <div class="proj-cols" id="projCols"></div>
+            </div>
+        </div>
+
         <ul id="todoList" class="task-list">
-            <!-- Todo items injected by JS (non-today views) -->
+            <!-- Todo items injected by JS (non-today, non-project views) -->
         </ul>
 
         <section class="stats-view" id="statsView" hidden aria-label="Inzichten">

@@ -105,7 +105,10 @@ class TodoApp {
         this.reviveProjectBtn = document.getElementById("reviveProjectBtn");
         this.showOnTodayBtn = document.getElementById("showOnTodayBtn");
         this.showOnTodayLabel = document.getElementById("showOnTodayLabel");
-        this.todayProjectIds = new Set(
+        // Pinned-to-today projects are persisted server-side via project.show_on_today.
+        // We keep a Set of legacy localStorage values so we can migrate them once on
+        // first load if the server has no pinned projects yet.
+        this._legacyTodayProjectIds = new Set(
             JSON.parse(localStorage.getItem("gripTodayProjects") || "[]").map(Number)
         );
         this.projectNav = document.getElementById("projectNav");
@@ -148,6 +151,10 @@ class TodoApp {
         this.todayAgendaList = document.getElementById("todayAgendaList");
         this.todayAgendaTitle = document.getElementById("todayAgendaTitle");
         this.agendaNowLabel = document.getElementById("agendaNowLabel");
+        // Project view (kanban)
+        this.projectView = document.getElementById("projectView");
+        this.projHead = document.getElementById("projHead");
+        this.projCols = document.getElementById("projCols");
         // Today view (integrated)
         this.todayView = document.getElementById("todayView");
         this.todayHeadline = document.getElementById("todayHeadline");
@@ -341,6 +348,16 @@ class TodoApp {
             this.clearCompletedButton.addEventListener("click", () =>
                 this.clearCompleted()
             );
+        }
+
+        // Project view (kanban) event delegation
+        if (this.projectView) {
+            this.projectView.addEventListener("click", (event) => {
+                const card = event.target.closest("[data-kanban-todo-id]");
+                if (!card) return;
+                const id = Number(card.dataset.kanbanTodoId);
+                if (id) this.openModal(id);
+            });
         }
 
         // Task list event delegation
@@ -1093,11 +1110,13 @@ class TodoApp {
 
         const isToday = this._isTodayView();
         const isStats = view.type === "view" && view.value === "stats";
+        const isProject = this._isProjectView();
 
-        // Toggle between today view, stats view, and regular task list.
+        // Toggle between today view, stats view, project view, and regular task list.
         if (this.statsView) this.statsView.hidden = !isStats;
         if (this.todayView) this.todayView.hidden = !isToday;
-        if (this.todoList) this.todoList.hidden = isStats || isToday;
+        if (this.projectView) this.projectView.hidden = !isProject;
+        if (this.todoList) this.todoList.hidden = isStats || isToday || isProject;
 
         if (isStats) {
             if (this.addTaskToggle) {
@@ -1120,6 +1139,13 @@ class TodoApp {
             return;
         }
 
+        if (isProject) {
+            this.renderProjectView();
+            this.updateItemCount();
+            this.updateSidebarCounts();
+            return;
+        }
+
         this.renderTodos();
         if (view.type === "view" && (view.value === "week" || view.value === "next-week")) {
             const offset = view.value === "next-week" ? 1 : 0;
@@ -1132,6 +1158,10 @@ class TodoApp {
 
     _isTodayView() {
         return this.currentView.type === "list" && this.currentView.value === "today";
+    }
+
+    _isProjectView() {
+        return this.currentView.type === "project";
     }
 
     _applyCalendarChrome() {
@@ -1430,6 +1460,7 @@ class TodoApp {
             this.renderProjectsSidebar();
             this.renderAreaTree();
             this._populateProjectSelects();
+            await this._migrateLegacyTodayProjects();
         } catch (_) {
             // Projects failing shouldn't block the app
         }
@@ -2394,6 +2425,14 @@ class TodoApp {
         // The today view has its own dedicated rendering path.
         if (this._isTodayView()) {
             this.renderTodayView();
+            this.updateItemCount();
+            this.updateSidebarCounts();
+            return;
+        }
+
+        // Project views render as a kanban board.
+        if (this._isProjectView()) {
+            this.renderProjectView();
             this.updateItemCount();
             this.updateSidebarCounts();
             return;
@@ -4062,19 +4101,72 @@ class TodoApp {
         return Math.round((done / tasks.length) * 100);
     }
 
-    toggleProjectOnToday() {
+    get todayProjectIds() {
+        // Derived live from this.projects so it stays in sync after server updates.
+        const ids = new Set();
+        for (const p of this.projects) {
+            if (p.show_on_today) ids.add(p.id);
+        }
+        return ids;
+    }
+
+    async toggleProjectOnToday() {
         if (this.currentView.type !== "project") return;
         const id = Number(this.currentView.value);
-        if (this.todayProjectIds.has(id)) {
-            this.todayProjectIds.delete(id);
-        } else {
-            this.todayProjectIds.add(id);
-        }
-        localStorage.setItem(
-            "gripTodayProjects",
-            JSON.stringify(Array.from(this.todayProjectIds))
-        );
+        const project = this.projects.find((p) => p.id === id);
+        if (!project) return;
+        const next = !project.show_on_today;
+        // Optimistic update
+        project.show_on_today = next;
         this._renderShowOnTodayBtnState(id);
+        try {
+            const data = await this.request(`/api/projects/${id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ show_on_today: next }),
+            });
+            if (data && data.project) {
+                Object.assign(project, data.project);
+            }
+        } catch (error) {
+            // Revert on failure
+            project.show_on_today = !next;
+            this._renderShowOnTodayBtnState(id);
+            this.setStatus(error.message);
+        }
+    }
+
+    async _migrateLegacyTodayProjects() {
+        // One-time migration: if localStorage has pinned project ids and the
+        // server hasn't received them yet (no project has show_on_today=true),
+        // push the local ids up so the user keeps their selection on first sync.
+        if (!this._legacyTodayProjectIds || this._legacyTodayProjectIds.size === 0) {
+            return;
+        }
+        const serverHasAny = this.projects.some((p) => p.show_on_today);
+        if (serverHasAny) {
+            this._legacyTodayProjectIds.clear();
+            localStorage.removeItem("gripTodayProjects");
+            return;
+        }
+        const idsToMigrate = Array.from(this._legacyTodayProjectIds).filter((id) =>
+            this.projects.some((p) => p.id === id)
+        );
+        for (const id of idsToMigrate) {
+            try {
+                const data = await this.request(`/api/projects/${id}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ show_on_today: true }),
+                });
+                if (data && data.project) {
+                    const proj = this.projects.find((p) => p.id === id);
+                    if (proj) Object.assign(proj, data.project);
+                }
+            } catch (_) {
+                // Best-effort migration; ignore failures so the app keeps working.
+            }
+        }
+        this._legacyTodayProjectIds.clear();
+        localStorage.removeItem("gripTodayProjects");
     }
 
     _renderShowOnTodayBtnState(projectId) {
@@ -4085,6 +4177,132 @@ class TodoApp {
         if (this.showOnTodayLabel) {
             this.showOnTodayLabel.textContent = isOn ? "Op Vandaag" : "Toon op Vandaag";
         }
+    }
+
+    // ── Project view (kanban) ─────────────────────────────────────────
+    renderProjectView() {
+        if (!this.projectView || !this.projHead || !this.projCols) return;
+        const projectId = Number(this.currentView.value);
+        const project =
+            this.projects.find((p) => p.id === projectId) ||
+            this.completedProjects.find((p) => p.id === projectId);
+        if (!project) {
+            this.projHead.innerHTML = `<div class="proj-body"><div class="proj-title">Project niet gevonden</div></div>`;
+            this.projCols.innerHTML = "";
+            return;
+        }
+
+        const tasks = this.todos.filter((t) => t.project_id === projectId);
+        const completed = tasks.filter((t) => t.completed);
+        const open = tasks.filter((t) => !t.completed);
+        const progress = this._projectProgress(project);
+
+        this.projHead.innerHTML = this._renderProjectHead(project, completed.length, open.length, progress);
+        this.projCols.innerHTML = this._renderKanbanColumns(open, completed);
+    }
+
+    _renderProjectHead(project, doneCount, openCount, progress) {
+        const areaName = project.area_id ? this._areaName(project.area_id) : "";
+        const goal = project.goal_id ? this.goals.find((g) => g.id === project.goal_id) : null;
+        const ctxParts = [];
+        if (areaName) ctxParts.push(`Gebied · ${this.escapeHtml(areaName).toUpperCase()}`);
+        if (goal) ctxParts.push(`Doel · ${this.escapeHtml(goal.name).toUpperCase()}`);
+        const contextLine = ctxParts.length
+            ? `<div class="proj-context">${ctxParts.join(" › ")}</div>`
+            : "";
+
+        const stats = [];
+        stats.push(`<div class="stat"><b>${doneCount}</b>taken voltooid</div>`);
+        stats.push(`<div class="stat"><b>${openCount}</b>nog te doen</div>`);
+        if (project.end_date) {
+            stats.push(`<div class="stat"><b>${this.escapeHtml(this._formatGoalDue(project.end_date) || project.end_date)}</b>deadline</div>`);
+            const days = this._daysUntil(project.end_date);
+            if (days !== null && days >= 0) {
+                stats.push(`<div class="stat"><b>${days}</b>dagen over</div>`);
+            }
+        }
+
+        return `
+            <div class="proj-ring" style="--p:${progress};"><span>${progress}%</span></div>
+            <div class="proj-body">
+                ${contextLine}
+                <div class="proj-title">${this.escapeHtml(project.name)}</div>
+                <div class="proj-row">${stats.join("")}</div>
+                <div class="proj-bar"><i style="width:${progress}%;"></i></div>
+            </div>
+        `;
+    }
+
+    _daysUntil(dateStr) {
+        if (!dateStr) return null;
+        const target = new Date(dateStr);
+        if (Number.isNaN(target.getTime())) return null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        target.setHours(0, 0, 0, 0);
+        return Math.round((target - today) / 86400000);
+    }
+
+    _renderKanbanColumns(openTasks, completedTasks) {
+        const inbox = openTasks.filter((t) => !t.state || t.state === "to_do" || t.state === "someday");
+        const bezig = openTasks.filter((t) => t.state === "in_progress");
+        const wachten = openTasks.filter((t) => t.state === "waiting");
+        const cols = [
+            { label: "Inbox", tasks: inbox, modifier: "" },
+            { label: "Bezig", tasks: bezig, modifier: "" },
+            { label: "Wachten", tasks: wachten, modifier: "" },
+            { label: "Voltooid", tasks: completedTasks, modifier: "is-done" },
+        ];
+        return cols.map((c) => this._renderKanbanColumn(c)).join("");
+    }
+
+    _renderKanbanColumn({ label, tasks, modifier }) {
+        const cards = tasks.length
+            ? tasks.map((t) => this._renderKanbanCard(t)).join("")
+            : `<div class="kanban-empty">Niets hier.</div>`;
+        return `
+            <div class="kanban-col ${modifier}">
+                <div class="kanban-head">${this.escapeHtml(label)} <span class="num">${tasks.length}</span></div>
+                ${cards}
+            </div>
+        `;
+    }
+
+    _renderKanbanCard(todo) {
+        const areaColor = todo.area_id ? this.getAreaColor(todo.area_id) : null;
+        const dotMarkup = areaColor
+            ? `<span class="dot" style="background:${this.escapeHtml(areaColor)}"></span>`
+            : "";
+        const meta = this._renderKanbanMeta(todo);
+        return `
+            <button type="button" class="kcard" data-kanban-todo-id="${todo.id}">
+                <div class="kt">${this.escapeHtml(todo.title)}</div>
+                <div class="kmeta">${dotMarkup}${meta}</div>
+            </button>
+        `;
+    }
+
+    _renderKanbanMeta(todo) {
+        const parts = [];
+        if (todo.completed) {
+            const date = todo.planned_date || todo.deadline || todo.start_date;
+            if (date) parts.push(this.escapeHtml(this._formatGoalDue(date) || date));
+        } else {
+            const date = todo.planned_date || todo.start_date || todo.deadline;
+            if (date) {
+                const today = this.getToday();
+                const formatted = this._formatGoalDue(date) || date;
+                if (date === today) {
+                    parts.push(`<span class="accent">Vandaag</span>`);
+                } else {
+                    parts.push(this.escapeHtml(formatted));
+                }
+            } else {
+                parts.push("geen datum");
+            }
+            if (todo.duration) parts.push(`${Number(todo.duration)} min`);
+        }
+        return parts.join(`<span class="sep">·</span>`);
     }
 
     _goalProgress(goal) {

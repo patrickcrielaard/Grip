@@ -18,9 +18,7 @@ TASK_SELECT_COLUMNS = (
     "planned_date, start_date, duration, recurrence_interval, recurrence_unit, "
     "recurrence_end, state, project_id"
 )
-PROJECT_SELECT_COLUMNS = (
-    "id, name, start_date, end_date, created_at, status, area_id, goal_id"
-)
+PROJECT_SELECT_COLUMNS = "id, name, start_date, end_date, created_at, status, area_id, goal_id, show_on_today"
 AREA_SELECT_COLUMNS = "id, name, color, description, status, created_at"
 GOAL_SELECT_COLUMNS = (
     "id, area_id, name, description, start_date, end_date, status, created_at"
