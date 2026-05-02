@@ -103,6 +103,11 @@ class TodoApp {
         this.projectActionsEl = document.getElementById("projectActions");
         this.archiveProjectBtn = document.getElementById("archiveProjectBtn");
         this.reviveProjectBtn = document.getElementById("reviveProjectBtn");
+        this.showOnTodayBtn = document.getElementById("showOnTodayBtn");
+        this.showOnTodayLabel = document.getElementById("showOnTodayLabel");
+        this.todayProjectIds = new Set(
+            JSON.parse(localStorage.getItem("gripTodayProjects") || "[]").map(Number)
+        );
         this.projectNav = document.getElementById("projectNav");
         this.projectArchivedNav = document.getElementById("projectArchivedNav");
         this.addProjectBtn = document.getElementById("addProjectBtn");
@@ -754,6 +759,9 @@ class TodoApp {
         if (this.reviveProjectBtn) {
             this.reviveProjectBtn.addEventListener("click", () => this.reviveProject());
         }
+        if (this.showOnTodayBtn) {
+            this.showOnTodayBtn.addEventListener("click", () => this.toggleProjectOnToday());
+        }
 
         // Area tree delegation: expand/collapse, selection, add buttons
         if (this.areaNav) {
@@ -1068,6 +1076,10 @@ class TodoApp {
             this.projectActionsEl.hidden = !(isActiveProject || isCompletedProject);
             if (this.archiveProjectBtn) this.archiveProjectBtn.hidden = !isActiveProject;
             if (this.reviveProjectBtn) this.reviveProjectBtn.hidden = !isCompletedProject;
+            if (this.showOnTodayBtn) {
+                this.showOnTodayBtn.hidden = !isActiveProject;
+                if (isActiveProject) this._renderShowOnTodayBtnState(view.value);
+            }
         }
         // Hide the "add task" affordance for archived projects
         if (this.addTaskToggle) {
@@ -2316,7 +2328,7 @@ class TodoApp {
                 if (view.value === "today") {
                     const today = this.getToday();
                     return this.todos.filter(
-                        (t) => !t.completed && !t.project_id && (t.list === "today" || t.planned_date === today)
+                        (t) => !t.completed && t.planned_date === today
                     );
                 }
                 if (view.value === "inbox") {
@@ -3943,8 +3955,7 @@ class TodoApp {
     // ── Today view ─────────────────────────────────────────────────────
     _isTodoForToday(t) {
         if (t.completed) return false;
-        const today = this.getToday();
-        return t.list === "today" || t.planned_date === today;
+        return t.planned_date === this.getToday();
     }
 
     renderTodayView() {
@@ -3952,7 +3963,6 @@ class TodoApp {
         const todays = this.todos.filter((t) => this._isTodoForToday(t));
         const open = todays.filter((t) => !t.completed);
 
-        this._renderTodayHeadline(open.length, todays);
         this._renderTodayGoals();
         this._renderTodayTasksList(todays);
 
@@ -3963,7 +3973,9 @@ class TodoApp {
 
     _renderTodayHeadline(openCount, todays) {
         if (!this.todayHeadline) return;
-        const goalsThisWeek = this._countActiveGoals();
+        const projectsOnToday = this.projects.filter((p) =>
+            this.todayProjectIds.has(p.id) && (!p.status || p.status === "active")
+        ).length;
         const minutes = todays.reduce((sum, t) => sum + (Number(t.duration_minutes) || 0), 0);
         const hours = Math.floor(minutes / 60);
         const mins = minutes % 60;
@@ -3974,7 +3986,7 @@ class TodoApp {
         this.todayHeadline.innerHTML = `<em>${openCount}</em>${openCount === 1 ? "ding" : "dingen"}<br>op je <i>radar.</i>`;
         if (this.todaySub) {
             const greetText = username ? `${greet} ${this.escapeHtml(username)}.` : `${greet}.`;
-            this.todaySub.innerHTML = `${greetText} <b>${goalsThisWeek} ${goalsThisWeek === 1 ? "doel" : "doelen"}</b> staan deze week op scherp en je hebt <b>${focusLabel}</b> aan focus-werk gepland. Begin klein.`;
+            this.todaySub.innerHTML = `${greetText} <b>${projectsOnToday} ${projectsOnToday === 1 ? "project" : "projecten"}</b> ${projectsOnToday === 1 ? "staat" : "staan"} op Vandaag en je hebt <b>${focusLabel}</b> aan focus-werk gepland. Begin klein.`;
         }
     }
 
@@ -3997,44 +4009,82 @@ class TodoApp {
 
     _renderTodayGoals() {
         if (!this.todayGoals) return;
-        const today = this.getToday();
-        const active = this.goals.filter((g) => !g.archived && (!g.end_date || g.end_date >= today));
+        const flagged = this.projects.filter((p) =>
+            this.todayProjectIds.has(p.id) && (!p.status || p.status === "active")
+        );
+
+        if (flagged.length === 0) {
+            this.todayGoals.innerHTML = `
+                <div class="goal-card today-empty-card" style="grid-column: 1 / -1; justify-content:center; color: var(--ink-tertiary); cursor: default;">
+                    Geen projecten op Vandaag. Open een project en kies "Toon op Vandaag".
+                </div>
+            `;
+            return;
+        }
+
         // Sort by urgency: closest end_date first.
-        active.sort((a, b) => {
+        flagged.sort((a, b) => {
             const ax = a.end_date || "9999-12-31";
             const bx = b.end_date || "9999-12-31";
             return ax.localeCompare(bx);
         });
-        const top = active.slice(0, 3);
+        const top = flagged.slice(0, 3);
 
-        if (top.length === 0) {
-            this.todayGoals.innerHTML = `<div class="goal-card" style="grid-column: 1 / -1; justify-content:center; color: var(--ink-tertiary); cursor: default;">Geen actieve doelen.</div>`;
-            return;
-        }
-
-        this.todayGoals.innerHTML = top.map((g, idx) => {
-            const pct = this._goalProgress(g);
-            const area = this.areas.find((a) => a.id === g.area_id);
-            const areaName = area ? area.name.toUpperCase() : "DOEL";
-            const due = this._formatGoalDue(g.end_date);
+        this.todayGoals.innerHTML = top.map((p, idx) => {
+            const pct = this._projectProgress(p);
+            const area = this.areas.find((a) => a.id === p.area_id);
+            const areaName = area ? area.name.toUpperCase() : "PROJECT";
+            const due = this._formatGoalDue(p.end_date);
             const featuredCls = idx === 0 ? " is-featured" : "";
             return `
-                <div class="goal-card${featuredCls}" data-goal-id="${g.id}" role="button" tabindex="0">
+                <div class="goal-card${featuredCls}" data-project-id="${p.id}" role="button" tabindex="0">
                     <div class="ring" style="--p: ${pct};"><span>${pct}%</span></div>
                     <div class="goal-meta">
                         <span class="area">${this.escapeHtml(areaName)}</span>
-                        <span class="name">${this.escapeHtml(g.name || "(naamloos)")}</span>
+                        <span class="name">${this.escapeHtml(p.name || "(naamloos)")}</span>
                         <span class="due">${due}</span>
                     </div>
                 </div>
             `;
         }).join("");
 
-        this.todayGoals.querySelectorAll(".goal-card[data-goal-id]").forEach((card) => {
+        this.todayGoals.querySelectorAll(".goal-card[data-project-id]").forEach((card) => {
             card.addEventListener("click", () => {
-                this.setView({ type: "goal", value: Number(card.dataset.goalId) });
+                this.setView({ type: "project", value: Number(card.dataset.projectId) });
             });
         });
+    }
+
+    _projectProgress(project) {
+        const tasks = this.todos.filter((t) => t.project_id === project.id);
+        if (tasks.length === 0) return 0;
+        const done = tasks.filter((t) => t.completed).length;
+        return Math.round((done / tasks.length) * 100);
+    }
+
+    toggleProjectOnToday() {
+        if (this.currentView.type !== "project") return;
+        const id = Number(this.currentView.value);
+        if (this.todayProjectIds.has(id)) {
+            this.todayProjectIds.delete(id);
+        } else {
+            this.todayProjectIds.add(id);
+        }
+        localStorage.setItem(
+            "gripTodayProjects",
+            JSON.stringify(Array.from(this.todayProjectIds))
+        );
+        this._renderShowOnTodayBtnState(id);
+    }
+
+    _renderShowOnTodayBtnState(projectId) {
+        if (!this.showOnTodayBtn) return;
+        const isOn = this.todayProjectIds.has(Number(projectId));
+        this.showOnTodayBtn.classList.toggle("is-active", isOn);
+        this.showOnTodayBtn.setAttribute("aria-pressed", String(isOn));
+        if (this.showOnTodayLabel) {
+            this.showOnTodayLabel.textContent = isOn ? "Op Vandaag" : "Toon op Vandaag";
+        }
     }
 
     _goalProgress(goal) {
@@ -4068,14 +4118,14 @@ class TodoApp {
             this.todayTasks.innerHTML = `<div class="today-empty">Niets gepland voor vandaag. Tijd om iets toe te voegen.</div>`;
             return;
         }
-        // Group by Ochtend / Middag / Avond based on planned_date or planned time fallback.
-        const groups = { ochtend: [], middag: [], avond: [], leeg: [] };
+        // Group by Hele dag / Ochtend / Middag / Avond based on planned time.
+        // Tasks without a planned time go into "Hele dag".
+        const groups = { hele: [], ochtend: [], middag: [], avond: [] };
         for (const t of todays) {
-            const slot = this._taskTimeSlot(t);
-            groups[slot].push(t);
+            groups[this._taskTimeSlot(t)].push(t);
         }
-        const slotLabels = { ochtend: "Ochtend", middag: "Middag", avond: "Avond", leeg: "Geen tijd" };
-        const order = ["ochtend", "middag", "avond", "leeg"];
+        const slotLabels = { hele: "Hele dag", ochtend: "Ochtend", middag: "Middag", avond: "Avond" };
+        const order = ["hele", "ochtend", "middag", "avond"];
         let html = "";
         for (const k of order) {
             const items = groups[k];
@@ -4087,14 +4137,23 @@ class TodoApp {
     }
 
     _taskTimeSlot(todo) {
-        // Try to find an associated calendar/agenda time. If todo.planned_date has time hidden in
-        // a related event we'd need to cross-reference. For now use a heuristic: if the title
-        // contains a time hint or duration, we still bucket by "leeg" — agenda events drive Ochtend/Middag/Avond.
-        // Default: place uncategorized tasks in current period of the day.
-        const hour = new Date().getHours();
+        // Tasks don't yet carry a planned time — bucket everything under "Hele dag".
+        // Once a time field is added, return "ochtend" / "middag" / "avond" based on the hour.
+        const hour = this._taskPlannedHour(todo);
+        if (hour == null) return "hele";
         if (hour < 12) return "ochtend";
         if (hour < 18) return "middag";
         return "avond";
+    }
+
+    _taskPlannedHour(todo) {
+        // Hook for future time-of-day support. Currently always null because the
+        // task model has no planned_time column yet.
+        const t = todo.planned_time || todo.planned_at;
+        if (!t) return null;
+        const m = String(t).match(/(\d{1,2}):(\d{2})/);
+        if (!m) return null;
+        return Number(m[1]);
     }
 
     _renderTodayTask(todo) {

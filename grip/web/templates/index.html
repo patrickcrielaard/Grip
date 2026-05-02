@@ -217,6 +217,16 @@
                     </svg>
                     Heractiveren
                 </button>
+                <button class="project-complete-btn" id="showOnTodayBtn" type="button" title="Toon op Vandaag" aria-pressed="false">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="4"/>
+                        <line x1="12" y1="3" x2="12" y2="5"/>
+                        <line x1="12" y1="19" x2="12" y2="21"/>
+                        <line x1="3" y1="12" x2="5" y2="12"/>
+                        <line x1="19" y1="12" x2="21" y2="12"/>
+                    </svg>
+                    <span id="showOnTodayLabel">Toon op Vandaag</span>
+                </button>
             </div>
         </div>
 
@@ -226,8 +236,6 @@
         <div class="today-view" id="todayView" hidden>
             <div class="today-grid">
                 <div class="today-left">
-                    <h1 class="today-headline" id="todayHeadline"><em>0</em>dingen<br>op je <i>radar.</i></h1>
-                    <p class="today-sub" id="todaySub"></p>
                     <div class="goals-stripe" id="todayGoals"></div>
                     <div class="panel today-tasks-panel">
                         <div class="panel-head">
@@ -988,5 +996,5 @@
                       ' · Week ' + isoWeek(now) + ' · ' + season(now.getMonth());
 })();
 </script>
-<script src="/static/js/app.js?v=23"></script>
+<script src="/static/js/app.js?v=25"></script>
 {% endblock %}

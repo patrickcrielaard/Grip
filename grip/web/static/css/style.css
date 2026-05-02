@@ -2956,6 +2956,7 @@ button.sidebar-section-label {
 }
 .fab-add-btn:hover { background: #000; }
 .fab-add-btn[hidden] { display: none !important; }
+.task-list[hidden] { display: none !important; }
 
 /* ----- Task detail modal ----- */
 .task-modal-overlay {
@@ -3900,7 +3901,7 @@ body.auth-page {
     display: grid;
     grid-template-columns: 1fr 360px;
     gap: 24px;
-    padding: 8px 8px 24px;
+    padding: 24px;
 }
 .today-left { min-width: 0; }
 .today-right-col {
@@ -4091,7 +4092,7 @@ body.auth-page {
     flex-direction: column;
 }
 .today-tasks-panel .task-group-head {
-    padding: 12px 20px 6px;
+    padding: 14px 20px 6px;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -4100,10 +4101,8 @@ body.auth-page {
     display: flex;
     align-items: center;
     gap: 10px;
-    border-top: 1px solid var(--border);
     background: var(--content-bg);
 }
-.today-tasks-panel .task-group-head:first-child { border-top: none; }
 .today-tasks-panel .task-group-head .line {
     flex: 1;
     height: 1px;
@@ -4445,7 +4444,6 @@ body.auth-page {
     gap: 12px;
     align-items: center;
     padding: 12px 20px;
-    border-top: 1px solid var(--border);
     cursor: pointer;
     transition: background 0.1s;
 }
