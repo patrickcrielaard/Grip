@@ -2,7 +2,10 @@
 :root {
     --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
     --font-body: "Plus Jakarta Sans", system-ui, sans-serif;
-    --font-serif: "Instrument Serif", Georgia, serif;
+    /* Display headlines previously used Instrument Serif italic. We now use
+       the same body font everywhere — the variable is kept so existing rules
+       still resolve, and italics are reset on the elements that opted in. */
+    --font-serif: var(--font-body);
 
     /* Layout */
     --sidebar-width: 248px;
@@ -510,6 +513,10 @@ button.sidebar-section-label {
     font-weight: 500;
     cursor: pointer;
     transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.project-complete-btn[hidden] {
+    display: none;
 }
 
 .project-complete-btn:hover {
@@ -4594,6 +4601,32 @@ body.auth-page {
     font-weight: 600;
     margin-bottom: 8px;
 }
+.proj-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    margin-bottom: 10px;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.proj-back-btn:hover {
+    background: var(--hover-bg);
+    color: var(--ink);
+    border-color: var(--ink-tertiary);
+}
+.proj-back-btn:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+}
+.proj-back-btn svg { flex-shrink: 0; }
 .proj-row {
     display: flex;
     align-items: center;
@@ -4643,6 +4676,19 @@ body.auth-page {
 .kanban-col.is-done {
     background: transparent;
     border: 1px dashed var(--border-strong);
+}
+.kanban-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-height: 60px;
+    border-radius: 12px;
+    transition: background 0.12s, box-shadow 0.12s;
+}
+.kanban-cards.is-drop-target {
+    background: var(--hover-bg);
+    box-shadow: inset 0 0 0 2px var(--ink);
 }
 .kanban-head {
     display: flex;
@@ -4696,6 +4742,12 @@ body.auth-page {
     outline-offset: 2px;
 }
 .kcard.is-active { border-color: var(--ink); }
+.kcard.is-dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+}
+.kcard[draggable="true"] { cursor: grab; }
+.kcard[draggable="true"]:active { cursor: grabbing; }
 .kcard .kt {
     font-size: 13px;
     font-weight: 600;
@@ -4737,4 +4789,24 @@ body.auth-page {
     .proj-page { padding: 16px 20px 32px; }
     .proj-cols { grid-template-columns: 1fr; }
     .proj-title { font-size: 30px; }
+}
+
+/* Replace the legacy italic display style with upright body type
+   everywhere it was applied. Sizes are preserved on each rule. */
+.brand-mark,
+.brand-name,
+.content-title,
+.modal-title-input,
+.entity-modal-header h2,
+.today-agenda-header h2,
+.stats-total-value,
+.login-quote,
+.login-quote em,
+.login-right h2,
+.today-headline,
+.streak-num,
+.focus-clock,
+.proj-title {
+    font-style: normal;
+    font-family: var(--font-body);
 }

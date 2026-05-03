@@ -353,10 +353,74 @@ class TodoApp {
         // Project view (kanban) event delegation
         if (this.projectView) {
             this.projectView.addEventListener("click", (event) => {
+                const back = event.target.closest("[data-kanban-back]");
+                if (back) {
+                    this._handleKanbanBack();
+                    return;
+                }
                 const card = event.target.closest("[data-kanban-todo-id]");
                 if (!card) return;
                 const id = Number(card.dataset.kanbanTodoId);
                 if (id) this.openModal(id);
+            });
+            this.projectView.addEventListener("keydown", (event) => {
+                const card = event.target.closest("[data-kanban-todo-id]");
+                if (!card) return;
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    const id = Number(card.dataset.kanbanTodoId);
+                    if (id) this.openModal(id);
+                }
+            });
+            this.projectView.addEventListener("dragstart", (event) => {
+                const card = event.target.closest("[data-kanban-todo-id]");
+                if (!card) return;
+                const id = Number(card.dataset.kanbanTodoId);
+                this._kanbanDragId = id;
+                card.classList.add("is-dragging");
+                if (event.dataTransfer) {
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", String(id));
+                }
+            });
+            this.projectView.addEventListener("dragend", (event) => {
+                const card = event.target.closest("[data-kanban-todo-id]");
+                if (card) card.classList.remove("is-dragging");
+                this._clearKanbanDragHover();
+                this._kanbanDragId = null;
+            });
+            this.projectView.addEventListener("dragover", (event) => {
+                const dropzone = event.target.closest("[data-kanban-dropzone]");
+                if (!dropzone) return;
+                event.preventDefault();
+                if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+                if (this._kanbanHoverEl !== dropzone) {
+                    this._clearKanbanDragHover();
+                    dropzone.classList.add("is-drop-target");
+                    this._kanbanHoverEl = dropzone;
+                }
+            });
+            this.projectView.addEventListener("dragleave", (event) => {
+                const dropzone = event.target.closest("[data-kanban-dropzone]");
+                if (!dropzone) return;
+                if (event.relatedTarget && dropzone.contains(event.relatedTarget)) return;
+                dropzone.classList.remove("is-drop-target");
+                if (this._kanbanHoverEl === dropzone) this._kanbanHoverEl = null;
+            });
+            this.projectView.addEventListener("drop", (event) => {
+                const dropzone = event.target.closest("[data-kanban-dropzone]");
+                if (!dropzone) return;
+                event.preventDefault();
+                this._clearKanbanDragHover();
+                let id = this._kanbanDragId;
+                if (!id && event.dataTransfer) {
+                    const raw = event.dataTransfer.getData("text/plain");
+                    if (raw) id = Number(raw);
+                }
+                this._kanbanDragId = null;
+                if (!id) return;
+                const targetState = dropzone.dataset.kanbanDropzone;
+                this._moveKanbanTodo(id, targetState);
             });
         }
 
@@ -4222,11 +4286,20 @@ class TodoApp {
             }
         }
 
+        const backButton = `
+            <button type="button" class="proj-back-btn" data-kanban-back aria-label="Terug">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"/>
+                    <polyline points="12 19 5 12 12 5"/>
+                </svg>
+                Terug
+            </button>`;
+
         return `
             <div class="proj-ring" style="--p:${progress};"><span>${progress}%</span></div>
             <div class="proj-body">
+                ${backButton}
                 ${contextLine}
-                <div class="proj-title">${this.escapeHtml(project.name)}</div>
                 <div class="proj-row">${stats.join("")}</div>
                 <div class="proj-bar"><i style="width:${progress}%;"></i></div>
             </div>
@@ -4248,22 +4321,22 @@ class TodoApp {
         const bezig = openTasks.filter((t) => t.state === "in_progress");
         const wachten = openTasks.filter((t) => t.state === "waiting");
         const cols = [
-            { label: "Inbox", tasks: inbox, modifier: "" },
-            { label: "Bezig", tasks: bezig, modifier: "" },
-            { label: "Wachten", tasks: wachten, modifier: "" },
-            { label: "Voltooid", tasks: completedTasks, modifier: "is-done" },
+            { label: "Te doen", tasks: inbox, modifier: "", state: "to_do" },
+            { label: "Bezig", tasks: bezig, modifier: "", state: "in_progress" },
+            { label: "Wachten", tasks: wachten, modifier: "", state: "waiting" },
+            { label: "Voltooid", tasks: completedTasks, modifier: "is-done", state: "done" },
         ];
         return cols.map((c) => this._renderKanbanColumn(c)).join("");
     }
 
-    _renderKanbanColumn({ label, tasks, modifier }) {
+    _renderKanbanColumn({ label, tasks, modifier, state }) {
         const cards = tasks.length
             ? tasks.map((t) => this._renderKanbanCard(t)).join("")
             : `<div class="kanban-empty">Niets hier.</div>`;
         return `
-            <div class="kanban-col ${modifier}">
+            <div class="kanban-col ${modifier}" data-kanban-state="${state}">
                 <div class="kanban-head">${this.escapeHtml(label)} <span class="num">${tasks.length}</span></div>
-                ${cards}
+                <div class="kanban-cards" data-kanban-dropzone="${state}">${cards}</div>
             </div>
         `;
     }
@@ -4275,10 +4348,10 @@ class TodoApp {
             : "";
         const meta = this._renderKanbanMeta(todo);
         return `
-            <button type="button" class="kcard" data-kanban-todo-id="${todo.id}">
+            <div class="kcard" role="button" tabindex="0" draggable="true" data-kanban-todo-id="${todo.id}">
                 <div class="kt">${this.escapeHtml(todo.title)}</div>
                 <div class="kmeta">${dotMarkup}${meta}</div>
-            </button>
+            </div>
         `;
     }
 
@@ -4303,6 +4376,63 @@ class TodoApp {
             if (todo.duration) parts.push(`${Number(todo.duration)} min`);
         }
         return parts.join(`<span class="sep">·</span>`);
+    }
+
+    _clearKanbanDragHover() {
+        if (!this.projectView) return;
+        this.projectView
+            .querySelectorAll(".is-drop-target")
+            .forEach((el) => el.classList.remove("is-drop-target"));
+        this._kanbanHoverEl = null;
+    }
+
+    async _moveKanbanTodo(id, targetState) {
+        const todo = this.todos.find((t) => t.id === id);
+        if (!todo) return;
+        const currentState = todo.completed ? "done" : todo.state || "to_do";
+        const normalizedTarget = targetState === "done" ? "done" : targetState;
+        if (currentState === normalizedTarget) return;
+
+        const previous = { state: todo.state, completed: todo.completed };
+        if (normalizedTarget === "done") {
+            todo.completed = true;
+            todo.state = "done";
+        } else {
+            todo.completed = false;
+            todo.state = normalizedTarget;
+        }
+        this.renderProjectView();
+        this.updateSidebarCounts();
+        try {
+            const data = await this.request(`/api/todos/${id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ state: normalizedTarget }),
+            });
+            if (data && data.todo) {
+                Object.assign(todo, data.todo);
+                if (data.spawned_todo) this.todos.unshift(data.spawned_todo);
+                this.renderProjectView();
+            }
+        } catch (error) {
+            Object.assign(todo, previous);
+            this.renderProjectView();
+            this.setStatus(error.message);
+        }
+    }
+
+    _handleKanbanBack() {
+        if (this.currentView.type !== "project") return;
+        const projectId = Number(this.currentView.value);
+        const project =
+            this.projects.find((p) => p.id === projectId) ||
+            this.completedProjects.find((p) => p.id === projectId);
+        if (project && project.goal_id) {
+            this.setView({ type: "goal", value: project.goal_id });
+        } else if (project && project.area_id) {
+            this.setView({ type: "area", value: project.area_id });
+        } else {
+            this.setView({ type: "list", value: "today" });
+        }
     }
 
     _goalProgress(goal) {
