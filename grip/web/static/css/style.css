@@ -2728,7 +2728,6 @@ body.app-page { background: var(--app-bg); }
     background: var(--sidebar-bg);
     padding: 22px 16px 18px;
     gap: 22px;
-    border-right: 1px solid var(--border);
 }
 .sidebar-profile {
     padding: 6px 8px 10px;
@@ -3348,6 +3347,32 @@ body.auth-page {
     gap: 1px;
     line-height: 1;
 }
+.content-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.content-back-btn:hover {
+    background: var(--hover-bg);
+    color: var(--ink);
+    border-color: var(--ink-tertiary);
+}
+.content-back-btn:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+}
+.content-back-btn svg { flex-shrink: 0; }
+.content-back-btn[hidden] { display: none; }
 .content-subtitle {
     font-size: 13px;
     color: var(--ink-tertiary);
@@ -4592,6 +4617,7 @@ body.auth-page {
     line-height: 1.05;
     letter-spacing: -0.02em;
     color: var(--ink);
+    margin: 0 0 10px;
 }
 .proj-context {
     font-size: 11px;

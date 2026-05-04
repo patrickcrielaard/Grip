@@ -41,6 +41,7 @@ from grip.routes.todos import (
     _normalize_priority,
     _normalize_recurrence,
     _normalize_state,
+    _normalize_time,
     _resolve_area_id,
     _validate_project_id,
 )
@@ -276,6 +277,7 @@ def create_todo(
     priority: str = DEFAULT_PRIORITY,
     deadline: str | None = None,
     planned_date: str | None = None,
+    planned_time: str | None = None,
     start_date: str | None = None,
     duration: int | None = None,
     recurrence_interval: int | None = None,
@@ -290,6 +292,7 @@ def create_todo(
     area_id: optional id of the Life Area (see list_areas). Omit for no area.
     priority: "not_set" (default) | "low" | "medium" | "high"
     deadline / planned_date / start_date / recurrence_end: YYYY-MM-DD strings
+    planned_time: optional HH:MM start time of day for the planned date
     duration: minutes as an integer
     recurrence_interval + recurrence_unit must be set together; unit: "day" | "week" | "month"
     state: "to_do" (default) | "in_progress" | "done" | "waiting" | "someday"
@@ -317,6 +320,7 @@ def create_todo(
         _v(_normalize_priority, priority),
         deadline=_v(_normalize_date, deadline, "deadline"),
         planned_date=_v(_normalize_date, planned_date, "planned_date"),
+        planned_time=_v(_normalize_time, planned_time, "planned_time"),
         start_date=_v(_normalize_date, start_date, "start_date"),
         duration=_v(_normalize_duration, duration),
         recurrence_interval=ri,
@@ -340,6 +344,7 @@ def update_todo(
     priority: str | None = None,
     deadline: str | None = None,
     planned_date: str | None = None,
+    planned_time: str | None = None,
     start_date: str | None = None,
     duration: int | None = None,
     recurrence_interval: int | None = None,
@@ -379,6 +384,8 @@ def update_todo(
         updates["deadline"] = _v(_normalize_date, deadline, "deadline")
     if planned_date is not None:
         updates["planned_date"] = _v(_normalize_date, planned_date, "planned_date")
+    if planned_time is not None:
+        updates["planned_time"] = _v(_normalize_time, planned_time, "planned_time")
     if start_date is not None:
         updates["start_date"] = _v(_normalize_date, start_date, "start_date")
     if duration is not None:
@@ -442,6 +449,7 @@ def update_todo(
                     current.get("priority", "not_set"),
                     deadline=current.get("deadline"),
                     planned_date=next_date,
+                    planned_time=current.get("planned_time"),
                     start_date=current.get("start_date"),
                     duration=current.get("duration"),
                     recurrence_interval=current["recurrence_interval"],

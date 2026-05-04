@@ -176,7 +176,14 @@
                         <line x1="3" y1="18" x2="21" y2="18"/>
                     </svg>
                 </button>
-                <div class="content-title-block">
+                <button type="button" class="content-back-btn" id="projectBackBtn" data-kanban-back hidden aria-label="Terug">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12"/>
+                        <polyline points="12 19 5 12 12 5"/>
+                    </svg>
+                    Terug
+                </button>
+                <div class="content-title-block" id="contentTitleBlock">
                     <h1 class="content-title" id="activeListLabel">Inbox</h1>
                     <span class="content-subtitle" id="contentSubtitle"></span>
                 </div>
@@ -531,6 +538,16 @@
                             <polyline points="12 6 12 12 16 14"/>
                         </svg>
                         <div class="modal-field-body">
+                            <span class="modal-field-label">Starttijd</span>
+                            <input type="time" id="modal-planned-time" class="modal-field-input">
+                        </div>
+                    </div>
+                    <div class="modal-field">
+                        <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                        <div class="modal-field-body">
                             <span class="modal-field-label">Startdatum</span>
                             <input type="text" id="modal-start-date" class="modal-field-input modal-date-btn" data-date="" readonly>
                         </div>
@@ -825,6 +842,10 @@
                     <input type="date" id="plannedDateInput" class="add-task-date" aria-label="Planned date">
                 </label>
                 <label class="add-task-date-label">
+                    <span>Starttijd</span>
+                    <input type="time" id="plannedTimeInput" class="add-task-date" aria-label="Start time">
+                </label>
+                <label class="add-task-date-label">
                     <span>Deadline</span>
                     <input type="date" id="deadlineInput" class="add-task-date" aria-label="Deadline">
                 </label>
@@ -1004,5 +1025,5 @@
                       ' · Week ' + isoWeek(now) + ' · ' + season(now.getMonth());
 })();
 </script>
-<script src="/static/js/app.js?v=25"></script>
+<script src="/static/js/app.js?v=26"></script>
 {% endblock %}

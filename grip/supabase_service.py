@@ -15,8 +15,8 @@ TASK_PRIORITIES = {"not_set", "low", "medium", "high"}
 
 TASK_SELECT_COLUMNS = (
     "id, title, completed, created_at, list, area_id, priority, deadline, "
-    "planned_date, start_date, duration, recurrence_interval, recurrence_unit, "
-    "recurrence_end, state, project_id"
+    "planned_date, planned_time, start_date, duration, recurrence_interval, "
+    "recurrence_unit, recurrence_end, state, project_id"
 )
 PROJECT_SELECT_COLUMNS = "id, name, start_date, end_date, created_at, status, area_id, goal_id, show_on_today"
 AREA_SELECT_COLUMNS = "id, name, color, description, status, created_at"
@@ -208,6 +208,7 @@ class SupabaseService:
         priority: str,
         deadline: str | None = None,
         planned_date: str | None = None,
+        planned_time: str | None = None,
         start_date: str | None = None,
         duration: int | None = None,
         recurrence_interval: int | None = None,
@@ -230,6 +231,8 @@ class SupabaseService:
                 payload["deadline"] = deadline
             if planned_date is not None:
                 payload["planned_date"] = planned_date
+            if planned_time is not None:
+                payload["planned_time"] = planned_time
             if start_date is not None:
                 payload["start_date"] = start_date
             if duration is not None:

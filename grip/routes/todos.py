@@ -30,6 +30,7 @@ ALLOWED_STATES = {"to_do", "in_progress", "done", "waiting", "someday"}
 DEFAULT_STATE = "to_do"
 ALLOWED_RECURRENCE_UNITS = {"day", "week", "month"}
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$")
 
 
 class TodoCreate(BaseModel):
@@ -42,6 +43,7 @@ class TodoCreate(BaseModel):
     priority: str | None = DEFAULT_PRIORITY
     deadline: str | None = None
     planned_date: str | None = None
+    planned_time: str | None = None
     start_date: str | None = None
     duration: int | None = None
     recurrence_interval: int | None = None
@@ -62,6 +64,7 @@ class TodoUpdate(BaseModel):
     priority: str | None = None
     deadline: str | None = None
     planned_date: str | None = None
+    planned_time: str | None = None
     start_date: str | None = None
     duration: int | None = None
     recurrence_interval: int | None = None
@@ -128,6 +131,17 @@ def _normalize_date(value: str | None, field: str) -> str | None:
             status_code=400, detail=f"{field} must be a date in YYYY-MM-DD format"
         )
     return value
+
+
+def _normalize_time(value: str | None, field: str) -> str | None:
+    if value is None or value == "":
+        return None
+    if not _TIME_RE.match(value):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field} must be a time in HH:MM format",
+        )
+    return value if len(value) == 8 else f"{value}:00"
 
 
 def _normalize_duration(value: int | None) -> int | None:
@@ -238,6 +252,7 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
     priority = _normalize_priority(payload.priority)
     deadline = _normalize_date(payload.deadline, "Deadline")
     planned_date = _normalize_date(payload.planned_date, "Planned date")
+    planned_time = _normalize_time(payload.planned_time, "Planned time")
     start_date = _normalize_date(payload.start_date, "Start date")
     duration = _normalize_duration(payload.duration)
     recurrence_interval, recurrence_unit = _normalize_recurrence(
@@ -253,6 +268,7 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
         priority,
         deadline=deadline,
         planned_date=planned_date,
+        planned_time=planned_time,
         start_date=start_date,
         duration=duration,
         recurrence_interval=recurrence_interval,
@@ -312,6 +328,8 @@ async def update_todo(
         updates["deadline"] = _normalize_date(payload.deadline, "Deadline")
     if "planned_date" in payload.model_fields_set:
         updates["planned_date"] = _normalize_date(payload.planned_date, "Planned date")
+    if "planned_time" in payload.model_fields_set:
+        updates["planned_time"] = _normalize_time(payload.planned_time, "Planned time")
     if "start_date" in payload.model_fields_set:
         updates["start_date"] = _normalize_date(payload.start_date, "Start date")
     if "duration" in payload.model_fields_set:
@@ -382,6 +400,7 @@ async def update_todo(
                     current.get("priority", "not_set"),
                     deadline=current.get("deadline"),
                     planned_date=next_date,
+                    planned_time=current.get("planned_time"),
                     start_date=current.get("start_date"),
                     duration=current.get("duration"),
                     recurrence_interval=current["recurrence_interval"],

@@ -45,6 +45,9 @@ class TodoApp {
         this.renderAreaTree();
         this._populateAreaSelects();
         await Promise.all([this.loadProjects(), this.loadCompletedProjects(), this.loadTodos()]);
+        // Apply the initial view now that data is loaded so the right panel
+        // becomes visible (panels are `hidden` in HTML by default).
+        this.setView(this.currentView);
         this.loadCalendarSubscriptions();
         // Timer state — load and start the pill if a session is active.
         this.loadPomodoroSettings();
@@ -62,6 +65,7 @@ class TodoApp {
         this.prioritySelect = document.getElementById("prioritySelect");
         this.startDateInput = document.getElementById("startDateInput");
         this.plannedDateInput = document.getElementById("plannedDateInput");
+        this.plannedTimeInput = document.getElementById("plannedTimeInput");
         this.deadlineInput = document.getElementById("deadlineInput");
         this.durationInput = document.getElementById("durationInput");
         this.recurrenceUnit = document.getElementById("recurrenceUnit");
@@ -85,6 +89,7 @@ class TodoApp {
         this.modalState = document.getElementById("modal-state");
         this.modalList = document.getElementById("modal-list");
         this.modalPlannedDate = document.getElementById("modal-planned-date");
+        this.modalPlannedTime = document.getElementById("modal-planned-time");
         this.modalStartDate = document.getElementById("modal-start-date");
         this.modalDuration = document.getElementById("modal-duration");
         this.modalDeadline = document.getElementById("modal-deadline");
@@ -155,6 +160,8 @@ class TodoApp {
         this.projectView = document.getElementById("projectView");
         this.projHead = document.getElementById("projHead");
         this.projCols = document.getElementById("projCols");
+        this.projectBackBtn = document.getElementById("projectBackBtn");
+        this.contentTitleBlock = document.getElementById("contentTitleBlock");
         // Today view (integrated)
         this.todayView = document.getElementById("todayView");
         this.todayHeadline = document.getElementById("todayHeadline");
@@ -348,6 +355,10 @@ class TodoApp {
             this.clearCompletedButton.addEventListener("click", () =>
                 this.clearCompleted()
             );
+        }
+
+        if (this.projectBackBtn) {
+            this.projectBackBtn.addEventListener("click", () => this._handleKanbanBack());
         }
 
         // Project view (kanban) event delegation
@@ -601,12 +612,13 @@ class TodoApp {
         // Modal field auto-save on change + immediate visual state sync
         // (date fields are handled by the custom date picker, not change events)
         [
-            { el: this.modalState,    field: "state" },
-            { el: this.modalList,     field: "list" },
-            { el: this.modalDuration, field: "duration" },
-            { el: this.modalPriority, field: "priority" },
-            { el: this.modalArea,     field: "area" },
-            { el: this.modalProject,  field: "project" },
+            { el: this.modalState,       field: "state" },
+            { el: this.modalList,        field: "list" },
+            { el: this.modalDuration,    field: "duration" },
+            { el: this.modalPlannedTime, field: "planned_time" },
+            { el: this.modalPriority,    field: "priority" },
+            { el: this.modalArea,        field: "area" },
+            { el: this.modalProject,     field: "project" },
         ].forEach(({ el, field }) => {
             if (!el) return;
             el.addEventListener("change", () => {
@@ -1181,6 +1193,11 @@ class TodoApp {
         if (this.todayView) this.todayView.hidden = !isToday;
         if (this.projectView) this.projectView.hidden = !isProject;
         if (this.todoList) this.todoList.hidden = isStats || isToday || isProject;
+
+        // Project view shows the back button in the top-left and moves the
+        // project name into the project header card body.
+        if (this.projectBackBtn) this.projectBackBtn.hidden = !isProject;
+        if (this.contentTitleBlock) this.contentTitleBlock.hidden = isProject;
 
         if (isStats) {
             if (this.addTaskToggle) {
@@ -1999,6 +2016,7 @@ class TodoApp {
         const priority = this.normalizePriority(this.prioritySelect?.value);
         const startDate = this.startDateInput?.value || null;
         const plannedDate = this.plannedDateInput?.value || null;
+        const plannedTime = this.plannedTimeInput?.value || null;
         const deadline = this.deadlineInput?.value || null;
         const duration = this.durationInput?.value ? Number(this.durationInput.value) : null;
         const recurrenceUnitVal = this.recurrenceUnit?.value || null;
@@ -2023,6 +2041,7 @@ class TodoApp {
             priority,
             start_date: startDate,
             planned_date: plannedDate,
+            planned_time: plannedTime,
             deadline,
             duration,
             recurrence_interval: recurrenceIntervalVal,
@@ -2044,6 +2063,7 @@ class TodoApp {
                 if (this.prioritySelect) this.prioritySelect.value = "not_set";
                 if (this.startDateInput) this.startDateInput.value = "";
                 if (this.plannedDateInput) this.plannedDateInput.value = "";
+                if (this.plannedTimeInput) this.plannedTimeInput.value = "";
                 if (this.deadlineInput) this.deadlineInput.value = "";
                 if (this.durationInput) this.durationInput.value = "";
                 if (this.recurrenceUnit) {
@@ -2316,6 +2336,9 @@ class TodoApp {
         this.modalList.value = todo.project_id ? "" : (todo.list || "inbox");
         this._setModalDateField(this.modalPlannedDate, todo.planned_date || "");
         this._setModalDateField(this.modalStartDate, todo.start_date || "");
+        if (this.modalPlannedTime) {
+            this.modalPlannedTime.value = this._formatTimeValue(todo.planned_time);
+        }
         this.modalDuration.value = todo.duration || "";
         this._setModalDateField(this.modalDeadline, todo.deadline || "");
         this.modalPriority.value = this.normalizePriority(todo.priority);
@@ -2338,6 +2361,7 @@ class TodoApp {
             { el: this.modalPlannedDate, isSet: () => !!this.modalPlannedDate.dataset.date },
             { el: this.modalStartDate,   isSet: () => !!this.modalStartDate.dataset.date },
             { el: this.modalDuration,    isSet: () => !!this.modalDuration.value && Number(this.modalDuration.value) > 0 },
+            { el: this.modalPlannedTime, isSet: () => !!this.modalPlannedTime?.value },
             { el: this.modalDeadline,    isSet: () => !!this.modalDeadline.dataset.date },
             { el: this.modalPriority,    isSet: () => this.modalPriority.value !== "not_set" },
             { el: this.modalArea,        isSet: () => !!this.modalArea.value },
@@ -2385,6 +2409,8 @@ class TodoApp {
         let payload;
         if (field === "duration") {
             payload = { duration: value ? Number(value) : null };
+        } else if (field === "planned_time") {
+            payload = { planned_time: value || null };
         } else if (field === "list") {
             // The "—" placeholder is for display only (project tasks have no
             // list). Ignore it so we don't POST an invalid empty list value.
@@ -4286,19 +4312,10 @@ class TodoApp {
             }
         }
 
-        const backButton = `
-            <button type="button" class="proj-back-btn" data-kanban-back aria-label="Terug">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="19" y1="12" x2="5" y2="12"/>
-                    <polyline points="12 19 5 12 12 5"/>
-                </svg>
-                Terug
-            </button>`;
-
         return `
             <div class="proj-ring" style="--p:${progress};"><span>${progress}%</span></div>
             <div class="proj-body">
-                ${backButton}
+                <h1 class="proj-title">${this.escapeHtml(project.name || "(naamloos)")}</h1>
                 ${contextLine}
                 <div class="proj-row">${stats.join("")}</div>
                 <div class="proj-bar"><i style="width:${progress}%;"></i></div>
@@ -4472,6 +4489,13 @@ class TodoApp {
         for (const t of todays) {
             groups[this._taskTimeSlot(t)].push(t);
         }
+        // Sort timed groups chronologically.
+        const byTime = (a, b) => {
+            const ta = this._formatTimeValue(a.planned_time) || "99:99";
+            const tb = this._formatTimeValue(b.planned_time) || "99:99";
+            return ta.localeCompare(tb);
+        };
+        ["ochtend", "middag", "avond"].forEach((k) => groups[k].sort(byTime));
         const slotLabels = { hele: "Hele dag", ochtend: "Ochtend", middag: "Middag", avond: "Avond" };
         const order = ["hele", "ochtend", "middag", "avond"];
         let html = "";
@@ -4495,13 +4519,19 @@ class TodoApp {
     }
 
     _taskPlannedHour(todo) {
-        // Hook for future time-of-day support. Currently always null because the
-        // task model has no planned_time column yet.
         const t = todo.planned_time || todo.planned_at;
         if (!t) return null;
         const m = String(t).match(/(\d{1,2}):(\d{2})/);
         if (!m) return null;
         return Number(m[1]);
+    }
+
+    _formatTimeValue(t) {
+        // Postgres `time` columns serialize as "HH:MM:SS"; <input type="time">
+        // wants "HH:MM".
+        if (!t) return "";
+        const m = String(t).match(/^(\d{2}:\d{2})/);
+        return m ? m[1] : "";
     }
 
     _renderTodayTask(todo) {
@@ -4510,9 +4540,13 @@ class TodoApp {
         const areaTag = area
             ? `<span class="today-task-tag"><span class="dot" style="background:${this.escapeHtml(area.color || "var(--ink-tertiary)")}"></span>${this.escapeHtml(area.name)}${project ? " · " + this.escapeHtml(project.name) : ""}</span>`
             : (project ? `<span class="today-task-tag"><span class="dot" style="background:var(--ink-tertiary)"></span>${this.escapeHtml(project.name)}</span>` : "");
-        const dur = Number(todo.duration_minutes) || 0;
-        const timeChip = dur > 0
-            ? `<span class="today-task-time"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${dur} min</span>`
+        const dur = Number(todo.duration) || Number(todo.duration_minutes) || 0;
+        const startTime = this._formatTimeValue(todo.planned_time);
+        const timeChipBody = startTime
+            ? `${startTime}${dur > 0 ? ` · ${dur} min` : ""}`
+            : (dur > 0 ? `${dur} min` : "");
+        const timeChip = timeChipBody
+            ? `<span class="today-task-time"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${this.escapeHtml(timeChipBody)}</span>`
             : "";
         const priorityCls = todo.priority && todo.priority !== "not_set" ? ` priority-${todo.priority}` : "";
         const checkedCls = todo.completed ? " is-checked" : "";
