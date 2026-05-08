@@ -2304,6 +2304,7 @@ class TodoApp {
         this.todoList.querySelectorAll(".menu-btn").forEach((button) => {
             button.setAttribute("aria-expanded", "false");
         });
+        document.body.classList.remove("menu-backdrop-active");
     }
 
     toggleMenu(item, button) {
@@ -2312,6 +2313,7 @@ class TodoApp {
         if (shouldOpen) {
             item.classList.add("menu-open");
             button.setAttribute("aria-expanded", "true");
+            document.body.classList.add("menu-backdrop-active");
         }
     }
 
@@ -4310,6 +4312,7 @@ class TodoApp {
         if (this.projectMenuBtn) {
             this.projectMenuBtn.setAttribute("aria-expanded", "false");
         }
+        document.body.classList.remove("menu-backdrop-active");
     }
 
     _toggleProjectMenu() {
@@ -4318,6 +4321,9 @@ class TodoApp {
         this.closeAllMenus();
         this.projectMenuWrap.classList.toggle("menu-open", willOpen);
         this.projectMenuBtn.setAttribute("aria-expanded", String(willOpen));
+        if (willOpen) {
+            document.body.classList.add("menu-backdrop-active");
+        }
     }
 
     async _renameCurrentProject() {

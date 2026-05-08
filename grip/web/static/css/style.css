@@ -911,6 +911,26 @@ button.sidebar-section-label {
     display: flex;
 }
 
+body.menu-backdrop-active::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(17, 17, 17, 0.45);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 9;
+    pointer-events: none;
+}
+
+.todo-item.menu-open {
+    position: relative;
+    z-index: 10;
+}
+
+.project-menu-wrap.menu-open {
+    z-index: 10;
+}
+
 .todo-menu-item {
     border: none;
     background: transparent;
