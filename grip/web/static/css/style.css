@@ -3416,6 +3416,8 @@ body.auth-page {
     gap: 1px;
     line-height: 1;
 }
+.content-title-block[hidden] { display: none; }
+.content-task-count[hidden] { display: none; }
 .content-back-btn {
     display: inline-flex;
     align-items: center;
