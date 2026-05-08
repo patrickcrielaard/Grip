@@ -108,8 +108,10 @@ class TodoApp {
         this.projectActionsEl = document.getElementById("projectActions");
         this.archiveProjectBtn = document.getElementById("archiveProjectBtn");
         this.reviveProjectBtn = document.getElementById("reviveProjectBtn");
-        this.showOnTodayBtn = document.getElementById("showOnTodayBtn");
-        this.showOnTodayLabel = document.getElementById("showOnTodayLabel");
+        this.projectMenuWrap = document.getElementById("projectMenuWrap");
+        this.projectMenuBtn = document.getElementById("projectMenuBtn");
+        this.projectMenu = document.getElementById("projectMenu");
+        this.projectMenuFavLabel = document.getElementById("projectMenuFavLabel");
         // Pinned-to-today projects are persisted server-side via project.show_on_today.
         // We keep a Set of legacy localStorage values so we can migrate them once on
         // first load if the server has no pinned projects yet.
@@ -569,7 +571,10 @@ class TodoApp {
 
         // Close menus on outside click
         document.addEventListener("click", (event) => {
-            if (!event.target.closest(".todo-actions")) {
+            if (
+                !event.target.closest(".todo-actions") &&
+                !event.target.closest(".project-menu-wrap")
+            ) {
                 this.closeAllMenus();
             }
         });
@@ -852,8 +857,27 @@ class TodoApp {
         if (this.reviveProjectBtn) {
             this.reviveProjectBtn.addEventListener("click", () => this.reviveProject());
         }
-        if (this.showOnTodayBtn) {
-            this.showOnTodayBtn.addEventListener("click", () => this.toggleProjectOnToday());
+        if (this.projectMenuBtn) {
+            this.projectMenuBtn.addEventListener("click", (event) => {
+                event.stopPropagation();
+                this._toggleProjectMenu();
+            });
+        }
+        if (this.projectMenu) {
+            this.projectMenu.addEventListener("click", (event) => {
+                const item = event.target.closest("[data-project-action]");
+                if (!item) return;
+                event.stopPropagation();
+                const action = item.dataset.projectAction;
+                this._closeProjectMenu();
+                if (action === "rename") {
+                    this._renameCurrentProject();
+                } else if (action === "toggle-today") {
+                    this.toggleProjectOnToday();
+                } else if (action === "delete") {
+                    this._deleteCurrentProject();
+                }
+            });
         }
 
         // Area tree delegation: expand/collapse, selection, add buttons
@@ -1169,9 +1193,10 @@ class TodoApp {
             this.projectActionsEl.hidden = !(isActiveProject || isCompletedProject);
             if (this.archiveProjectBtn) this.archiveProjectBtn.hidden = !isActiveProject;
             if (this.reviveProjectBtn) this.reviveProjectBtn.hidden = !isCompletedProject;
-            if (this.showOnTodayBtn) {
-                this.showOnTodayBtn.hidden = !isActiveProject;
-                if (isActiveProject) this._renderShowOnTodayBtnState(view.value);
+            if (this.projectMenuWrap) {
+                this.projectMenuWrap.hidden = !isActiveProject;
+                if (!isActiveProject) this.projectMenuWrap.classList.remove("menu-open");
+                if (isActiveProject) this._renderProjectMenuFavState(view.value);
             }
         }
         // Hide the "add task" affordance for archived projects
@@ -1198,6 +1223,7 @@ class TodoApp {
         // project name into the project header card body.
         if (this.projectBackBtn) this.projectBackBtn.hidden = !isProject;
         if (this.contentTitleBlock) this.contentTitleBlock.hidden = isProject;
+        if (this.itemCount) this.itemCount.hidden = isProject;
 
         if (isStats) {
             if (this.addTaskToggle) {
@@ -2264,7 +2290,12 @@ class TodoApp {
 
     // --- Menu management ---
 
+    closeAllProjectMenus() {
+        this._closeProjectMenu();
+    }
+
     closeAllMenus() {
+        this.closeAllProjectMenus();
         this.todoList
             .querySelectorAll(".todo-item.menu-open")
             .forEach((item) => {
@@ -4208,7 +4239,7 @@ class TodoApp {
         const next = !project.show_on_today;
         // Optimistic update
         project.show_on_today = next;
-        this._renderShowOnTodayBtnState(id);
+        this._renderProjectMenuFavState(id);
         try {
             const data = await this.request(`/api/projects/${id}`, {
                 method: "PATCH",
@@ -4220,7 +4251,7 @@ class TodoApp {
         } catch (error) {
             // Revert on failure
             project.show_on_today = !next;
-            this._renderShowOnTodayBtnState(id);
+            this._renderProjectMenuFavState(id);
             this.setStatus(error.message);
         }
     }
@@ -4259,13 +4290,84 @@ class TodoApp {
         localStorage.removeItem("gripTodayProjects");
     }
 
-    _renderShowOnTodayBtnState(projectId) {
-        if (!this.showOnTodayBtn) return;
+    _renderProjectMenuFavState(projectId) {
+        if (!this.projectMenu) return;
         const isOn = this.todayProjectIds.has(Number(projectId));
-        this.showOnTodayBtn.classList.toggle("is-active", isOn);
-        this.showOnTodayBtn.setAttribute("aria-pressed", String(isOn));
-        if (this.showOnTodayLabel) {
-            this.showOnTodayLabel.textContent = isOn ? "Op Vandaag" : "Toon op Vandaag";
+        const item = this.projectMenu.querySelector(
+            '[data-project-action="toggle-today"]'
+        );
+        if (item) item.classList.toggle("is-active", isOn);
+        if (this.projectMenuFavLabel) {
+            this.projectMenuFavLabel.textContent = isOn
+                ? "Op Vandaag"
+                : "Zet in favorieten";
+        }
+    }
+
+    _closeProjectMenu() {
+        if (!this.projectMenuWrap) return;
+        this.projectMenuWrap.classList.remove("menu-open");
+        if (this.projectMenuBtn) {
+            this.projectMenuBtn.setAttribute("aria-expanded", "false");
+        }
+    }
+
+    _toggleProjectMenu() {
+        if (!this.projectMenuWrap || !this.projectMenuBtn) return;
+        const willOpen = !this.projectMenuWrap.classList.contains("menu-open");
+        this.closeAllMenus();
+        this.projectMenuWrap.classList.toggle("menu-open", willOpen);
+        this.projectMenuBtn.setAttribute("aria-expanded", String(willOpen));
+    }
+
+    async _renameCurrentProject() {
+        if (this.currentView.type !== "project") return;
+        const id = Number(this.currentView.value);
+        const project = this.projects.find((p) => p.id === id);
+        if (!project) return;
+        const next = window.prompt("Nieuwe naam voor het project:", project.name || "");
+        if (next === null) return;
+        const trimmed = next.trim();
+        if (!trimmed || trimmed === project.name) return;
+        try {
+            const data = await this.request(`/api/projects/${id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ name: trimmed }),
+            });
+            if (data && data.project) {
+                Object.assign(project, data.project);
+            } else {
+                project.name = trimmed;
+            }
+            this.renderProjectsSidebar();
+            this.renderAreaTree();
+            this._populateProjectSelects();
+            this.renderProjectView();
+            this.activeListLabel.textContent = this.getViewLabel();
+        } catch (error) {
+            this.setStatus(error.message);
+        }
+    }
+
+    async _deleteCurrentProject() {
+        if (this.currentView.type !== "project") return;
+        const id = Number(this.currentView.value);
+        const project = this.projects.find((p) => p.id === id);
+        if (!project) return;
+        const confirmed = window.confirm(
+            `Weet je zeker dat je '${project.name}' wilt verwijderen?`
+        );
+        if (!confirmed) return;
+        try {
+            await this.request(`/api/projects/${id}`, { method: "DELETE" });
+            this.projects = this.projects.filter((p) => p.id !== id);
+            this.completedProjects = this.completedProjects.filter((p) => p.id !== id);
+            this.renderProjectsSidebar();
+            this.renderAreaTree();
+            this._populateProjectSelects();
+            this.setView({ type: "list", value: "inbox" });
+        } catch (error) {
+            this.setStatus(error.message);
         }
     }
 

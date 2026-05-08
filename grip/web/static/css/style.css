@@ -511,6 +511,7 @@ button.sidebar-section-label {
     font-size: 0.82rem;
     font-family: var(--font-body);
     font-weight: 500;
+    line-height: 1;
     cursor: pointer;
     transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
@@ -2875,6 +2876,74 @@ button.sidebar-section-label {
     border-color: var(--border-strong);
 }
 
+/* ----- Project actions menu (three-dot) ----- */
+.project-menu-wrap {
+    position: relative;
+    display: inline-flex;
+}
+.project-menu-wrap[hidden] { display: none; }
+.project-menu-btn {
+    padding: 7px 10px;
+}
+.project-menu-btn svg {
+    width: 16px;
+    height: 16px;
+}
+.project-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    min-width: 220px;
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+    border-radius: var(--radius-md);
+    background: var(--content-bg);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-menu);
+    z-index: 20;
+}
+.project-menu-wrap.menu-open .project-menu {
+    display: flex;
+}
+.project-menu-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    border: none;
+    background: transparent;
+    padding: 8px 10px;
+    text-align: left;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 500;
+    font-family: var(--font-body);
+    color: var(--ink);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.project-menu-item svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+.project-menu-item:hover {
+    background: var(--hover-bg);
+}
+.project-menu-item.is-active {
+    color: var(--ink);
+}
+.project-menu-item.is-active svg {
+    fill: currentColor;
+}
+.project-menu-item.delete-btn {
+    color: var(--priority-high);
+}
+.project-menu-item.delete-btn:hover {
+    background: rgba(255, 59, 48, 0.08);
+}
+
 .today-agenda-toggle {
     width: 36px; height: 36px;
     border-radius: 12px;
@@ -3351,14 +3420,15 @@ body.auth-page {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 12px 6px 10px;
+    padding: 7px 12px;
     border: 1px solid var(--border);
-    border-radius: 999px;
+    border-radius: 12px;
     background: transparent;
     color: var(--ink-secondary);
-    font-size: 12px;
-    font-weight: 600;
-    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: var(--font-body);
+    line-height: 1;
     cursor: pointer;
     transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
