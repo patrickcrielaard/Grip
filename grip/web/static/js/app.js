@@ -213,8 +213,8 @@ class TodoApp {
         this.modalTimeTotal = document.getElementById("modalTimeTotal");
         this.modalTimePomodoros = document.getElementById("modalTimePomodoros");
         this.modalTimeEntries = document.getElementById("modalTimeEntries");
-        this.modalStartStopwatch = document.getElementById("modalStartStopwatch");
         this.modalStartPomodoro = document.getElementById("modalStartPomodoro");
+        this.modalPauseTimer = document.getElementById("modalPauseTimer");
         this.modalStopTimer = document.getElementById("modalStopTimer");
         // Settings modal
         this.settingsModal = document.getElementById("settingsModal");
@@ -628,6 +628,7 @@ class TodoApp {
             if (!el) return;
             el.addEventListener("change", () => {
                 this._syncModalFieldStates();
+                if (field === "area") this._syncModalAreaSwatch();
                 this.saveModalField(field, el.value);
             });
             // Remove is-editing on blur if still unset
@@ -1032,15 +1033,13 @@ class TodoApp {
         }
 
         // ── Modal Tijd actions ──────────────────────────────────────────
-        if (this.modalStartStopwatch) {
-            this.modalStartStopwatch.addEventListener("click", () => {
-                if (this.openTodoId) this.startStopwatch(this.openTodoId);
-            });
-        }
         if (this.modalStartPomodoro) {
             this.modalStartPomodoro.addEventListener("click", () => {
                 if (this.openTodoId) this.startPomodoro(this.openTodoId);
             });
+        }
+        if (this.modalPauseTimer) {
+            this.modalPauseTimer.addEventListener("click", () => this.skipPomodoroPhase());
         }
         if (this.modalStopTimer) {
             this.modalStopTimer.addEventListener("click", () => this.stopActiveTimer());
@@ -1717,6 +1716,21 @@ class TodoApp {
         return fmt(goal.start_date);
     }
 
+    _syncModalAreaSwatch() {
+        const swatch = document.getElementById("modalAreaSwatch");
+        if (!swatch || !this.modalArea) return;
+        const wrap = swatch.parentElement;
+        const id = this.modalArea.value;
+        const area = id ? this.areas.find((a) => String(a.id) === String(id)) : null;
+        if (area && area.color) {
+            swatch.style.background = area.color;
+            wrap?.classList.add("has-area");
+        } else {
+            swatch.style.background = "";
+            wrap?.classList.remove("has-area");
+        }
+    }
+
     _populateAreaSelects() {
         const activeAreas = this.areas.filter((a) => a.status === "active");
         const options = `<option value="">Geen gebied</option>` +
@@ -2056,6 +2070,13 @@ class TodoApp {
             targetList = this.currentView.value;
         }
 
+        // In the Today view, default the planned date to today so the task is
+        // pinned to "vandaag" and shows up in the today counts/filters.
+        let plannedDateFinal = plannedDate;
+        if (!plannedDateFinal && targetList === "today") {
+            plannedDateFinal = this.getToday();
+        }
+
         this.addButton.disabled = true;
         this.setStatus("");
 
@@ -2066,7 +2087,7 @@ class TodoApp {
             area_id: areaId,
             priority,
             start_date: startDate,
-            planned_date: plannedDate,
+            planned_date: plannedDateFinal,
             planned_time: plannedTime,
             deadline,
             duration,
@@ -2376,6 +2397,7 @@ class TodoApp {
         this._setModalDateField(this.modalDeadline, todo.deadline || "");
         this.modalPriority.value = this.normalizePriority(todo.priority);
         this.modalArea.value = todo.area_id ? String(todo.area_id) : "";
+        this._syncModalAreaSwatch();
         if (this.modalProject) this.modalProject.value = todo.project_id ? String(todo.project_id) : "";
         if (this.modalRecurrenceUnit) {
             this.modalRecurrenceUnit.value = todo.recurrence_unit || "";
@@ -2482,7 +2504,10 @@ class TodoApp {
                 if (view.value === "today") {
                     const today = this.getToday();
                     return this.todos.filter(
-                        (t) => !t.completed && t.planned_date === today
+                        (t) =>
+                            !t.completed &&
+                            !t.project_id &&
+                            (t.planned_date === today || t.list === "today")
                     );
                 }
                 if (view.value === "inbox") {
@@ -3496,14 +3521,14 @@ class TodoApp {
         const taskId = Number(todo.id);
         const isActive = Number(this.activeSession?.task_id) === taskId;
 
-        // Action button visibility
+        // Action button visibility: Start when idle; Pause + Stop when active.
         if (isActive) {
-            this.modalStartStopwatch.hidden = true;
             this.modalStartPomodoro.hidden = true;
+            this.modalPauseTimer.hidden = false;
             this.modalStopTimer.hidden = false;
         } else {
-            this.modalStartStopwatch.hidden = false;
             this.modalStartPomodoro.hidden = false;
+            this.modalPauseTimer.hidden = true;
             this.modalStopTimer.hidden = true;
         }
 
@@ -4117,7 +4142,8 @@ class TodoApp {
     // ── Today view ─────────────────────────────────────────────────────
     _isTodoForToday(t) {
         if (t.completed) return false;
-        return t.planned_date === this.getToday();
+        if (t.project_id) return false;
+        return t.planned_date === this.getToday() || t.list === "today";
     }
 
     renderTodayView() {

@@ -478,6 +478,36 @@
                     </div>
                 </div>
                 <div class="task-modal-right">
+                    <div class="modal-field is-set modal-time-field" id="modalTimeField">
+                        <div class="modal-field-body">
+                            <div class="modal-time-summary">
+                                <span class="modal-time-total" id="modalTimeTotal">0 min</span>
+                                <span class="modal-time-pomodoros" id="modalTimePomodoros"></span>
+                            </div>
+                            <div class="modal-time-actions">
+                                <button type="button" class="modal-time-btn modal-time-start" id="modalStartPomodoro">
+                                    <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" stroke="none">
+                                        <polygon points="6 4 20 12 6 20 6 4"/>
+                                    </svg>
+                                    Start
+                                </button>
+                                <button type="button" class="modal-time-btn modal-time-pause" id="modalPauseTimer" hidden>
+                                    <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" stroke="none">
+                                        <rect x="6" y="5" width="4" height="14" rx="1"/>
+                                        <rect x="14" y="5" width="4" height="14" rx="1"/>
+                                    </svg>
+                                    Pauze
+                                </button>
+                                <button type="button" class="modal-time-btn modal-time-stop" id="modalStopTimer" hidden>
+                                    <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" stroke="none">
+                                        <rect x="6" y="6" width="12" height="12" rx="1"/>
+                                    </svg>
+                                    Stop
+                                </button>
+                            </div>
+                            <ul class="modal-time-entries" id="modalTimeEntries" hidden></ul>
+                        </div>
+                    </div>
                     <div class="modal-field is-set">
                         <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="12" cy="12" r="10"/>
@@ -494,43 +524,6 @@
                             </select>
                         </div>
                     </div>
-                    <div class="modal-field is-set modal-time-field" id="modalTimeField">
-                        <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"/>
-                            <polyline points="12 6 12 12 16 14"/>
-                        </svg>
-                        <div class="modal-field-body">
-                            <span class="modal-field-label">Tijd</span>
-                            <div class="modal-time-summary">
-                                <span class="modal-time-total" id="modalTimeTotal">0 min</span>
-                                <span class="modal-time-pomodoros" id="modalTimePomodoros"></span>
-                            </div>
-                            <div class="modal-time-actions">
-                                <button type="button" class="modal-time-btn modal-time-stopwatch" id="modalStartStopwatch">
-                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <polygon points="6 4 20 12 6 20 6 4"/>
-                                    </svg>
-                                    Stopwatch
-                                </button>
-                                <button type="button" class="modal-time-btn modal-time-pomodoro" id="modalStartPomodoro">
-                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <circle cx="12" cy="13" r="8"/>
-                                        <line x1="12" y1="9" x2="12" y2="13"/>
-                                        <line x1="12" y1="13" x2="15" y2="15"/>
-                                        <line x1="10" y1="2" x2="14" y2="2"/>
-                                    </svg>
-                                    Pomodoro
-                                </button>
-                                <button type="button" class="modal-time-btn modal-time-stop" id="modalStopTimer" hidden>
-                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <rect x="6" y="6" width="12" height="12" rx="1"/>
-                                    </svg>
-                                    Stoppen
-                                </button>
-                            </div>
-                            <ul class="modal-time-entries" id="modalTimeEntries"></ul>
-                        </div>
-                    </div>
                     <div class="modal-field">
                         <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
@@ -541,7 +534,7 @@
                             <select id="modal-list" class="modal-field-input">
                                 <option value="">—</option>
                                 <option value="inbox">Inbox</option>
-                                <option value="today">Vandaag</option>
+                                <option value="today">vandaag</option>
                             </select>
                         </div>
                     </div>
@@ -554,24 +547,13 @@
                         </svg>
                         <div class="modal-field-body">
                             <span class="modal-field-label">Gepland</span>
-                            <input type="text" id="modal-planned-date" class="modal-field-input modal-date-btn" data-date="" readonly>
+                            <span class="modal-planned-combo">
+                                <input type="text" id="modal-planned-date" class="modal-field-input modal-date-btn" data-date="" readonly>
+                                <input type="time" id="modal-planned-time" class="modal-field-input modal-planned-time">
+                            </span>
                         </div>
                     </div>
-                    <div class="modal-field">
-                        <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"/>
-                            <polyline points="12 6 12 12 16 14"/>
-                        </svg>
-                        <div class="modal-field-body">
-                            <span class="modal-field-label">Starttijd</span>
-                            <input type="time" id="modal-planned-time" class="modal-field-input">
-                        </div>
-                    </div>
-                    <div class="modal-field">
-                        <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"/>
-                            <polyline points="12 6 12 12 16 14"/>
-                        </svg>
+                    <div class="modal-field" hidden>
                         <div class="modal-field-body">
                             <span class="modal-field-label">Startdatum</span>
                             <input type="text" id="modal-start-date" class="modal-field-input modal-date-btn" data-date="" readonly>
@@ -582,8 +564,11 @@
                             <path d="M5 22h14M5 2h14M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22M17 2v4.172a2 2 0 0 1-.586 1.414L12 12 7.586 7.586A2 2 0 0 1 7 6.172V2"/>
                         </svg>
                         <div class="modal-field-body">
-                            <span class="modal-field-label">Duur</span>
-                            <input type="number" id="modal-duration" class="modal-field-input" min="1" placeholder="min">
+                            <span class="modal-field-label">Geschatte duur</span>
+                            <span class="modal-duration-wrap">
+                                <input type="number" id="modal-duration" class="modal-field-input" min="1" placeholder="—">
+                                <span class="modal-duration-suffix" aria-hidden="true">min</span>
+                            </span>
                         </div>
                     </div>
                     <div class="modal-field">
@@ -619,9 +604,12 @@
                         </svg>
                         <div class="modal-field-body">
                             <span class="modal-field-label">Gebied</span>
-                            <select id="modal-area" class="modal-field-input">
-                                <option value="">Geen gebied</option>
-                            </select>
+                            <span class="modal-area-value">
+                                <span class="modal-area-swatch" id="modalAreaSwatch" aria-hidden="true"></span>
+                                <select id="modal-area" class="modal-field-input">
+                                    <option value="">Geen gebied</option>
+                                </select>
+                            </span>
                         </div>
                     </div>
                     <div class="modal-field" id="modal-project-field">

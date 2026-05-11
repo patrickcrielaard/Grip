@@ -3053,16 +3053,27 @@ button.sidebar-section-label {
 .fab-add-btn[hidden] { display: none !important; }
 .task-list[hidden] { display: none !important; }
 
-/* ----- Task detail modal ----- */
+/* ----- Task detail modal (frame 08) ----- */
 .task-modal-overlay {
     background: rgba(17, 17, 17, 0.45);
     backdrop-filter: blur(6px);
 }
 .task-modal {
+    width: min(880px, 100%);
     border-radius: 24px;
     box-shadow: var(--shadow-pop);
 }
-.task-modal-right { background: var(--surface); }
+.task-modal-body { grid-template-columns: 1.4fr 1fr; }
+.task-modal-left {
+    padding: 24px 24px 20px;
+    gap: 14px;
+    border-right: none;
+}
+.task-modal-right {
+    background: var(--surface);
+    padding: 20px;
+    gap: 0;
+}
 
 .modal-title-input {
     font-family: var(--font-serif);
@@ -3072,16 +3083,245 @@ button.sidebar-section-label {
     line-height: 1.15;
     letter-spacing: -0.01em;
     color: var(--ink);
+    /* Grow with content even before the JS auto-resize runs */
+    field-sizing: content;
+    overflow: visible;
 }
 
+/* Field rows: icon | (label left, value right), separated by hairlines */
+.modal-field {
+    display: grid;
+    grid-template-columns: 16px 1fr;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    cursor: default;
+    font-size: 13px;
+}
+.modal-field:first-child { border-top: none; }
+.modal-field:hover { background: transparent; }
+.modal-field[hidden] { display: none; }
+
+.modal-field-icon {
+    width: 14px;
+    height: 14px;
+    color: var(--ink-tertiary);
+}
+.modal-field.is-set .modal-field-icon { color: var(--ink-tertiary); }
+
+.modal-field-body {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    min-height: 22px;
+    /* Stop values 12px short of the row's right edge so they line up with the
+       pomo card's content edge (the card has 12px right padding). */
+    padding-right: 12px;
+}
+.modal-time-field .modal-field-body { padding-right: 0; }
+.modal-time-entries[hidden] { display: none; }
 .modal-field-label {
+    display: inline-block;
     font-size: 12px;
     color: var(--ink-tertiary);
     letter-spacing: 0.02em;
 }
-.modal-field-input {
-    font-size: 13px;
+/* Labels stay visible in every state (design 08) */
+.modal-field.is-set .modal-field-label,
+.modal-field.is-editing .modal-field-label {
+    display: inline-block;
+}
+
+/* Selects + inputs: render as right-aligned text, no native chrome */
+select.modal-field-input,
+input.modal-field-input {
+    position: static;
+    inset: auto;
+    display: inline-block;
+    width: auto;
+    max-width: 60%;
+    height: auto;
+    opacity: 1;
+    text-align: right;
     color: var(--ink);
+    font-weight: 600;
+    font-size: 13px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+}
+.modal-field.is-set select.modal-field-input,
+.modal-field.is-set input.modal-field-input,
+.modal-field.is-editing input.modal-field-input { display: inline-block; }
+
+/* Recurrence field stacks its inputs under the label */
+.modal-recurrence-body {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+.modal-recurrence-inputs { justify-content: flex-end; }
+
+/* Timer block: compact white card at the top of the right column */
+.modal-time-field {
+    background: var(--content-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.modal-time-field + .modal-field { border-top: none; }
+.modal-time-field .modal-field-body {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex: 1;
+    min-height: 0;
+}
+.modal-time-summary {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 22px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+}
+.modal-time-total { font-weight: 400; }
+.modal-time-pomodoros {
+    font-family: var(--font-body);
+    font-style: normal;
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-tertiary);
+    font-weight: 600;
+}
+.modal-time-field .modal-time-actions {
+    margin-top: 0;
+    margin-left: auto;
+    gap: 6px;
+    flex-wrap: nowrap;
+}
+.modal-time-field .modal-time-btn {
+    padding: 5px 10px;
+    font-size: 11.5px;
+    border-radius: 8px;
+}
+.modal-time-field .modal-time-btn svg { width: 11px; height: 11px; }
+.modal-time-field .modal-time-btn.modal-time-start {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: #fff;
+}
+.modal-time-field .modal-time-btn.modal-time-start:hover { background: #000; }
+
+/* Gepland: date + time on a single right-aligned line */
+.modal-planned-combo {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    justify-content: flex-end;
+}
+.modal-planned-combo input.modal-field-input { width: auto; max-width: none; }
+.modal-planned-combo .modal-planned-time { color: var(--ink-tertiary); }
+.modal-planned-combo .modal-planned-time:not([value=""]) { color: var(--ink); }
+input[type="time"].modal-planned-time::-webkit-calendar-picker-indicator { display: none; }
+input[type="time"].modal-planned-time { font-variant-numeric: tabular-nums; }
+.modal-planned-combo .modal-planned-time[value=""] { display: none; }
+
+/* Duration: visible "min" suffix */
+.modal-duration-wrap {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+}
+.modal-duration-wrap input.modal-field-input {
+    width: auto;
+    text-align: right;
+    max-width: 60px;
+}
+.modal-duration-suffix {
+    color: var(--ink-tertiary);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* Gebied: colored swatch sits immediately before the area name, both flush
+   right against the value column. */
+.modal-area-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.modal-area-value select.modal-field-input {
+    max-width: none;
+    width: auto;
+    /* field-sizing shrinks the select to its option text so "Werk" sits
+       right next to the colored swatch instead of in a wide native box. */
+    field-sizing: content;
+    padding: 0;
+}
+.modal-area-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    background: var(--border-strong);
+    flex-shrink: 0;
+    display: none;
+}
+.modal-area-value.has-area .modal-area-swatch { display: inline-block; }
+
+/* Priority value: tinted by selected option (CSS :has support) */
+#modal-priority { color: var(--ink); }
+#modal-priority:has(option[value="high"]:checked) { color: var(--priority-high); }
+#modal-priority:has(option[value="medium"]:checked) { color: var(--priority-medium); }
+#modal-priority:has(option[value="low"]:checked) { color: #1E5FB0; }
+
+/* Title checkbox: square with rounded corners, aligned with first line */
+.modal-title-row { gap: 14px; align-items: flex-start; }
+.modal-title-row .modal-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--border-strong);
+    border-radius: 6px;
+    background: var(--content-bg);
+    cursor: pointer;
+    /* Title sits inside a textarea with 2px top padding; centring the 22px
+       box on the first 34.5px line needs ~8px (2 + 17 − 11). */
+    margin-top: 8px;
+    position: relative;
+    flex-shrink: 0;
+}
+.modal-title-row .modal-checkbox:hover { border-color: var(--ink); }
+.modal-title-row .modal-checkbox:checked {
+    background: var(--ink);
+    border-color: var(--ink);
+}
+.modal-title-row .modal-checkbox:checked::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 6px;
+    width: 5px;
+    height: 9px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
 }
 
 .modal-close-btn,
