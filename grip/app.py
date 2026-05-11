@@ -8,16 +8,25 @@ from pathlib import Path
 import logging
 from typing import Any, AsyncGenerator
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from mcp.server.auth.provider import AuthorizationCode
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from starlette.middleware.sessions import SessionMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from grip.calendar_service import sync_subscription
+from grip.configuration import settings
 from grip.routes.areas import router as area_router
-from grip.routes.authentication import router as auth_router
+from grip.routes.authentication import (
+    get_or_create_csrf_token,
+    limiter,
+    require_csrf,
+    router as auth_router,
+)
 from grip.routes.calendar import router as calendar_router
 from grip.routes.goals import router as goal_router
 from grip.routes.projects import router as project_router
@@ -95,6 +104,17 @@ app = FastAPI(
     title="Grip", description="A simple to-do application", lifespan=_lifespan
 )
 
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.session_secret,
+    https_only=settings.is_production,
+    same_site="lax",
+    max_age=60 * 60 * 24 * 7,
+)
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+
 static_dir = BASE_DIR / "web" / "static"
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
@@ -157,20 +177,33 @@ async def mcp_login_get(request: Request, nonce: str) -> HTMLResponse:
         return HTMLResponse(
             "Invalid or expired authorization request.", status_code=400
         )
+    csrf_token = get_or_create_csrf_token(request)
     return _templates.TemplateResponse(
         "mcp_login.html",
-        {"request": request, "nonce": nonce, "error_message": None},
+        {
+            "request": request,
+            "nonce": nonce,
+            "error_message": None,
+            "csrf_token": csrf_token,
+        },
     )
 
 
 @app.post("/mcp-login")
+@limiter.limit("5/minute")
 async def mcp_login_post(
     request: Request,
     nonce: str = Form(...),
     username: str = Form(...),
     password: str = Form(...),
+    csrf_token: str = Form(...),
 ) -> Any:
     """Process OAuth login form and redirect back to the MCP client."""
+    try:
+        require_csrf(request, csrf_token)
+    except HTTPException:
+        return HTMLResponse("Invalid CSRF token.", status_code=403)
+
     pending = oauth_provider.get_pending(nonce)
     if not pending:
         return HTMLResponse(
@@ -185,6 +218,7 @@ async def mcp_login_post(
                 "request": request,
                 "nonce": nonce,
                 "error_message": "Invalid username or password.",
+                "csrf_token": get_or_create_csrf_token(request),
             },
             status_code=401,
         )

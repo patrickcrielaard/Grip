@@ -20,6 +20,7 @@
 
     <form class="auth-form" action="/mcp-login" method="post">
         <input type="hidden" name="nonce" value="{{ nonce }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <label class="field">
             <span>Gebruikersnaam</span>
             <input name="username" type="text" autocomplete="username" required>

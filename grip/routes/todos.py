@@ -13,7 +13,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field
 
-from grip.routes.authentication import COOKIE_USER_ID, COOKIE_USERNAME
+from grip.routes.authentication import (
+    SESSION_USER_ID,
+    SESSION_USERNAME,
+    get_or_create_csrf_token,
+)
 from grip.supabase_service import supabase_service
 
 
@@ -201,16 +205,16 @@ def _advance_planned_date(date_str: str, interval: int, unit: str) -> str:
     return d.isoformat()
 
 
-def _get_user_from_cookies(request: Request) -> Dict[str, str] | None:
-    user_id = request.cookies.get(COOKIE_USER_ID)
-    username = request.cookies.get(COOKIE_USERNAME)
+def _get_user_from_session(request: Request) -> Dict[str, str] | None:
+    user_id = request.session.get(SESSION_USER_ID)
+    username = request.session.get(SESSION_USERNAME)
     if not user_id or not username:
         return None
-    return {"id": user_id, "username": username}
+    return {"id": str(user_id), "username": str(username)}
 
 
 def _require_user(request: Request) -> Dict[str, str]:
-    user = _get_user_from_cookies(request)
+    user = _get_user_from_session(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
@@ -219,11 +223,16 @@ def _require_user(request: Request) -> Dict[str, str]:
 @router.get("/", response_class=HTMLResponse, response_model=None)
 async def todos_page(request: Request) -> HTMLResponse | RedirectResponse:
     """Serve the main todo page."""
-    user = _get_user_from_cookies(request)
+    user = _get_user_from_session(request)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
     return templates.TemplateResponse(
-        "index.html", {"request": request, "username": user["username"]}
+        "index.html",
+        {
+            "request": request,
+            "username": user["username"],
+            "csrf_token": get_or_create_csrf_token(request),
+        },
     )
 
 

@@ -154,6 +154,7 @@
                     <span class="profile-name">{{ username }}</span>
                 </div>
                 <form class="sidebar-logout-form" action="/logout" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button class="sidebar-logout-btn" type="submit" aria-label="Uitloggen" title="Uitloggen">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
