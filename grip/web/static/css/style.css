@@ -28,7 +28,7 @@
     /* Priority — desaturated mono-leaning accents */
     --priority-high: #9A2B2B;
     --priority-medium: #B8651A;
-    --priority-low: #2F5F3A;
+    --priority-low: #1E5FB0;
 
     /* Area accents (desaturated, mono-leaning) */
     --area-1: #2F5F3A;
@@ -2997,7 +2997,7 @@ button.sidebar-section-label {
 .todo-checkbox {
     width: 20px; height: 20px;
     border: 1.5px solid var(--border-strong);
-    border-radius: 50%;
+    border-radius: 6px;
     background: var(--content-bg);
     margin-top: 1px;
 }
@@ -3142,7 +3142,7 @@ input.modal-field-input {
     inset: auto;
     display: inline-block;
     width: auto;
-    max-width: 60%;
+    max-width: none;
     height: auto;
     opacity: 1;
     text-align: right;
@@ -3155,6 +3155,9 @@ input.modal-field-input {
     cursor: pointer;
     -webkit-appearance: none;
     appearance: none;
+    /* Shrink form controls to their current value so they always sit flush
+       against the right edge of the column (no wide native-default box). */
+    field-sizing: content;
 }
 .modal-field.is-set select.modal-field-input,
 .modal-field.is-set input.modal-field-input,
@@ -3266,14 +3269,6 @@ input[type="time"].modal-planned-time { font-variant-numeric: tabular-nums; }
     align-items: center;
     gap: 6px;
 }
-.modal-area-value select.modal-field-input {
-    max-width: none;
-    width: auto;
-    /* field-sizing shrinks the select to its option text so "Werk" sits
-       right next to the colored swatch instead of in a wide native box. */
-    field-sizing: content;
-    padding: 0;
-}
 .modal-area-swatch {
     width: 10px;
     height: 10px;
@@ -3288,7 +3283,18 @@ input[type="time"].modal-planned-time { font-variant-numeric: tabular-nums; }
 #modal-priority { color: var(--ink); }
 #modal-priority:has(option[value="high"]:checked) { color: var(--priority-high); }
 #modal-priority:has(option[value="medium"]:checked) { color: var(--priority-medium); }
-#modal-priority:has(option[value="low"]:checked) { color: #1E5FB0; }
+#modal-priority:has(option[value="low"]:checked) { color: var(--priority-low); }
+
+/* Title checkbox border picks up the priority colour. */
+.task-modal:has(#modal-priority option[value="high"]:checked) .modal-title-row .modal-checkbox {
+    border-color: var(--priority-high);
+}
+.task-modal:has(#modal-priority option[value="medium"]:checked) .modal-title-row .modal-checkbox {
+    border-color: var(--priority-medium);
+}
+.task-modal:has(#modal-priority option[value="low"]:checked) .modal-title-row .modal-checkbox {
+    border-color: var(--priority-low);
+}
 
 /* Title checkbox: square with rounded corners, aligned with first line */
 .modal-title-row { gap: 14px; align-items: flex-start; }
@@ -4819,7 +4825,7 @@ body.auth-page {
 .today-tasks-panel .today-task-check {
     width: 20px;
     height: 20px;
-    border-radius: 50%;
+    border-radius: 6px;
     border: 1.5px solid var(--border-strong);
     display: grid;
     place-items: center;

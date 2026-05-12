@@ -2034,14 +2034,15 @@ class TodoApp {
 
     _populateProjectSelects() {
         const activeProjects = this.projects.filter(p => p.status === undefined || p.status === "active");
-        const options = `<option value="">Geen project</option>` +
-            activeProjects.map(p =>
-                `<option value="${p.id}">${this.escapeHtml(p.name)}</option>`
-            ).join("");
-        if (this.projectSelect) this.projectSelect.innerHTML = options;
+        const projectOptions = activeProjects.map(p =>
+            `<option value="${p.id}">${this.escapeHtml(p.name)}</option>`
+        ).join("");
+        if (this.projectSelect) {
+            this.projectSelect.innerHTML = `<option value="">Geen project</option>` + projectOptions;
+        }
         if (this.modalProject) {
             const current = this.modalProject.value;
-            this.modalProject.innerHTML = options;
+            this.modalProject.innerHTML = `<option value="">—</option>` + projectOptions;
             this.modalProject.value = current;
         }
     }
@@ -3342,6 +3343,9 @@ class TodoApp {
         if (Number.isNaN(startedMs)) return;
         const elapsed = Math.floor((Date.now() - startedMs) / 1000);
         const phase = this.activeSession.phase_seconds;
+        if (Number(this.openTodoId) === Number(this.activeSession.task_id)) {
+            this._paintModalLiveClock();
+        }
         if (phase) {
             const remaining = phase - elapsed;
             this.timerPillClock.textContent = this._formatClock(Math.max(0, remaining));
@@ -3429,6 +3433,20 @@ class TodoApp {
         const pad = (n) => String(n).padStart(2, "0");
         if (h > 0) return `${h}:${pad(m)}:${pad(sec)}`;
         return `${pad(m)}:${pad(sec)}`;
+    }
+
+    _paintModalLiveClock() {
+        if (!this.modalTimeTotal || !this.activeSession) return;
+        const startedMs = Date.parse(this.activeSession.started_at);
+        if (Number.isNaN(startedMs)) return;
+        const elapsed = Math.floor((Date.now() - startedMs) / 1000);
+        const phase = this.activeSession.phase_seconds;
+        const seconds = phase ? Math.max(0, phase - elapsed) : elapsed;
+        // Pomodoro phases never exceed an hour, so strip hours entirely.
+        const m = Math.floor(seconds / 60);
+        const sec = seconds % 60;
+        const pad = (n) => String(n).padStart(2, "0");
+        this.modalTimeTotal.textContent = `${pad(m)}:${pad(sec)}`;
     }
 
     _phaseLabel(kind) {
@@ -3550,7 +3568,12 @@ class TodoApp {
             totalSec += Number(e.duration_seconds || 0);
             if (e.kind === "pomodoro_focus") pomodoros += 1;
         });
-        this.modalTimeTotal.textContent = this._formatTotal(totalSec);
+        if (isActive) {
+            // Live countdown (mm:ss) while a session is running on this task.
+            this._paintModalLiveClock();
+        } else {
+            this.modalTimeTotal.textContent = this._formatTotal(totalSec);
+        }
         this.modalTimePomodoros.textContent =
             pomodoros > 0 ? `· ${pomodoros} pomodoro${pomodoros === 1 ? "" : "s"}` : "";
 
