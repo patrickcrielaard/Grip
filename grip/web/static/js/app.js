@@ -168,6 +168,8 @@ class TodoApp {
         this.projCols = document.getElementById("projCols");
         this.projectBackBtn = document.getElementById("projectBackBtn");
         this.contentTitleBlock = document.getElementById("contentTitleBlock");
+        // Next-week view (blueprint)
+        this.nextWeekView = document.getElementById("nextWeekView");
         // Today view (integrated)
         this.todayView = document.getElementById("todayView");
         this.todayHeadline = document.getElementById("todayHeadline");
@@ -1235,18 +1237,21 @@ class TodoApp {
         const isToday = this._isTodayView();
         const isStats = view.type === "view" && view.value === "stats";
         const isProject = this._isProjectView();
+        const isNextWeek = view.type === "view" && view.value === "next-week";
 
-        // Toggle between today view, stats view, project view, and regular task list.
+        // Toggle between today view, stats view, project view, next-week view,
+        // and regular task list.
         if (this.statsView) this.statsView.hidden = !isStats;
         if (this.todayView) this.todayView.hidden = !isToday;
         if (this.projectView) this.projectView.hidden = !isProject;
-        if (this.todoList) this.todoList.hidden = isStats || isToday || isProject;
+        if (this.nextWeekView) this.nextWeekView.hidden = !isNextWeek;
+        if (this.todoList) this.todoList.hidden = isStats || isToday || isProject || isNextWeek;
 
         // Project view shows the back button in the top-left and moves the
         // project name into the project header card body.
         if (this.projectBackBtn) this.projectBackBtn.hidden = !isProject;
-        if (this.contentTitleBlock) this.contentTitleBlock.hidden = isProject;
-        if (this.itemCount) this.itemCount.hidden = isProject || isToday;
+        if (this.contentTitleBlock) this.contentTitleBlock.hidden = isProject || isNextWeek;
+        if (this.itemCount) this.itemCount.hidden = isProject || isToday || isNextWeek;
 
         if (isStats) {
             if (this.addTaskToggle) {
@@ -1276,10 +1281,18 @@ class TodoApp {
             return;
         }
 
+        if (isNextWeek) {
+            if (this.addTaskToggle) {
+                this.addTaskToggle.hidden = true;
+                this.hideAddTask();
+            }
+            this.updateSidebarCounts();
+            return;
+        }
+
         this.renderTodos();
-        if (view.type === "view" && (view.value === "week" || view.value === "next-week")) {
-            const offset = view.value === "next-week" ? 1 : 0;
-            const range = this.getWeekRange(offset);
+        if (view.type === "view" && view.value === "week") {
+            const range = this.getWeekRange(0);
             this.loadCalendarEvents(range.start, range.end).then(() =>
                 this.renderTodos()
             );
