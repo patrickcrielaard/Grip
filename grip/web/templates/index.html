@@ -286,7 +286,7 @@
                     <div class="goals-stripe" id="todayGoals"></div>
                     <div class="panel today-tasks-panel">
                         <div class="panel-head">
-                            <div class="panel-title">Vandaag</div>
+                            <div class="panel-title">Vandaag <span class="num" id="vandaagPanelCount"></span></div>
                             <div class="panel-tools">
                                 <div class="tab-pill" role="tablist" aria-label="Weergave">
                                     <button type="button" class="on" data-today-tab="list">Lijst</button>
@@ -1028,30 +1028,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-(function () {
-    var sub = document.getElementById('contentSubtitle');
-    if (!sub) return;
-    var weekdays = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
-    var months = ['januari', 'februari', 'maart', 'april', 'mei', 'juni',
-                  'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
-    function isoWeek(d) {
-        var date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-        var dayNum = date.getUTCDay() || 7;
-        date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-        var yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-        return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
-    }
-    function season(m) {
-        if (m >= 2 && m <= 4) return 'Lente';
-        if (m >= 5 && m <= 7) return 'Zomer';
-        if (m >= 8 && m <= 10) return 'Herfst';
-        return 'Winter';
-    }
-    var now = new Date();
-    sub.textContent = weekdays[now.getDay()] + ' ' + now.getDate() + ' ' + months[now.getMonth()] +
-                      ' · Week ' + isoWeek(now) + ' · ' + season(now.getMonth());
-})();
-</script>
 <script src="/static/js/app.js?v=27"></script>
 {% endblock %}

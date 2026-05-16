@@ -915,6 +915,14 @@ class TodoApp {
                     this.renderAreaTree();
                     return;
                 }
+                const editArea = e.target.closest(".edit-area-btn");
+                if (editArea) {
+                    e.stopPropagation();
+                    const areaId = Number(editArea.dataset.areaId);
+                    const area = this.areas.find((a) => a.id === areaId);
+                    if (area) this.openAreaModal(area);
+                    return;
+                }
                 const addGoal = e.target.closest(".add-goal-btn");
                 if (addGoal) {
                     e.stopPropagation();
@@ -1238,7 +1246,7 @@ class TodoApp {
         // project name into the project header card body.
         if (this.projectBackBtn) this.projectBackBtn.hidden = !isProject;
         if (this.contentTitleBlock) this.contentTitleBlock.hidden = isProject;
-        if (this.itemCount) this.itemCount.hidden = isProject;
+        if (this.itemCount) this.itemCount.hidden = isProject || isToday;
 
         if (isStats) {
             if (this.addTaskToggle) {
@@ -1642,13 +1650,13 @@ class TodoApp {
                 : 0;
             const safeColor = this.escapeHtml(area.color || "#666");
 
-            // Per design: a flat area row — swatch + name + thin colored
-            // progress bar. No chevron, no nested goals/projects, no count,
-            // no inline action buttons.
             return `
                 <div class="tree-node tree-area ${extraClass}" data-tree-node="area" data-id="${area.id}" role="button" aria-pressed="false">
                     <span class="area-swatch" style="background:${safeColor}"></span>
                     <span class="tree-label">${this.escapeHtml(area.name)}</span>
+                    <span class="tree-actions">
+                        <button class="tree-action edit-area-btn" type="button" title="Gebied bewerken" data-area-id="${area.id}" aria-label="Gebied bewerken"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+                    </span>
                     <span class="tree-area-bar" aria-hidden="true" style="background:${safeColor};"><i style="width:${progressPct}%; background:${safeColor};"></i></span>
                 </div>`;
         };
@@ -2081,16 +2089,15 @@ class TodoApp {
         const recurrenceEndVal = recurrenceUnitVal && this.recurrenceEnd?.value ? this.recurrenceEnd.value : null;
         const projectId = this.projectSelect?.value ? Number(this.projectSelect.value) : null;
 
-        // Determine target list from current view
+        // Determine target list from current view; Vandaag is not a list so
+        // tasks created there land in inbox but get planned_date = today.
         let targetList = "inbox";
-        if (this.currentView.type === "list") {
+        if (this.currentView.type === "list" && this.currentView.value !== "today") {
             targetList = this.currentView.value;
         }
 
-        // In the Today view, default the planned date to today so the task is
-        // pinned to "vandaag" and shows up in the today counts/filters.
         let plannedDateFinal = plannedDate;
-        if (!plannedDateFinal && targetList === "today") {
+        if (!plannedDateFinal && this._isTodayView()) {
             plannedDateFinal = this.getToday();
         }
 
@@ -2530,10 +2537,7 @@ class TodoApp {
                 if (view.value === "today") {
                     const today = this.getToday();
                     return this.todos.filter(
-                        (t) =>
-                            !t.completed &&
-                            !t.project_id &&
-                            (t.planned_date === today || t.list === "today")
+                        (t) => !t.completed && !t.project_id && t.planned_date === today
                     );
                 }
                 if (view.value === "inbox") {
@@ -2925,7 +2929,7 @@ class TodoApp {
             const count =
                 list === "today"
                     ? activeTodos.filter(
-                          (t) => !t.project_id && (t.list === "today" || t.planned_date === todayStr)
+                          (t) => !t.project_id && t.planned_date === todayStr
                       ).length
                     : list === "inbox"
                     ? activeTodos.filter((t) => t.list === "inbox" && !t.area_id && !t.project_id && t.state !== "waiting").length
@@ -3880,7 +3884,9 @@ class TodoApp {
             .sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at));
 
         if (this.todayAgendaTitle) {
-            this.todayAgendaTitle.textContent = this._dpFormatDisplay(today);
+            const DAYS = ["Zondag", "Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag"];
+            const d = new Date(today);
+            this.todayAgendaTitle.textContent = `${DAYS[d.getDay()]} ${this._dpFormatDisplay(today)}`;
         }
         this._renderAgendaNow();
 
@@ -4190,8 +4196,7 @@ class TodoApp {
     // ── Today view ─────────────────────────────────────────────────────
     _isTodoForToday(t) {
         if (t.project_id) return false;
-        const plannedToday = t.planned_date === this.getToday() || t.list === "today";
-        if (!plannedToday) return false;
+        if (t.planned_date !== this.getToday()) return false;
         if (t.completed) return this._completedTodayIds.has(t.id);
         return true;
     }
@@ -4222,6 +4227,12 @@ class TodoApp {
     renderTodayView() {
         if (!this.todayView) return;
         const todays = this.todos.filter((t) => this._isTodoForToday(t));
+
+        const panelCount = document.getElementById("vandaagPanelCount");
+        if (panelCount) {
+            const open = todays.filter((t) => !t.completed).length;
+            panelCount.textContent = open > 0 ? String(open) : "";
+        }
 
         this._renderTodayGoals();
         this._renderTodayTasksList(todays);
