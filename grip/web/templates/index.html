@@ -44,6 +44,9 @@
                     </svg>
                     <span class="sidebar-label">Vandaag</span>
                     <span class="sidebar-count" data-count-list="today"></span>
+                    <span class="sidebar-item-add" role="button" tabindex="-1" aria-label="Nieuwe taak in Vandaag" data-add-list="today">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    </span>
                 </button>
                 <button class="sidebar-item" type="button" data-list="inbox" aria-pressed="false">
                     <svg class="sidebar-icon" viewBox="0 0 24 24">
@@ -52,6 +55,9 @@
                     </svg>
                     <span class="sidebar-label">Inbox</span>
                     <span class="sidebar-count" data-count-list="inbox"></span>
+                    <span class="sidebar-item-add" role="button" tabindex="-1" aria-label="Nieuwe taak in Inbox" data-add-list="inbox">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    </span>
                 </button>
                 <button class="sidebar-item" type="button" data-view="week" aria-pressed="false">
                     <svg class="sidebar-icon" viewBox="0 0 24 24">
@@ -62,6 +68,9 @@
                     </svg>
                     <span class="sidebar-label">Deze week</span>
                     <span class="sidebar-count" data-count-view="week"></span>
+                    <span class="sidebar-item-add" role="button" tabindex="-1" aria-label="Nieuwe taak voor deze week" data-add-view="week">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    </span>
                 </button>
                 <button class="sidebar-item" type="button" data-view="all" aria-pressed="false">
                     <svg class="sidebar-icon" viewBox="0 0 24 24">
@@ -74,6 +83,9 @@
                     </svg>
                     <span class="sidebar-label">Alle taken</span>
                     <span class="sidebar-count" data-count-view="all"></span>
+                    <span class="sidebar-item-add" role="button" tabindex="-1" aria-label="Nieuwe taak" data-add-view="all">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    </span>
                 </button>
                 <button class="sidebar-item" type="button" data-view="waiting" aria-pressed="false">
                     <svg class="sidebar-icon" viewBox="0 0 24 24">
@@ -82,6 +94,9 @@
                     </svg>
                     <span class="sidebar-label">Wachten op</span>
                     <span class="sidebar-count" data-count-view="waiting"></span>
+                    <span class="sidebar-item-add" role="button" tabindex="-1" aria-label="Nieuwe taak bij Wachten op" data-add-view="waiting">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    </span>
                 </button>
             </nav>
         </div>
@@ -271,7 +286,7 @@
                     <div class="goals-stripe" id="todayGoals"></div>
                     <div class="panel today-tasks-panel">
                         <div class="panel-head">
-                            <div class="panel-title">Vandaag <span class="num" id="todayTaskCount">0 over</span></div>
+                            <div class="panel-title">Vandaag</div>
                             <div class="panel-tools">
                                 <div class="tab-pill" role="tablist" aria-label="Weergave">
                                     <button type="button" class="on" data-today-tab="list">Lijst</button>

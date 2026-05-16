@@ -21,6 +21,10 @@ class TodoApp {
         this.weekAddDay = null;
         this.collapsedWeekDays = new Set();
         this.todayAgendaOpen = localStorage.getItem("gripTodayAgendaOpen") === "1";
+        // Task IDs completed today. Persisted with the current date so the set
+        // auto-clears at midnight; lets the Today view keep showing tasks that
+        // were checked off today for a sense of progress.
+        this._completedTodayIds = this._loadCompletedTodayIds();
         this._statusTimer = null;
 
         // Timer / pomodoro state
@@ -170,7 +174,6 @@ class TodoApp {
         this.todaySub = document.getElementById("todaySub");
         this.todayGoals = document.getElementById("todayGoals");
         this.todayTasks = document.getElementById("todayTasks");
-        this.todayTaskCount = document.getElementById("todayTaskCount");
         this.todayHeaderTools = document.getElementById("todayHeaderTools");
         this.todayFocusBtn = document.getElementById("todayFocusBtn");
         this.todayBellBtn = document.getElementById("todayBellBtn");
@@ -296,7 +299,20 @@ class TodoApp {
 
         // Sidebar navigation (only static todoNav items — areas/goals/projects are delegated)
         this.sidebarItems.forEach((item) => {
-            item.addEventListener("click", () => {
+            item.addEventListener("click", (event) => {
+                const addBtn = event.target.closest(".sidebar-item-add");
+                if (addBtn && item.contains(addBtn)) {
+                    event.stopPropagation();
+                    event.preventDefault();
+                    if (addBtn.dataset.addList) {
+                        this.setView({ type: "list", value: addBtn.dataset.addList });
+                    } else if (addBtn.dataset.addView) {
+                        this.setView({ type: "view", value: addBtn.dataset.addView });
+                    }
+                    if (!this.addTaskVisible) this.toggleAddTask();
+                    if (window.innerWidth <= 768) this.closeMobileSidebar();
+                    return;
+                }
                 if (item.dataset.list) {
                     this.setView({
                         type: "list",
@@ -691,7 +707,7 @@ class TodoApp {
             this.todayTasks.addEventListener("click", (e) => this._onTodayTaskClick(e));
         }
         // Tab pill (visual-only for now)
-        const todayTabPill = this.todayTaskCount?.closest(".today-tasks-panel")?.querySelector(".tab-pill");
+        const todayTabPill = this.todayTasks?.closest(".today-tasks-panel")?.querySelector(".tab-pill");
         if (todayTabPill) {
             todayTabPill.addEventListener("click", (e) => {
                 const btn = e.target.closest("button");
@@ -1633,7 +1649,7 @@ class TodoApp {
                 <div class="tree-node tree-area ${extraClass}" data-tree-node="area" data-id="${area.id}" role="button" aria-pressed="false">
                     <span class="area-swatch" style="background:${safeColor}"></span>
                     <span class="tree-label">${this.escapeHtml(area.name)}</span>
-                    <span class="tree-area-bar" aria-hidden="true"><i style="width:${progressPct}%; background:${safeColor};"></i></span>
+                    <span class="tree-area-bar" aria-hidden="true" style="background:${safeColor};"><i style="width:${progressPct}%; background:${safeColor};"></i></span>
                 </div>`;
         };
 
@@ -2340,6 +2356,15 @@ class TodoApp {
     }
 
     applyTodoUpdate(updated) {
+        const prev = this.todos.find((t) => t.id === updated.id);
+        if (prev && typeof updated.completed === "boolean" && prev.completed !== updated.completed) {
+            if (updated.completed) {
+                this._completedTodayIds.add(updated.id);
+            } else {
+                this._completedTodayIds.delete(updated.id);
+            }
+            this._saveCompletedTodayIds();
+        }
         this.todos = this.todos.map((todo) => {
             if (todo.id !== updated.id) {
                 return todo;
@@ -4164,22 +4189,42 @@ class TodoApp {
 
     // ── Today view ─────────────────────────────────────────────────────
     _isTodoForToday(t) {
-        if (t.completed) return false;
         if (t.project_id) return false;
-        return t.planned_date === this.getToday() || t.list === "today";
+        const plannedToday = t.planned_date === this.getToday() || t.list === "today";
+        if (!plannedToday) return false;
+        if (t.completed) return this._completedTodayIds.has(t.id);
+        return true;
+    }
+
+    _loadCompletedTodayIds() {
+        try {
+            const raw = localStorage.getItem("gripCompletedToday");
+            if (!raw) return new Set();
+            const data = JSON.parse(raw);
+            if (!data || data.date !== this.getToday()) return new Set();
+            return new Set((data.ids || []).map(Number));
+        } catch (_) {
+            return new Set();
+        }
+    }
+
+    _saveCompletedTodayIds() {
+        try {
+            localStorage.setItem("gripCompletedToday", JSON.stringify({
+                date: this.getToday(),
+                ids: Array.from(this._completedTodayIds),
+            }));
+        } catch (_) {
+            // ignore quota / serialization errors
+        }
     }
 
     renderTodayView() {
         if (!this.todayView) return;
         const todays = this.todos.filter((t) => this._isTodoForToday(t));
-        const open = todays.filter((t) => !t.completed);
 
         this._renderTodayGoals();
         this._renderTodayTasksList(todays);
-
-        if (this.todayTaskCount) {
-            this.todayTaskCount.textContent = `${open.length} over`;
-        }
     }
 
     _renderTodayHeadline(openCount, todays) {
