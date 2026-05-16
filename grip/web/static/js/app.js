@@ -383,7 +383,7 @@ class TodoApp {
             });
         }
         // Restore persisted theme/density on load
-        this.applyTheme(localStorage.getItem("gripTheme") || "marigold", false);
+        this.applyTheme(localStorage.getItem("gripTheme") || "ink", false);
         this.applyDensity(localStorage.getItem("gripDensity") || "cozy", false);
 
         // Clear completed
@@ -1350,12 +1350,13 @@ class TodoApp {
     }
 
     applyTheme(theme, persist) {
-        const allowed = [
-            "marigold", "mint", "strawberry", "vivid-blue", "clay",
-            "lavender", "seaweed", "peony", "moss", "sky-blue",
-        ];
-        const value = allowed.includes(theme) ? theme : "marigold";
-        document.body.setAttribute("data-theme", value);
+        const allowed = ["ink", "forest", "plum", "ochre"];
+        const value = allowed.includes(theme) ? theme : "ink";
+        if (value === "ink") {
+            document.body.removeAttribute("data-theme");
+        } else {
+            document.body.setAttribute("data-theme", value);
+        }
         if (persist) {
             localStorage.setItem("gripTheme", value);
         }
@@ -1388,7 +1389,7 @@ class TodoApp {
         if (!this.settingsModal) return;
         // Snapshot current persisted theme/density so Cancel can revert.
         this._settingsSnapshot = {
-            theme: localStorage.getItem("gripTheme") || "marigold",
+            theme: localStorage.getItem("gripTheme") || "ink",
             density: localStorage.getItem("gripDensity") || "cozy",
         };
         // Sync the picker UI to the current state.
@@ -1414,7 +1415,7 @@ class TodoApp {
 
     saveSettingsModal() {
         // Read whichever theme/density is currently previewed and persist it.
-        const theme = document.body.getAttribute("data-theme") || "marigold";
+        const theme = document.body.getAttribute("data-theme") || "ink";
         const density = document.body.getAttribute("data-density") || "cozy";
         localStorage.setItem("gripTheme", theme);
         localStorage.setItem("gripDensity", density);
