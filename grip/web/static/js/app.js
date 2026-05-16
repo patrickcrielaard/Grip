@@ -170,6 +170,22 @@ class TodoApp {
         this.contentTitleBlock = document.getElementById("contentTitleBlock");
         // Next-week view (blueprint)
         this.nextWeekView = document.getElementById("nextWeekView");
+        this.nextWeekHeaderTools = document.getElementById("nextWeekHeaderTools");
+        this.nextWeekNextLabel = document.getElementById("nextWeekNextLabel");
+        this.nextWeekBreadcrumb = document.getElementById("nextWeekBreadcrumb");
+        this.nextWeekCount = document.getElementById("nextWeekCount");
+        this.nextWeekLede = document.getElementById("nextWeekLede");
+        this.nextWeekPlannedVal = document.getElementById("nextWeekPlannedVal");
+        this.nextWeekPlannedSub = document.getElementById("nextWeekPlannedSub");
+        this.nextWeekDeadlinesVal = document.getElementById("nextWeekDeadlinesVal");
+        this.nextWeekDeadlinesSub = document.getElementById("nextWeekDeadlinesSub");
+        this.nextWeekFocusVal = document.getElementById("nextWeekFocusVal");
+        this.nextWeekFocusSub = document.getElementById("nextWeekFocusSub");
+        this.nextWeekFreeVal = document.getElementById("nextWeekFreeVal");
+        this.nextWeekFreeSub = document.getElementById("nextWeekFreeSub");
+        this.nextWeekStrip = document.getElementById("nextWeekStrip");
+        this.nextWeekDays = document.getElementById("nextWeekDays");
+        this.nextWeekFootSummary = document.getElementById("nextWeekFootSummary");
         // Today view (integrated)
         this.todayView = document.getElementById("todayView");
         this.todayHeadline = document.getElementById("todayHeadline");
@@ -367,7 +383,7 @@ class TodoApp {
             });
         }
         // Restore persisted theme/density on load
-        this.applyTheme(localStorage.getItem("gripTheme") || "ink", false);
+        this.applyTheme(localStorage.getItem("gripTheme") || "marigold", false);
         this.applyDensity(localStorage.getItem("gripDensity") || "cozy", false);
 
         // Clear completed
@@ -704,6 +720,19 @@ class TodoApp {
         }
         if (this.todayBellBtn) {
             this.todayBellBtn.addEventListener("click", () => this.setStatus("Geen nieuwe meldingen"));
+        }
+        // Next-week header action buttons
+        const nwPrev = document.getElementById("nextWeekPrevBtn");
+        if (nwPrev) {
+            nwPrev.addEventListener("click", () => this.setView({ type: "view", value: "week" }));
+        }
+        const nwNext = document.getElementById("nextWeekNextBtn");
+        if (nwNext) {
+            nwNext.addEventListener("click", () => this.setStatus("Verder vooruit plannen komt nog"));
+        }
+        const nwPlan = document.getElementById("nextWeekPlanBtn");
+        if (nwPlan) {
+            nwPlan.addEventListener("click", () => this.toggleAddTask());
         }
         if (this.todayTasks) {
             this.todayTasks.addEventListener("click", (e) => this._onTodayTaskClick(e));
@@ -1250,8 +1279,15 @@ class TodoApp {
         // Project view shows the back button in the top-left and moves the
         // project name into the project header card body.
         if (this.projectBackBtn) this.projectBackBtn.hidden = !isProject;
-        if (this.contentTitleBlock) this.contentTitleBlock.hidden = isProject || isNextWeek;
+        if (this.contentTitleBlock) this.contentTitleBlock.hidden = isProject;
         if (this.itemCount) this.itemCount.hidden = isProject || isToday || isNextWeek;
+
+        // Show the next-week header tools alongside the existing content header.
+        if (this.nextWeekHeaderTools) this.nextWeekHeaderTools.hidden = !isNextWeek;
+        if (!isNextWeek) {
+            const sub = document.getElementById("contentSubtitle");
+            if (sub) sub.textContent = "";
+        }
 
         if (isStats) {
             if (this.addTaskToggle) {
@@ -1286,6 +1322,7 @@ class TodoApp {
                 this.addTaskToggle.hidden = true;
                 this.hideAddTask();
             }
+            this.renderNextWeekView();
             this.updateSidebarCounts();
             return;
         }
@@ -1313,13 +1350,12 @@ class TodoApp {
     }
 
     applyTheme(theme, persist) {
-        const allowed = ["ink", "forest", "plum", "ochre"];
-        const value = allowed.includes(theme) ? theme : "ink";
-        if (value === "ink") {
-            document.body.removeAttribute("data-theme");
-        } else {
-            document.body.setAttribute("data-theme", value);
-        }
+        const allowed = [
+            "marigold", "mint", "strawberry", "vivid-blue", "clay",
+            "lavender", "seaweed", "peony", "moss", "sky-blue",
+        ];
+        const value = allowed.includes(theme) ? theme : "marigold";
+        document.body.setAttribute("data-theme", value);
         if (persist) {
             localStorage.setItem("gripTheme", value);
         }
@@ -1352,7 +1388,7 @@ class TodoApp {
         if (!this.settingsModal) return;
         // Snapshot current persisted theme/density so Cancel can revert.
         this._settingsSnapshot = {
-            theme: localStorage.getItem("gripTheme") || "ink",
+            theme: localStorage.getItem("gripTheme") || "marigold",
             density: localStorage.getItem("gripDensity") || "cozy",
         };
         // Sync the picker UI to the current state.
@@ -1378,7 +1414,7 @@ class TodoApp {
 
     saveSettingsModal() {
         // Read whichever theme/density is currently previewed and persist it.
-        const theme = document.body.getAttribute("data-theme") || "ink";
+        const theme = document.body.getAttribute("data-theme") || "marigold";
         const density = document.body.getAttribute("data-density") || "cozy";
         localStorage.setItem("gripTheme", theme);
         localStorage.setItem("gripDensity", density);
@@ -3942,6 +3978,284 @@ class TodoApp {
         if (!this.agendaNowLabel) return;
         const d = new Date();
         this.agendaNowLabel.textContent = `Nu · ${this._fmtHm(d.getTime())}`;
+    }
+
+    // ── Next week view ──────────────────────────────────────────────────
+    async renderNextWeekView() {
+        if (!this.nextWeekView) return;
+        const range = this.getWeekRange(1);
+        const startDate = new Date(range.start);
+        const endDate = new Date(range.end);
+
+        // Header subtitle and "Wk N+1" label.
+        const weekNo = this._isoWeekNumber(startDate);
+        const monthName = startDate.toLocaleDateString("nl-NL", { month: "long" });
+        const daysUntil = Math.max(
+            0,
+            Math.round((startDate - this._startOfToday()) / 86400000)
+        );
+        const fmtDay = (d) => `${d.getDate()}`;
+        const endMonth = endDate.toLocaleDateString("nl-NL", { month: "short" });
+        const rangeLabel = startDate.getMonth() === endDate.getMonth()
+            ? `${fmtDay(startDate)} — ${fmtDay(endDate)} ${endMonth}`
+            : `${fmtDay(startDate)} ${startDate.toLocaleDateString("nl-NL", { month: "short" })} — ${fmtDay(endDate)} ${endMonth}`;
+        const sub = this.contentSubtitle || document.getElementById("contentSubtitle");
+        if (sub) {
+            sub.textContent = `Week ${weekNo} · ${rangeLabel} · over ${daysUntil} ${daysUntil === 1 ? "dag" : "dagen"}`;
+        }
+        if (this.nextWeekNextLabel) {
+            this.nextWeekNextLabel.textContent = String(weekNo + 1);
+        }
+        if (this.nextWeekBreadcrumb) {
+            this.nextWeekBreadcrumb.textContent = `Week ${weekNo} · ${monthName} ${startDate.getFullYear()}`;
+        }
+
+        // Load real calendar events for the next week.
+        const events = await this.loadCalendarEvents(range.start, range.end);
+
+        // Build per-day buckets.
+        const dayKeys = [];
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(startDate);
+            d.setDate(startDate.getDate() + i);
+            dayKeys.push(this._fmtDateKey(d));
+        }
+        const eventsByDay = new Map(dayKeys.map((k) => [k, []]));
+        events.forEach((ev) => {
+            const key = this._eventDateKey(ev);
+            if (eventsByDay.has(key)) eventsByDay.get(key).push(ev);
+        });
+        const todosByDay = new Map(dayKeys.map((k) => [k, []]));
+        this.todos.forEach((t) => {
+            if (t.completed) return;
+            if (!t.planned_date) return;
+            if (todosByDay.has(t.planned_date)) todosByDay.get(t.planned_date).push(t);
+        });
+
+        // Aggregate stats.
+        let totalItems = 0;
+        let totalMinutes = 0;
+        let hardDeadlines = 0;
+        let focusBlocks = 0;
+        let focusMinutes = 0;
+        let meetingMinutes = 0;
+        const perDayMinutes = [];
+
+        const dayHtmls = dayKeys.map((key, idx) => {
+            const date = new Date(startDate);
+            date.setDate(startDate.getDate() + idx);
+            const dayEvents = eventsByDay.get(key).sort(
+                (a, b) => Date.parse(a.start_at) - Date.parse(b.start_at)
+            );
+            const dayTodos = todosByDay.get(key).sort((a, b) => {
+                const ta = this._timeToMinutes(a.planned_time);
+                const tb = this._timeToMinutes(b.planned_time);
+                return ta - tb;
+            });
+
+            // Sum minutes for this day.
+            let dayMinutes = 0;
+            dayEvents.forEach((ev) => {
+                if (ev.all_day) return;
+                const dur = (Date.parse(ev.end_at) - Date.parse(ev.start_at)) / 60000;
+                dayMinutes += dur;
+                meetingMinutes += dur;
+            });
+            dayTodos.forEach((t) => {
+                const dur = Number(t.duration) || 0;
+                dayMinutes += dur;
+                focusMinutes += dur;
+                if (dur > 0) focusBlocks += 1;
+                if (t.deadline === key) hardDeadlines += 1;
+            });
+            const itemCount = dayEvents.length + dayTodos.length;
+            totalItems += itemCount;
+            totalMinutes += dayMinutes;
+            perDayMinutes.push(dayMinutes);
+
+            // Combine + sort lines by start time.
+            const lines = [
+                ...dayEvents.map((ev) => ({ kind: "event", start: Date.parse(ev.start_at), payload: ev })),
+                ...dayTodos.map((t) => ({
+                    kind: "task",
+                    start: this._timeToMinutes(t.planned_time) * 60000,
+                    payload: t,
+                })),
+            ].sort((a, b) => a.start - b.start);
+
+            const lineHtmls = lines.map((line) => this._renderNextWeekLine(line, key)).join("");
+            const dayName = date.toLocaleDateString("nl-NL", { weekday: "long" });
+            const dateNum = date.getDate();
+            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+            const lineupHtml = lineHtmls || `<div class="nw-day-empty">Geen items gepland.</div>`;
+            const focusH = Math.floor(dayMinutes / 60);
+            const focusM = Math.round(dayMinutes % 60);
+            const focusLabel = focusH || focusM
+                ? `${focusH}<small>u${focusM ? ` ${focusM}m` : ""}</small>`
+                : `0<small>u</small>`;
+
+            return `
+                <div class="nw-day${isWeekend ? " weekend" : ""}">
+                    <div class="nw-day-when">
+                        <div class="nm">${this.escapeHtml(dayName)}<sup>${dateNum}</sup></div>
+                    </div>
+                    <div class="nw-day-lineup">${lineupHtml}</div>
+                    <div class="nw-day-totals">
+                        <span class="focus">${focusLabel}</span>
+                        <span class="meta"><b>${itemCount}</b> ${itemCount === 1 ? "item" : "items"}</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        if (this.nextWeekDays) {
+            this.nextWeekDays.innerHTML = dayHtmls.join("")
+                || `<div class="nw-days-empty">Geen geplande items voor volgende week.</div>`;
+        }
+
+        // Hero count + lede.
+        if (this.nextWeekCount) this.nextWeekCount.textContent = String(totalItems);
+        if (this.nextWeekLede) {
+            this.nextWeekLede.textContent = totalItems === 0
+                ? "Nog niets gepland — een rustige week om vooruit te kijken."
+                : `${totalItems} ${totalItems === 1 ? "item" : "items"} verspreid over de week, waarvan ${hardDeadlines} ${hardDeadlines === 1 ? "deadline" : "deadlines"}.`;
+        }
+
+        // Hero stats.
+        const totalH = Math.floor(totalMinutes / 60);
+        const totalM = Math.round(totalMinutes % 60);
+        if (this.nextWeekPlannedVal) {
+            this.nextWeekPlannedVal.innerHTML = `${totalH}<small>u${totalM ? ` ${totalM}m` : ""}</small>`;
+        }
+        if (this.nextWeekPlannedSub) {
+            const pct = Math.round((totalMinutes / (45 * 60)) * 100);
+            this.nextWeekPlannedSub.textContent = `van 45u capaciteit · ${pct}%`;
+        }
+        if (this.nextWeekDeadlinesVal) {
+            this.nextWeekDeadlinesVal.innerHTML = `${hardDeadlines}<small>hard</small>`;
+        }
+        if (this.nextWeekDeadlinesSub) {
+            this.nextWeekDeadlinesSub.textContent = hardDeadlines === 0 ? "geen deadlines" : "harde data";
+        }
+        if (this.nextWeekFocusVal) this.nextWeekFocusVal.textContent = String(focusBlocks);
+        if (this.nextWeekFocusSub) {
+            const fH = Math.floor(focusMinutes / 60);
+            const fM = Math.round(focusMinutes % 60);
+            this.nextWeekFocusSub.textContent = `${fH}u${fM ? ` ${fM}m` : ""} diep werk`;
+        }
+        const freeMinutes = Math.max(0, 45 * 60 - totalMinutes);
+        if (this.nextWeekFreeVal) {
+            const freeH = Math.floor(freeMinutes / 60);
+            const freeM = Math.round(freeMinutes % 60);
+            this.nextWeekFreeVal.innerHTML = `${freeH}<small>u${freeM ? ` ${freeM}m` : ""}</small>`;
+        }
+        if (this.nextWeekFreeSub) this.nextWeekFreeSub.textContent = "buffer";
+
+        // Week strip.
+        const maxDay = perDayMinutes.reduce((m, v) => Math.max(m, v), 0) || 1;
+        const dayShortNames = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
+        if (this.nextWeekStrip) {
+            this.nextWeekStrip.innerHTML = dayKeys.map((_, i) => {
+                const d = new Date(startDate);
+                d.setDate(startDate.getDate() + i);
+                const mins = perDayMinutes[i];
+                const pct = Math.round((mins / maxDay) * 100);
+                const h = Math.floor(mins / 60);
+                const m = Math.round(mins % 60);
+                const hh = mins ? `${h}u${m ? ` ${m}m` : ""}` : "—";
+                return `
+                    <div class="nwd">
+                        <span class="dn">${dayShortNames[i]}</span>
+                        <span class="dt">${d.getDate()}</span>
+                        <span class="bar"><i style="width:${pct}%;"></i></span>
+                        <span class="hh">${hh}</span>
+                    </div>
+                `;
+            }).join("");
+        }
+
+        if (this.nextWeekFootSummary) {
+            this.nextWeekFootSummary.innerHTML =
+                `<b>${totalItems} ${totalItems === 1 ? "item" : "items"}</b> · ` +
+                `<b>${focusBlocks} focus-${focusBlocks === 1 ? "blok" : "blokken"}</b> · ` +
+                `<b>${Math.floor(focusMinutes / 60)}u ${String(Math.round(focusMinutes % 60)).padStart(2, "0")}m</b> diep werk · ` +
+                `<b>${Math.floor(meetingMinutes / 60)}u ${String(Math.round(meetingMinutes % 60)).padStart(2, "0")}m</b> meetings & afspraken`;
+        }
+    }
+
+    _renderNextWeekLine(line, dayKey) {
+        const escape = (s) => this.escapeHtml(s);
+        if (line.kind === "event") {
+            const ev = line.payload;
+            const color = ev.subscription_color || "var(--ink-tertiary)";
+            const time = ev.all_day
+                ? `<b>Hele</b><span>dag</span>`
+                : `<b>${this._fmtHm(Date.parse(ev.start_at))}</b><span>${this._fmtHm(Date.parse(ev.end_at))}</span>`;
+            const subParts = [];
+            if (ev.subscription_name) subParts.push(escape(ev.subscription_name));
+            if (ev.location) subParts.push(escape(ev.location));
+            const sub = subParts.length
+                ? `<span class="dot" style="background:${escape(color)}"></span>${subParts.join(" · ")}`
+                : `<span class="dot" style="background:${escape(color)}"></span>`;
+            return `
+                <div class="nw-line event">
+                    <div class="t">${time}</div>
+                    <div class="bar" style="background:${escape(color)};"></div>
+                    <div class="body">
+                        <div class="ti">${escape(ev.summary || "(geen titel)")}</div>
+                        <div class="sub">${sub}</div>
+                    </div>
+                </div>
+            `;
+        }
+        const t = line.payload;
+        const area = this.areas.find((a) => a.id === t.area_id);
+        const areaColor = area ? area.color : "var(--ink-tertiary)";
+        const areaName = area ? escape(area.name) : "Geen gebied";
+        const start = t.planned_time ? t.planned_time.slice(0, 5) : "—";
+        const dur = Number(t.duration) || 0;
+        const durLabel = dur >= 60
+            ? `${Math.floor(dur / 60)}u${dur % 60 ? ` ${dur % 60}m` : ""}`
+            : (dur ? `${dur}m` : "—");
+        const isDeadlineToday = t.deadline === dayKey;
+        const badge = isDeadlineToday
+            ? `<span class="badge dl">Deadline</span>`
+            : (dur >= 50 ? `<span class="badge">Focus</span>` : "");
+        return `
+            <div class="nw-line task${isDeadlineToday ? " deadline" : ""}">
+                <div class="t"><b>${escape(start)}</b><span>${escape(durLabel)}</span></div>
+                <div class="bar"${isDeadlineToday ? ' style="background:var(--danger);"' : ""}></div>
+                <div class="body">
+                    <div class="ti">${escape(t.title || "")}</div>
+                    <div class="sub"><span class="dot" style="background:${escape(areaColor)}"></span>${areaName}</div>
+                </div>
+                ${badge}
+            </div>
+        `;
+    }
+
+    _fmtDateKey(d) {
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    }
+
+    _startOfToday() {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d;
+    }
+
+    _timeToMinutes(value) {
+        if (!value) return 24 * 60; // unscheduled → sort to end of day
+        const [h, m] = String(value).split(":").map((n) => parseInt(n, 10));
+        return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
+    }
+
+    _isoWeekNumber(date) {
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        const dayNum = d.getUTCDay() || 7;
+        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
     }
 
     // ── Streaks ─────────────────────────────────────────────────────────

@@ -216,6 +216,22 @@
                 </div>
                 <span class="content-task-count" id="itemCount">0 tasks</span>
             </div>
+            <div class="content-header-tools" id="nextWeekHeaderTools" hidden>
+                <button type="button" class="btn-ghost" id="nextWeekPrevBtn">‹ Deze week</button>
+                <button type="button" class="btn-ghost" id="nextWeekNextBtn">Wk <span id="nextWeekNextLabel">22</span> ›</button>
+                <div class="tab-pill nw-tab-pill" role="tablist" aria-label="Weergave">
+                    <button type="button" class="on" data-nw-tab="blueprint">Blauwdruk</button>
+                    <button type="button" data-nw-tab="agenda">Agenda</button>
+                    <button type="button" data-nw-tab="list">Lijst</button>
+                </div>
+                <button type="button" class="btn-primary" id="nextWeekPlanBtn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 20h9"/>
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                    </svg>
+                    Plan week
+                </button>
+            </div>
             <div class="content-header-tools" id="todayHeaderTools" hidden>
                 <button type="button" class="btn-ghost" id="todayFocusBtn" title="Start focus">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -369,69 +385,38 @@
 
         <!-- Volgende week view (blueprint) -->
         <div class="next-week-view" id="nextWeekView" hidden>
-            <div class="nw-topbar">
-                <div class="nw-topbar-left">
-                    <div class="nw-topbar-date">Volgende week</div>
-                    <div class="nw-topbar-day">Week 21 · 18 — 24 mei · over 2 dagen</div>
-                </div>
-                <div class="nw-topbar-right">
-                    <button type="button" class="btn-ghost nw-btn-ghost">‹ Deze week</button>
-                    <button type="button" class="btn-ghost nw-btn-ghost">Wk 22 ›</button>
-                    <div class="tab-pill nw-tab-pill">
-                        <button type="button" class="on">Blauwdruk</button>
-                        <button type="button">Agenda</button>
-                        <button type="button">Lijst</button>
-                    </div>
-                    <button type="button" class="btn-primary nw-btn-primary">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M12 20h9"/>
-                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-                        </svg>
-                        Plan week
-                    </button>
-                </div>
-            </div>
-
             <div class="nw-page">
                 <div class="nw-main">
                     <!-- Hero -->
                     <div class="nw-hero">
                         <div class="nw-hero-intro">
-                            <div class="nw-breadcrumb">Week 21 · mei 2026 · zomerprognose ☼ 22°</div>
-                            <h1 class="nw-h1">Volgende week<br>ligt er <em>34</em> dingen klaar.</h1>
-                            <p class="nw-lede">Twee <b>harde deadlines</b>, één <b>klantbezoek in Utrecht</b>, en de marathon-finalisatie. Vrijdagmiddag is bewust open gelaten — Eva's verjaardag-cadeau ophalen. <b>Donderdag</b> wordt je zwaarste dag.</p>
+                            <div class="nw-breadcrumb" id="nextWeekBreadcrumb"></div>
+                            <h1 class="nw-h1">Volgende week<br>ligt er <em id="nextWeekCount">0</em> dingen klaar.</h1>
+                            <p class="nw-lede" id="nextWeekLede"></p>
                         </div>
                         <div class="nw-hero-stats">
                             <div class="nw-hero-stat">
                                 <div class="lbl">Geplande tijd</div>
-                                <div class="val">38<small>u 15m</small></div>
-                                <div class="sub">van 45u capaciteit · 85%</div>
+                                <div class="val" id="nextWeekPlannedVal">0<small>u</small></div>
+                                <div class="sub" id="nextWeekPlannedSub">van 45u capaciteit</div>
                             </div>
                             <div class="nw-hero-stat">
                                 <div class="lbl">Deadlines</div>
-                                <div class="val">4<small>hard</small></div>
-                                <div class="sub">+ 6 zacht</div>
+                                <div class="val" id="nextWeekDeadlinesVal">0<small>hard</small></div>
+                                <div class="sub" id="nextWeekDeadlinesSub">geen zachte</div>
                             </div>
                             <div class="nw-hero-stat">
                                 <div class="lbl">Focus-blokken</div>
-                                <div class="val">9</div>
-                                <div class="sub">22u 30m diep werk</div>
+                                <div class="val" id="nextWeekFocusVal">0</div>
+                                <div class="sub" id="nextWeekFocusSub">diep werk</div>
                             </div>
                             <div class="nw-hero-stat">
                                 <div class="lbl">Vrije ruimte</div>
-                                <div class="val">6<small>u 45m</small></div>
-                                <div class="sub">buffer voor 'eruit komt'</div>
+                                <div class="val" id="nextWeekFreeVal">0<small>u</small></div>
+                                <div class="sub" id="nextWeekFreeSub">buffer</div>
                             </div>
                         </div>
-                        <div class="nw-weekstrip">
-                            <div class="nwd"><span class="dn">Ma</span><span class="dt">18</span><span class="bar"><i style="width:72%;"></i></span><span class="hh">5u 40m</span></div>
-                            <div class="nwd"><span class="dn">Di</span><span class="dt">19</span><span class="bar"><i style="width:80%;"></i></span><span class="hh">7u 15m</span></div>
-                            <div class="nwd"><span class="dn">Wo</span><span class="dt">20</span><span class="bar"><i style="width:55%;"></i></span><span class="hh">4u 30m</span></div>
-                            <div class="nwd active"><span class="dn">Do</span><span class="dt">21</span><span class="bar"><i style="width:95%;"></i></span><span class="hh">8u 45m</span></div>
-                            <div class="nwd"><span class="dn">Vr</span><span class="dt">22</span><span class="bar"><i style="width:48%;"></i></span><span class="hh">4u 10m</span></div>
-                            <div class="nwd"><span class="dn">Za</span><span class="dt">23</span><span class="bar"><i style="width:35%;"></i></span><span class="hh">3u 30m</span></div>
-                            <div class="nwd"><span class="dn">Zo</span><span class="dt">24</span><span class="bar"><i style="width:50%;"></i></span><span class="hh">4u 25m</span></div>
-                        </div>
+                        <div class="nw-weekstrip" id="nextWeekStrip"></div>
                     </div>
 
                     <!-- Per-day blueprint -->
@@ -446,402 +431,11 @@
                             </div>
                         </div>
 
-                        <!-- Monday -->
-                        <div class="nw-day">
-                            <div class="nw-day-when">
-                                <div class="nm">maandag<sup>18</sup></div>
-                                <div class="dt">Pinkstermaandag</div>
-                                <span class="pill calm"><span class="pip"></span>Rustige start</span>
-                            </div>
-                            <div class="nw-day-lineup">
-                                <div class="nw-line event">
-                                    <div class="t"><b>09:00</b><span>09:30</span></div>
-                                    <div class="bar" style="background:var(--area-2);"></div>
-                                    <div class="body">
-                                        <div class="ti">Wekelijkse planning <b>· solo</b></div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-2)"></span>Werk · weekstart</div>
-                                    </div>
-                                    <span class="badge recur">↻ wekelijks</span>
-                                </div>
-                                <div class="nw-line task">
-                                    <div class="t"><b>10:00</b><span>90m</span></div>
-                                    <div class="bar"></div>
-                                    <div class="body">
-                                        <div class="ti">Q3 budget · eerste cut met aannames headcount</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-2)"></span>Werk · Q2 Plan<span class="sep"></span>diep werk</div>
-                                    </div>
-                                    <span class="badge">Focus</span>
-                                </div>
-                                <div class="nw-line event">
-                                    <div class="t"><b>14:00</b><span>30m</span></div>
-                                    <div class="bar" style="background:var(--area-5);"></div>
-                                    <div class="body">
-                                        <div class="ti">Telefoon · aannemer Jansen <b>(eindelijk)</b></div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-5)"></span>Persoonlijk · Verbouwing</div>
-                                    </div>
-                                </div>
-                                <div class="nw-line task">
-                                    <div class="t"><b>18:30</b><span>60m</span></div>
-                                    <div class="bar"></div>
-                                    <div class="body">
-                                        <div class="ti">Krachttraining · onderlichaam</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-1)"></span>Gezondheid · marathon-blok wk 8</div>
-                                    </div>
-                                    <span class="badge recur">↻ ma + do</span>
-                                </div>
-                            </div>
-                            <div class="nw-day-totals">
-                                <span class="focus">5<small>u 40m</small></span>
-                                <span class="meta"><b>4</b> items · <b>2</b> focus<br>1 belafspraak</span>
-                                <div class="ratio">
-                                    <div class="seg"><i class="a" style="width:55%;"></i><i class="b" style="width:10%;"></i><i class="c" style="width:35%;"></i></div>
-                                </div>
-                            </div>
-                        </div>
+                        <!-- Day rows (rendered by JS) -->
+                        <div id="nextWeekDays" class="nw-days-container"></div>
 
-                        <!-- Tuesday -->
-                        <div class="nw-day">
-                            <div class="nw-day-when">
-                                <div class="nm">dinsdag<sup>19</sup></div>
-                                <div class="dt">Klantdag · Utrecht</div>
-                                <span class="pill"><span class="pip"></span>Reizen + klant</span>
-                            </div>
-                            <div class="nw-day-lineup">
-                                <div class="nw-line event">
-                                    <div class="t"><b>08:30</b><span>09:00</span></div>
-                                    <div class="bar" style="background:var(--area-2);"></div>
-                                    <div class="body">
-                                        <div class="ti">Standup · vanuit trein</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-2)"></span>Werk · async ok</div>
-                                    </div>
-                                    <span class="badge recur">↻ dagelijks</span>
-                                </div>
-                                <div class="nw-line event">
-                                    <div class="t"><b>10:30</b><span>12:30</span></div>
-                                    <div class="bar" style="background:var(--area-2);"></div>
-                                    <div class="body">
-                                        <div class="ti">Klantbezoek <b>Bever Holding</b> · onboarding-demo</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-2)"></span>Werk · Utrecht CS-Hojel<span class="sep"></span>met Marieke + Tom</div>
-                                    </div>
-                                    <span class="badge">Sleutel</span>
-                                </div>
-                                <div class="nw-line task deadline">
-                                    <div class="t"><b>14:00</b><span>—</span></div>
-                                    <div class="bar" style="background:var(--danger);"></div>
-                                    <div class="body">
-                                        <div class="ti">Inleveren · sprint-rapport Q2 vóór 16:00</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-2)"></span>Werk · Q2 Plan<span class="sep"></span>vanuit kantoor</div>
-                                    </div>
-                                    <span class="badge dl">Deadline</span>
-                                </div>
-                                <div class="nw-line task">
-                                    <div class="t"><b>16:30</b><span>45m</span></div>
-                                    <div class="bar"></div>
-                                    <div class="body">
-                                        <div class="ti">Spaans · vocabulaire-set 16</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-4)"></span>Leren · streak <b>17d</b></div>
-                                    </div>
-                                    <span class="badge recur">↻ dagelijks</span>
-                                </div>
-                                <div class="nw-line event">
-                                    <div class="t"><b>19:00</b><span>20:30</span></div>
-                                    <div class="bar" style="background:var(--area-3);"></div>
-                                    <div class="body">
-                                        <div class="ti">Avondeten · Eva (last-minute restaurant)</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-3)"></span>Familie</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="nw-day-totals">
-                                <span class="focus">7<small>u 15m</small></span>
-                                <span class="meta"><b>5</b> items · <b>1</b> deadline<br>2u reistijd</span>
-                                <div class="ratio">
-                                    <div class="seg"><i class="a" style="width:30%;"></i><i class="b" style="width:45%;"></i><i class="c" style="width:25%;"></i></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Wednesday -->
-                        <div class="nw-day">
-                            <div class="nw-day-when">
-                                <div class="nm">woensdag<sup>20</sup></div>
-                                <div class="dt">Diepe-werk dag</div>
-                                <span class="pill calm"><span class="pip"></span>Geen meetings</span>
-                            </div>
-                            <div class="nw-day-lineup">
-                                <div class="nw-line task">
-                                    <div class="t"><b>09:00</b><span>2u</span></div>
-                                    <div class="bar"></div>
-                                    <div class="body">
-                                        <div class="ti">Refactor onboarding-flow · stap 4 &amp; 5</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-2)"></span>Werk · 4 pomodoros</div>
-                                    </div>
-                                    <span class="badge">Focus</span>
-                                </div>
-                                <div class="nw-line event">
-                                    <div class="t"><b>11:30</b><span>30m</span></div>
-                                    <div class="bar" style="background:var(--area-2);"></div>
-                                    <div class="body">
-                                        <div class="ti">1:1 Marieke <b>· half uur</b></div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-2)"></span>Werk · agenda gedeeld</div>
-                                    </div>
-                                    <span class="badge recur">↻ tweewekelijks</span>
-                                </div>
-                                <div class="nw-line task">
-                                    <div class="t"><b>14:00</b><span>90m</span></div>
-                                    <div class="bar"></div>
-                                    <div class="body">
-                                        <div class="ti">Hire-loop · 3 CV's screenen, 2 calls plannen</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-2)"></span>Werk · doel: 2 engineers</div>
-                                    </div>
-                                    <span class="badge">Focus</span>
-                                </div>
-                                <div class="nw-line task">
-                                    <div class="t"><b>17:00</b><span>20m</span></div>
-                                    <div class="bar"></div>
-                                    <div class="body">
-                                        <div class="ti">Boodschappen + PostNL pakket ophalen</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-5)"></span>Persoonlijk</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="nw-day-totals">
-                                <span class="focus">4<small>u 30m</small></span>
-                                <span class="meta"><b>4</b> items · <b>3</b> focus<br>1 meeting</span>
-                                <div class="ratio">
-                                    <div class="seg"><i class="a" style="width:75%;"></i><i class="b" style="width:10%;"></i><i class="c" style="width:15%;"></i></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Thursday (highlighted - heaviest day) -->
-                        <div class="nw-day nw-day-heavy">
-                            <div class="nw-day-when">
-                                <div class="nm">donderdag<sup>21</sup></div>
-                                <div class="dt">Zwaarste dag</div>
-                                <span class="pill heavy"><span class="pip"></span>Vol · niets bij</span>
-                            </div>
-                            <div class="nw-day-lineup">
-                                <div class="nw-line task">
-                                    <div class="t"><b>06:30</b><span>60m</span></div>
-                                    <div class="bar"></div>
-                                    <div class="body">
-                                        <div class="ti">Tempo run · 8 km onder 4:30/km</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-1)"></span>Gezondheid · marathon T-21d</div>
-                                    </div>
-                                    <span class="badge">Focus</span>
-                                </div>
-                                <div class="nw-line event">
-                                    <div class="t"><b>10:00</b><span>12:00</span></div>
-                                    <div class="bar" style="background:#222;"></div>
-                                    <div class="body">
-                                        <div class="ti">Sprint review + planning · hele team</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-2)"></span>Werk · groot · voorbereiden wo-avond</div>
-                                    </div>
-                                    <span class="badge">Sleutel</span>
-                                </div>
-                                <div class="nw-line event">
-                                    <div class="t"><b>13:00</b><span>14:00</span></div>
-                                    <div class="bar" style="background:var(--area-2);"></div>
-                                    <div class="body">
-                                        <div class="ti">Lunch · CEO + nieuwe partner intro</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-2)"></span>Werk · niet missen</div>
-                                    </div>
-                                </div>
-                                <div class="nw-line task deadline">
-                                    <div class="t"><b>15:00</b><span>—</span></div>
-                                    <div class="bar" style="background:var(--danger);"></div>
-                                    <div class="body">
-                                        <div class="ti">Marathon-inschrijving definitief · bib + start-vak</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-1)"></span>Gezondheid · sluit 17:00</div>
-                                    </div>
-                                    <span class="badge dl">Deadline</span>
-                                </div>
-                                <div class="nw-line task">
-                                    <div class="t"><b>16:00</b><span>45m</span></div>
-                                    <div class="bar"></div>
-                                    <div class="body">
-                                        <div class="ti">PR-reviews team · pre-release sweep</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-2)"></span>Werk</div>
-                                    </div>
-                                </div>
-                                <div class="nw-line task">
-                                    <div class="t"><b>18:30</b><span>60m</span></div>
-                                    <div class="bar"></div>
-                                    <div class="body">
-                                        <div class="ti">Krachttraining · bovenlichaam (kort)</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-1)"></span>Gezondheid</div>
-                                    </div>
-                                    <span class="badge recur">↻ ma + do</span>
-                                </div>
-                            </div>
-                            <div class="nw-day-totals">
-                                <span class="focus">8<small>u 45m</small></span>
-                                <span class="meta"><b>6</b> items · <b>2</b> deadlines<br><b class="danger">bescherm slaap</b></span>
-                                <div class="ratio">
-                                    <div class="seg"><i class="a" style="width:40%;"></i><i class="b" style="width:50%;"></i><i class="c" style="width:10%;"></i></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Friday -->
-                        <div class="nw-day">
-                            <div class="nw-day-when">
-                                <div class="nm">vrijdag<sup>22</sup></div>
-                                <div class="dt">Halve dag · vroeg los</div>
-                                <span class="pill calm"><span class="pip"></span>Open middag</span>
-                            </div>
-                            <div class="nw-day-lineup">
-                                <div class="nw-line event">
-                                    <div class="t"><b>08:30</b><span>09:00</span></div>
-                                    <div class="bar" style="background:var(--area-2);"></div>
-                                    <div class="body">
-                                        <div class="ti">Standup</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-2)"></span>Werk</div>
-                                    </div>
-                                    <span class="badge recur">↻ dagelijks</span>
-                                </div>
-                                <div class="nw-line task">
-                                    <div class="t"><b>09:30</b><span>2u</span></div>
-                                    <div class="bar"></div>
-                                    <div class="body">
-                                        <div class="ti">Demo voorbereiden · onboarding flow v2</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-2)"></span>Werk</div>
-                                    </div>
-                                    <span class="badge">Focus</span>
-                                </div>
-                                <div class="nw-line task">
-                                    <div class="t"><b>14:00</b><span>—</span></div>
-                                    <div class="bar"></div>
-                                    <div class="body">
-                                        <div class="ti">Cadeau ophalen Eva · Aesop De Bijenkorf</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-3)"></span>Familie · van Ooit gepromoveerd</div>
-                                    </div>
-                                </div>
-                                <div class="nw-line task">
-                                    <div class="t"><b>16:00</b><span>30m</span></div>
-                                    <div class="bar"></div>
-                                    <div class="body">
-                                        <div class="ti">Lezen · Atomic Habits hfst. 11–13</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-4)"></span>Leren · streak <b>10d</b></div>
-                                    </div>
-                                </div>
-                                <div class="nw-line event">
-                                    <div class="t"><b>19:00</b><span>22:00</span></div>
-                                    <div class="bar" style="background:var(--area-3);"></div>
-                                    <div class="body">
-                                        <div class="ti">Vrijdagavond drinks · met Linda &amp; Marc</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-3)"></span>Familie</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="nw-day-totals">
-                                <span class="focus">4<small>u 10m</small></span>
-                                <span class="meta"><b>5</b> items<br>0 deadlines</span>
-                                <div class="ratio">
-                                    <div class="seg"><i class="a" style="width:50%;"></i><i class="b" style="width:15%;"></i><i class="c" style="width:35%;"></i></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Saturday -->
-                        <div class="nw-day weekend">
-                            <div class="nw-day-when">
-                                <div class="nm">zaterdag<sup>23</sup></div>
-                                <div class="dt">Weekend · lang lopen</div>
-                                <span class="pill calm"><span class="pip"></span>Privé</span>
-                            </div>
-                            <div class="nw-day-lineup">
-                                <div class="nw-line task">
-                                    <div class="t"><b>07:00</b><span>2u 30m</span></div>
-                                    <div class="bar"></div>
-                                    <div class="body">
-                                        <div class="ti">Long run <b>22 km</b> · piek-trainings-blok</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-1)"></span>Gezondheid · met Tom</div>
-                                    </div>
-                                    <span class="badge">Sleutel</span>
-                                </div>
-                                <div class="nw-line event">
-                                    <div class="t"><b>12:00</b><span>13:30</span></div>
-                                    <div class="bar" style="background:var(--area-3);"></div>
-                                    <div class="body">
-                                        <div class="ti">Brunch · ouders Den Haag</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-3)"></span>Familie · maandelijks</div>
-                                    </div>
-                                    <span class="badge recur">↻ maandelijks</span>
-                                </div>
-                                <div class="nw-line task">
-                                    <div class="t"><b>15:30</b><span>1u</span></div>
-                                    <div class="bar"></div>
-                                    <div class="body">
-                                        <div class="ti">Verbouwing · meten + foto's aannemer sturen</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-5)"></span>Persoonlijk · Verbouwing</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="nw-day-totals">
-                                <span class="focus">3<small>u 30m</small></span>
-                                <span class="meta"><b>3</b> items<br>1 grote run</span>
-                                <div class="ratio">
-                                    <div class="seg"><i class="a" style="width:60%;"></i><i class="b" style="width:5%;"></i><i class="c" style="width:35%;"></i></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Sunday -->
-                        <div class="nw-day weekend">
-                            <div class="nw-day-when">
-                                <div class="nm">zondag<sup>24</sup></div>
-                                <div class="dt">Eva's verjaardag</div>
-                                <span class="pill family"><span class="pip"></span>Bewust offline</span>
-                            </div>
-                            <div class="nw-day-lineup">
-                                <div class="nw-line event">
-                                    <div class="t"><b>09:30</b><span>11:30</span></div>
-                                    <div class="bar" style="background:var(--area-3);"></div>
-                                    <div class="body">
-                                        <div class="ti">Ontbijt thuis · cadeau geven 🎁</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-3)"></span>Familie · Eva 32</div>
-                                    </div>
-                                    <span class="badge">Sleutel</span>
-                                </div>
-                                <div class="nw-line task">
-                                    <div class="t"><b>11:30</b><span>30m</span></div>
-                                    <div class="bar"></div>
-                                    <div class="body">
-                                        <div class="ti">Bellen ouders Eva · feliciteren namens beide</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-3)"></span>Familie</div>
-                                    </div>
-                                </div>
-                                <div class="nw-line event">
-                                    <div class="t"><b>14:00</b><span>18:00</span></div>
-                                    <div class="bar" style="background:var(--area-3);"></div>
-                                    <div class="body">
-                                        <div class="ti">Verjaardags-borrel · familie + 8 vrienden</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-3)"></span>Familie · taart afhalen 13:30</div>
-                                    </div>
-                                </div>
-                                <div class="nw-line task">
-                                    <div class="t"><b>20:00</b><span>25m</span></div>
-                                    <div class="bar"></div>
-                                    <div class="body">
-                                        <div class="ti">Weekreflectie · zondagavond ritueel</div>
-                                        <div class="sub"><span class="dot" style="background:var(--area-5)"></span>Persoonlijk · streak <b>14w</b></div>
-                                    </div>
-                                    <span class="badge recur">↻ wekelijks</span>
-                                </div>
-                            </div>
-                            <div class="nw-day-totals">
-                                <span class="focus">4<small>u 25m</small></span>
-                                <span class="meta"><b>4</b> items<br>verjaardag-modus</span>
-                                <div class="ratio">
-                                    <div class="seg"><i class="a" style="width:10%;"></i><i class="b" style="width:5%;"></i><i class="c" style="width:85%;"></i></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="nw-panel-foot">
-                            <span><b>34 items</b> · <b>9 focus-blokken</b> · <b>22u 30m</b> diep werk · <b>15u 45m</b> meetings &amp; afspraken</span>
+                        <div class="nw-panel-foot" id="nextWeekPanelFoot">
+                            <span id="nextWeekFootSummary"></span>
                             <span class="grow"></span>
                             <span>Sneltoetsen: <span class="kbd">←/→</span> dag · <span class="kbd">⌘P</span> printen · <span class="kbd">⌘E</span> exporteer</span>
                         </div>
@@ -1571,21 +1165,75 @@
                 <span>Thema</span>
                 <p class="settings-card-help">Kies een accentkleur. Klik om te bekijken — opslaan om te bewaren.</p>
                 <div class="theme-picker" id="themePicker" role="radiogroup" aria-label="Thema kleur">
-                    <button type="button" class="theme-swatch" data-theme="ink" role="radio" aria-checked="true" aria-label="Ink">
-                        <span class="theme-swatch-chip" style="background:#111111;"></span>
-                        <span class="theme-swatch-label">Ink</span>
+                    <button type="button" class="theme-option" data-theme="marigold" role="radio" aria-checked="true" aria-label="Goudsbloem">
+                        <span class="theme-option-chip" style="background:#D9A24E;"></span>
+                        <span class="theme-option-info">
+                            <span class="theme-option-name">Goudsbloem</span>
+                            <span class="theme-option-desc">warmte, prestatie, streaks</span>
+                        </span>
                     </button>
-                    <button type="button" class="theme-swatch" data-theme="forest" role="radio" aria-checked="false" aria-label="Forest">
-                        <span class="theme-swatch-chip" style="background:#1F3D2A;"></span>
-                        <span class="theme-swatch-label">Forest</span>
+                    <button type="button" class="theme-option" data-theme="mint" role="radio" aria-checked="false" aria-label="Munt">
+                        <span class="theme-option-chip" style="background:#7BB89A;"></span>
+                        <span class="theme-option-info">
+                            <span class="theme-option-name">Munt</span>
+                            <span class="theme-option-desc">positief, voltooid, kalm</span>
+                        </span>
                     </button>
-                    <button type="button" class="theme-swatch" data-theme="plum" role="radio" aria-checked="false" aria-label="Plum">
-                        <span class="theme-swatch-chip" style="background:#3A1F3D;"></span>
-                        <span class="theme-swatch-label">Plum</span>
+                    <button type="button" class="theme-option" data-theme="strawberry" role="radio" aria-checked="false" aria-label="Aardbei">
+                        <span class="theme-option-chip" style="background:#C44A55;"></span>
+                        <span class="theme-option-info">
+                            <span class="theme-option-name">Aardbei</span>
+                            <span class="theme-option-desc">urgentie, deadlines</span>
+                        </span>
                     </button>
-                    <button type="button" class="theme-swatch" data-theme="ochre" role="radio" aria-checked="false" aria-label="Ochre">
-                        <span class="theme-swatch-chip" style="background:#4A3220;"></span>
-                        <span class="theme-swatch-label">Ochre</span>
+                    <button type="button" class="theme-option" data-theme="vivid-blue" role="radio" aria-checked="false" aria-label="Levendig blauw">
+                        <span class="theme-option-chip" style="background:#2D6BE0;"></span>
+                        <span class="theme-option-info">
+                            <span class="theme-option-name">Levendig blauw</span>
+                            <span class="theme-option-desc">primaire actie, links</span>
+                        </span>
+                    </button>
+                    <button type="button" class="theme-option" data-theme="clay" role="radio" aria-checked="false" aria-label="Klei">
+                        <span class="theme-option-chip" style="background:#B8654A;"></span>
+                        <span class="theme-option-info">
+                            <span class="theme-option-name">Klei</span>
+                            <span class="theme-option-desc">persoonlijk, handwerk</span>
+                        </span>
+                    </button>
+                    <button type="button" class="theme-option" data-theme="lavender" role="radio" aria-checked="false" aria-label="Lavendel">
+                        <span class="theme-option-chip" style="background:#8B7CC9;"></span>
+                        <span class="theme-option-info">
+                            <span class="theme-option-name">Lavendel</span>
+                            <span class="theme-option-desc">ideeën, spraakmemo</span>
+                        </span>
+                    </button>
+                    <button type="button" class="theme-option" data-theme="seaweed" role="radio" aria-checked="false" aria-label="Zeewier">
+                        <span class="theme-option-chip" style="background:#264D52;"></span>
+                        <span class="theme-option-info">
+                            <span class="theme-option-name">Zeewier</span>
+                            <span class="theme-option-desc">werk, klant</span>
+                        </span>
+                    </button>
+                    <button type="button" class="theme-option" data-theme="peony" role="radio" aria-checked="false" aria-label="Pioen">
+                        <span class="theme-option-chip" style="background:#D88AA3;"></span>
+                        <span class="theme-option-info">
+                            <span class="theme-option-name">Pioen</span>
+                            <span class="theme-option-desc">familie, verjaardag</span>
+                        </span>
+                    </button>
+                    <button type="button" class="theme-option" data-theme="moss" role="radio" aria-checked="false" aria-label="Mos">
+                        <span class="theme-option-chip" style="background:#5C6B3A;"></span>
+                        <span class="theme-option-info">
+                            <span class="theme-option-name">Mos</span>
+                            <span class="theme-option-desc">habits, lange termijn</span>
+                        </span>
+                    </button>
+                    <button type="button" class="theme-option" data-theme="sky-blue" role="radio" aria-checked="false" aria-label="Hemelblauw">
+                        <span class="theme-option-chip" style="background:#86B6D1;"></span>
+                        <span class="theme-option-info">
+                            <span class="theme-option-name">Hemelblauw</span>
+                            <span class="theme-option-desc">reizen, info</span>
+                        </span>
                     </button>
                 </div>
             </div>

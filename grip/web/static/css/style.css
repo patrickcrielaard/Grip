@@ -3834,25 +3834,68 @@ body.auth-page {
 }
 
 /* ----- Theme accent variants (settable via data-theme on <body>) -----
-   Themes drive both the sidebar and the app background (the area outside
-   the white main-content card), so the page colour shifts together. */
-[data-theme="forest"] {
-    --ink: #1F3D2A;
-    --surface: #EFF1EC;
-    --sidebar-bg: #EFF1EC;
-    --app-bg: #EFF1EC;
+   Each theme pairs a saturated HEX (--accent, used for primary actions and
+   focus rings) with a soft tint applied to the sidebar and app background.
+   --ink stays dark for readable text. */
+[data-theme="marigold"] {
+    --accent: #D9A24E;
+    --surface: #FFF5DA;
+    --sidebar-bg: #FFF5DA;
+    --app-bg: #FFF5DA;
 }
-[data-theme="plum"] {
-    --ink: #3A1F3D;
-    --surface: #F1ECEF;
-    --sidebar-bg: #F1ECEF;
-    --app-bg: #F1ECEF;
+[data-theme="mint"] {
+    --accent: #7BB89A;
+    --surface: #EAF6EF;
+    --sidebar-bg: #EAF6EF;
+    --app-bg: #EAF6EF;
 }
-[data-theme="ochre"] {
-    --ink: #4A3220;
-    --surface: #F4EFE6;
-    --sidebar-bg: #F4EFE6;
-    --app-bg: #F4EFE6;
+[data-theme="strawberry"] {
+    --accent: #C44A55;
+    --surface: #FBE7E9;
+    --sidebar-bg: #FBE7E9;
+    --app-bg: #FBE7E9;
+}
+[data-theme="vivid-blue"] {
+    --accent: #2D6BE0;
+    --surface: #E2EAFB;
+    --sidebar-bg: #E2EAFB;
+    --app-bg: #E2EAFB;
+}
+[data-theme="clay"] {
+    --accent: #B8654A;
+    --surface: #F4E3DA;
+    --sidebar-bg: #F4E3DA;
+    --app-bg: #F4E3DA;
+}
+[data-theme="lavender"] {
+    --accent: #8B7CC9;
+    --surface: #ECE8F6;
+    --sidebar-bg: #ECE8F6;
+    --app-bg: #ECE8F6;
+}
+[data-theme="seaweed"] {
+    --accent: #264D52;
+    --surface: #DCE9EA;
+    --sidebar-bg: #DCE9EA;
+    --app-bg: #DCE9EA;
+}
+[data-theme="peony"] {
+    --accent: #D88AA3;
+    --surface: #F9E6EC;
+    --sidebar-bg: #F9E6EC;
+    --app-bg: #F9E6EC;
+}
+[data-theme="moss"] {
+    --accent: #5C6B3A;
+    --surface: #E5E8D8;
+    --sidebar-bg: #E5E8D8;
+    --app-bg: #E5E8D8;
+}
+[data-theme="sky-blue"] {
+    --accent: #86B6D1;
+    --surface: #E3EFF4;
+    --sidebar-bg: #E3EFF4;
+    --app-bg: #E3EFF4;
 }
 
 /* ----- Density variants (settable via data-density on <body>) ----- */
@@ -4047,42 +4090,57 @@ body.auth-page {
 
 /* Theme picker (4 swatches) */
 .theme-picker {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    margin-top: 4px;
-}
-.theme-swatch {
     display: flex;
     flex-direction: column;
+    gap: 6px;
+    margin-top: 6px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+.theme-option {
+    display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 12px 8px 10px;
+    gap: 12px;
+    padding: 10px 12px;
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: 12px;
     background: var(--content-bg);
     cursor: pointer;
     font-family: var(--font-body);
-    transition: border-color 0.12s ease, transform 0.12s ease;
+    text-align: left;
+    transition: border-color 0.12s ease, background 0.12s ease;
 }
-.theme-swatch:hover { border-color: var(--border-strong); }
-.theme-swatch.is-active {
+.theme-option:hover { border-color: var(--border-strong); }
+.theme-option.is-active {
     border-color: var(--ink);
     border-width: 2px;
-    padding: 11px 7px 9px;
+    padding: 9px 11px;
 }
-.theme-swatch-chip {
-    width: 32px;
-    height: 32px;
+.theme-option-chip {
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+    flex-shrink: 0;
 }
-.theme-swatch-label {
-    font-size: 12px;
+.theme-option-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+.theme-option-name {
+    font-size: 13px;
     font-weight: 600;
-    color: var(--ink-secondary);
+    color: var(--ink);
+    line-height: 1.2;
 }
-.theme-swatch.is-active .theme-swatch-label { color: var(--ink); }
+.theme-option-desc {
+    font-size: 11.5px;
+    color: var(--ink-tertiary);
+    line-height: 1.3;
+}
 
 /* Density picker (segmented) */
 .density-picker {
@@ -4135,7 +4193,6 @@ body.auth-page {
 
 @media (max-width: 768px) {
     .settings-grid { grid-template-columns: 1fr; }
-    .theme-picker { grid-template-columns: repeat(2, 1fr); }
     .settings-card-head { flex-direction: column; align-items: stretch; }
 }
 
@@ -5220,56 +5277,6 @@ body.auth-page {
 .next-week-view { padding: 0; }
 .next-week-view[hidden] { display: none; }
 
-/* Custom topbar */
-.nw-topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 18px 32px 0;
-    gap: 24px;
-    flex-wrap: wrap;
-}
-.nw-topbar-left { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
-.nw-topbar-date {
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-size: 32px;
-    letter-spacing: -0.01em;
-    color: var(--ink);
-}
-.nw-topbar-day {
-    font-size: 13px;
-    color: var(--ink-tertiary);
-    font-weight: 500;
-}
-.nw-topbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.nw-btn-ghost {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 7px 12px;
-    border-radius: 10px;
-    background: transparent;
-    color: var(--ink-secondary);
-    font-weight: 500;
-    font-size: 13px;
-    border: 1px solid var(--border);
-    cursor: pointer;
-    font-family: inherit;
-}
-.nw-btn-ghost:hover { background: var(--surface); color: var(--ink); }
-.nw-btn-primary {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 8px 14px;
-    border-radius: 12px;
-    background: var(--ink);
-    color: #fff;
-    font-weight: 600;
-    font-size: 13px;
-    border: none;
-    cursor: pointer;
-    font-family: inherit;
-}
-.nw-btn-primary:hover { background: #000; }
-
 .nw-tab-pill {
     display: inline-flex; gap: 2px;
     background: var(--surface);
@@ -5884,11 +5891,16 @@ body.auth-page {
     color: var(--ink-tertiary); font-weight: 700; margin-bottom: 4px;
 }
 
-/* Hide the standard content-header chrome when next-week view is active */
-.next-week-view-active .content-title-block,
-.next-week-view-active .content-task-count {
-    display: none;
+/* Empty state shown until calendar data is loaded */
+.next-week-view .nw-days-empty {
+    padding: 28px 22px;
+    color: var(--ink-tertiary);
+    font-size: 13px;
 }
+
+/* Hide the FAB / standard task-count when next-week view is active.
+   Title block uses the existing content-header pattern. */
+.next-week-view ~ .fab-add-btn { display: none; }
 
 @media (max-width: 1100px) {
     .nw-page { grid-template-columns: 1fr; }
