@@ -1013,6 +1013,12 @@
                 <input type="url" id="calendarUrlInput" autocomplete="off" placeholder="webcal://...">
             </label>
             <label class="entity-modal-field">
+                <span>Gebied</span>
+                <select id="calendarAreaSelect">
+                    <option value="">— Geen gebied —</option>
+                </select>
+            </label>
+            <label class="entity-modal-field" id="calendarColorField">
                 <span>Kleur</span>
                 <input type="color" id="calendarColorInput" value="#0288D1">
             </label>
@@ -1274,5 +1280,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=27"></script>
+<script src="/static/js/app.js?v=28"></script>
 {% endblock %}

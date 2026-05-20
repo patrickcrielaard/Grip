@@ -28,7 +28,8 @@ AREA_STATUSES = {"active", "archived"}
 GOAL_STATUSES = {"active", "completed", "archived"}
 
 CALENDAR_SUBSCRIPTION_SELECT_COLUMNS = (
-    "id, user_id, name, url, color, enabled, last_synced_at, last_error, created_at"
+    "id, user_id, name, url, color, area_id, enabled, "
+    "last_synced_at, last_error, created_at"
 )
 CALENDAR_EVENT_SELECT_COLUMNS = (
     "id, subscription_id, uid, summary, description, location, "
@@ -723,6 +724,7 @@ class SupabaseService:
         name: str,
         url: str,
         color: str | None = None,
+        area_id: int | None = None,
     ) -> Optional[Dict[str, Any]]:
         """Create a calendar subscription."""
         try:
@@ -733,6 +735,8 @@ class SupabaseService:
             }
             if color is not None:
                 payload["color"] = color
+            if area_id is not None:
+                payload["area_id"] = area_id
             result = (
                 self.supabase.table("calendar_subscriptions").insert(payload).execute()
             )
@@ -743,6 +747,27 @@ class SupabaseService:
             return cast(Dict[str, Any], result.data)
         except Exception as exc:
             self.logger.exception("create_calendar_subscription failed: %s", exc)
+            return None
+
+    def update_calendar_subscription(
+        self, user_id: str, subscription_id: int, updates: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Update a calendar subscription's mutable fields (name, url, color, area_id)."""
+        try:
+            result = (
+                self.supabase.table("calendar_subscriptions")
+                .update(updates)
+                .eq("id", subscription_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if not result.data:
+                return None
+            if isinstance(result.data, list):
+                return cast(Dict[str, Any], result.data[0])
+            return cast(Dict[str, Any], result.data)
+        except Exception as exc:
+            self.logger.exception("update_calendar_subscription failed: %s", exc)
             return None
 
     def delete_calendar_subscription(self, user_id: str, subscription_id: int) -> bool:
@@ -804,7 +829,7 @@ class SupabaseService:
         try:
             sub_result = (
                 self.supabase.table("calendar_subscriptions")
-                .select("id, name, color")
+                .select("id, name, color, area_id")
                 .eq("user_id", user_id)
                 .eq("enabled", True)
                 .execute()
@@ -814,6 +839,25 @@ class SupabaseService:
                 return []
             sub_ids = [int(r["id"]) for r in sub_rows]
             sub_meta = {int(r["id"]): r for r in sub_rows}
+
+            # When subscriptions are linked to areas, use the area color.
+            area_ids = {
+                int(r["area_id"]) for r in sub_rows if r.get("area_id") is not None
+            }
+            area_colors: Dict[int, str] = {}
+            if area_ids:
+                area_result = (
+                    self.supabase.table("areas")
+                    .select("id, color")
+                    .in_("id", list(area_ids))
+                    .eq("user_id", user_id)
+                    .execute()
+                )
+                for raw_row in area_result.data or []:
+                    area_row = cast(Dict[str, Any], raw_row)
+                    color_value = area_row.get("color")
+                    if color_value is not None:
+                        area_colors[int(area_row["id"])] = color_value
 
             result = (
                 self.supabase.table("calendar_events")
@@ -829,7 +873,11 @@ class SupabaseService:
                 meta = sub_meta.get(int(row["subscription_id"]))
                 if meta:
                     row["subscription_name"] = meta.get("name")
-                    row["subscription_color"] = meta.get("color")
+                    area_id = meta.get("area_id")
+                    if area_id is not None and area_colors.get(int(area_id)):
+                        row["subscription_color"] = area_colors[int(area_id)]
+                    else:
+                        row["subscription_color"] = meta.get("color")
             return rows
         except Exception as exc:
             self.logger.exception("list_calendar_events failed: %s", exc)

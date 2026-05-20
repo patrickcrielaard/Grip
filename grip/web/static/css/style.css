@@ -2076,6 +2076,20 @@ body.auth-page {
     padding: 4px 12px;
     font-size: 13px;
     color: #333;
+    cursor: pointer;
+}
+
+.calendar-sub-item:hover {
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.calendar-sub-area {
+    font-size: 11px;
+    color: #666;
+    background: rgba(0, 0, 0, 0.06);
+    padding: 1px 6px;
+    border-radius: 10px;
+    flex-shrink: 0;
 }
 
 .calendar-sub-swatch {

@@ -158,7 +158,11 @@ class TodoApp {
         this.calendarNameInput = document.getElementById("calendarNameInput");
         this.calendarUrlInput = document.getElementById("calendarUrlInput");
         this.calendarColorInput = document.getElementById("calendarColorInput");
+        this.calendarColorField = document.getElementById("calendarColorField");
+        this.calendarAreaSelect = document.getElementById("calendarAreaSelect");
+        this.calendarModalTitle = document.getElementById("calendarModalTitle");
         this.calendarModalError = document.getElementById("calendarModalError");
+        this.editingCalendarSubscriptionId = null;
         this.todayAgendaList = document.getElementById("todayAgendaList");
         this.todayAgendaTitle = document.getElementById("todayAgendaTitle");
         this.agendaNowLabel = document.getElementById("agendaNowLabel");
@@ -686,6 +690,11 @@ class TodoApp {
             });
             this.calendarModalSave.addEventListener("click", () => this.saveCalendarSubscription());
         }
+        if (this.calendarAreaSelect) {
+            this.calendarAreaSelect.addEventListener("change", () => {
+                this._updateCalendarColorVisibility();
+            });
+        }
         if (this.calendarNav) {
             this.calendarNav.addEventListener("click", (event) => {
                 const delBtn = event.target.closest(".calendar-sub-delete");
@@ -699,6 +708,14 @@ class TodoApp {
                 if (syncBtn) {
                     event.stopPropagation();
                     this.syncCalendarSubscription(Number(syncBtn.dataset.id));
+                    return;
+                }
+                const editBtn = event.target.closest(".calendar-sub-edit");
+                const item = event.target.closest(".calendar-sub-item");
+                if (editBtn || item) {
+                    event.stopPropagation();
+                    const id = Number((editBtn || item).dataset.id);
+                    if (id) this.openCalendarModal(id);
                 }
             });
         }
@@ -3222,17 +3239,24 @@ class TodoApp {
         }
         this.calendarNav.innerHTML = this.calendarSubscriptions
             .map((sub) => {
-                const color = sub.color || "#0288D1";
+                const area = sub.area_id
+                    ? this.areas.find((a) => a.id === sub.area_id)
+                    : null;
+                const color = (area && area.color) || sub.color || "#0288D1";
                 const errorTitle = sub.last_error
                     ? ` title="${this.escapeHtml(sub.last_error)}"`
                     : "";
                 const errorBadge = sub.last_error
                     ? `<span class="calendar-sub-error" aria-label="Synchronisatiefout"${errorTitle}>!</span>`
                     : "";
+                const areaBadge = area
+                    ? `<span class="calendar-sub-area">${this.escapeHtml(area.name)}</span>`
+                    : "";
                 return `
-                    <div class="calendar-sub-item"${errorTitle}>
+                    <div class="calendar-sub-item" data-id="${sub.id}"${errorTitle}>
                         <span class="calendar-sub-swatch" style="background:${this.escapeHtml(color)}"></span>
                         <span class="calendar-sub-name">${this.escapeHtml(sub.name)}</span>
+                        ${areaBadge}
                         ${errorBadge}
                         <button class="calendar-sub-sync" data-id="${sub.id}" type="button" title="Nu synchroniseren" aria-label="Nu synchroniseren">
                             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -3253,11 +3277,25 @@ class TodoApp {
             .join("");
     }
 
-    openCalendarModal() {
+    openCalendarModal(subscriptionId = null) {
         if (!this.calendarModal) return;
-        this.calendarNameInput.value = "";
-        this.calendarUrlInput.value = "";
-        this.calendarColorInput.value = "#0288D1";
+        const sub = subscriptionId
+            ? this.calendarSubscriptions.find((s) => s.id === subscriptionId)
+            : null;
+        this.editingCalendarSubscriptionId = sub ? sub.id : null;
+        this._populateCalendarAreaSelect(sub ? sub.area_id : null);
+        if (sub) {
+            this.calendarModalTitle.textContent = "Agenda bewerken";
+            this.calendarNameInput.value = sub.name || "";
+            this.calendarUrlInput.value = sub.url || "";
+            this.calendarColorInput.value = sub.color || "#0288D1";
+        } else {
+            this.calendarModalTitle.textContent = "Agenda toevoegen";
+            this.calendarNameInput.value = "";
+            this.calendarUrlInput.value = "";
+            this.calendarColorInput.value = "#0288D1";
+        }
+        this._updateCalendarColorVisibility();
         this.calendarModalError.hidden = true;
         this.calendarModalError.textContent = "";
         this.calendarModal.hidden = false;
@@ -3266,12 +3304,33 @@ class TodoApp {
 
     closeCalendarModal() {
         if (this.calendarModal) this.calendarModal.hidden = true;
+        this.editingCalendarSubscriptionId = null;
+    }
+
+    _populateCalendarAreaSelect(selectedId) {
+        if (!this.calendarAreaSelect) return;
+        const activeAreas = this.areas.filter((a) => a.status === "active");
+        const options = ['<option value="">— Geen gebied —</option>'];
+        for (const area of activeAreas) {
+            const selected = String(area.id) === String(selectedId) ? " selected" : "";
+            options.push(
+                `<option value="${area.id}"${selected}>${this.escapeHtml(area.name)}</option>`,
+            );
+        }
+        this.calendarAreaSelect.innerHTML = options.join("");
+    }
+
+    _updateCalendarColorVisibility() {
+        if (!this.calendarColorField || !this.calendarAreaSelect) return;
+        this.calendarColorField.hidden = !!this.calendarAreaSelect.value;
     }
 
     async saveCalendarSubscription() {
         const name = (this.calendarNameInput.value || "").trim();
         const url = (this.calendarUrlInput.value || "").trim();
         const color = this.calendarColorInput.value || null;
+        const areaValue = this.calendarAreaSelect ? this.calendarAreaSelect.value : "";
+        const area_id = areaValue ? Number(areaValue) : null;
         if (!name || !url) {
             this.calendarModalError.textContent = "Naam en URL zijn verplicht.";
             this.calendarModalError.hidden = false;
@@ -3279,20 +3338,34 @@ class TodoApp {
         }
         this.calendarModalSave.disabled = true;
         try {
-            const data = await this.request("/api/calendar/subscriptions", {
-                method: "POST",
-                body: JSON.stringify({ name, url, color }),
-            });
-            this.closeCalendarModal();
-            await this.loadCalendarSubscriptions();
-            if (data.sync_error) {
-                this.setStatus(`Agenda toegevoegd, maar sync gaf een fout: ${data.sync_error}`);
+            const editingId = this.editingCalendarSubscriptionId;
+            if (editingId) {
+                await this.request(`/api/calendar/subscriptions/${editingId}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ name, url, color, area_id }),
+                });
+                this.closeCalendarModal();
+                await this.loadCalendarSubscriptions();
+                this.calendarEventsByRange.clear();
+                this._refreshCalendarEventsForCurrentView();
+                this.setStatus("Agenda bijgewerkt.");
             } else {
-                this.setStatus("Agenda toegevoegd.");
+                const data = await this.request("/api/calendar/subscriptions", {
+                    method: "POST",
+                    body: JSON.stringify({ name, url, color, area_id }),
+                });
+                this.closeCalendarModal();
+                await this.loadCalendarSubscriptions();
+                if (data.sync_error) {
+                    this.setStatus(`Agenda toegevoegd, maar sync gaf een fout: ${data.sync_error}`);
+                } else {
+                    this.setStatus("Agenda toegevoegd.");
+                }
+                this._refreshCalendarEventsForCurrentView();
             }
-            this._refreshCalendarEventsForCurrentView();
         } catch (error) {
-            this.calendarModalError.textContent = error.message || "Kon agenda niet toevoegen.";
+            this.calendarModalError.textContent =
+                error.message || "Kon agenda niet opslaan.";
             this.calendarModalError.hidden = false;
         } finally {
             this.calendarModalSave.disabled = false;

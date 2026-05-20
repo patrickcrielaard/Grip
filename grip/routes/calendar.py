@@ -28,6 +28,16 @@ class SubscriptionCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
     url: str = Field(..., min_length=1, max_length=2048)
     color: str | None = None
+    area_id: int | None = None
+
+
+class SubscriptionUpdate(BaseModel):
+    """Payload for updating a calendar subscription."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    url: str | None = Field(default=None, min_length=1, max_length=2048)
+    color: str | None = None
+    area_id: int | None = None
 
 
 def _normalize_color(value: str | None) -> str | None:
@@ -41,6 +51,15 @@ def _normalize_color(value: str | None) -> str | None:
             status_code=400, detail="Color must be a hex string like #2E7D32"
         )
     return color
+
+
+def _validate_area_id(user_id: str, area_id: int | None) -> int | None:
+    if area_id is None:
+        return None
+    area = supabase_service.get_area(user_id, area_id)
+    if not area:
+        raise HTTPException(status_code=400, detail="Area not found")
+    return area_id
 
 
 def _normalize_url(value: str) -> str:
@@ -72,8 +91,9 @@ async def create_subscription(
         raise HTTPException(status_code=400, detail="Name is required")
     url = _normalize_url(payload.url)
     color = _normalize_color(payload.color)
+    area_id = _validate_area_id(user["id"], payload.area_id)
     sub = supabase_service.create_calendar_subscription(
-        user["id"], name, url, color=color
+        user["id"], name, url, color=color, area_id=area_id
     )
     if not sub:
         logger.error("create_calendar_subscription failed for user_id=%s", user["id"])
@@ -83,6 +103,44 @@ async def create_subscription(
     error = await asyncio.to_thread(sync_subscription, int(sub["id"]))
     refreshed = supabase_service.get_calendar_subscription(user["id"], int(sub["id"]))
     return {"subscription": refreshed or sub, "sync_error": error}
+
+
+@router.patch("/api/calendar/subscriptions/{subscription_id}")
+async def update_subscription(
+    request: Request, subscription_id: int, payload: SubscriptionUpdate
+) -> Dict[str, Any]:
+    """Update an existing calendar subscription."""
+    user = _require_user(request)
+    existing = supabase_service.get_calendar_subscription(user["id"], subscription_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+
+    updates: Dict[str, Any] = {}
+    if payload.name is not None:
+        name = payload.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Name is required")
+        updates["name"] = name
+    if payload.url is not None:
+        updates["url"] = _normalize_url(payload.url)
+    if "color" in payload.model_fields_set:
+        updates["color"] = _normalize_color(payload.color)
+    if "area_id" in payload.model_fields_set:
+        updates["area_id"] = _validate_area_id(user["id"], payload.area_id)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No changes provided")
+
+    updated = supabase_service.update_calendar_subscription(
+        user["id"], subscription_id, updates
+    )
+    if not updated:
+        logger.error(
+            "update_calendar_subscription failed for user_id=%s subscription_id=%s",
+            user["id"],
+            subscription_id,
+        )
+        raise HTTPException(status_code=500, detail="Unable to update subscription")
+    return {"subscription": updated}
 
 
 @router.delete("/api/calendar/subscriptions/{subscription_id}")
