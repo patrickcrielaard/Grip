@@ -175,21 +175,13 @@ class TodoApp {
         // Next-week view (blueprint)
         this.nextWeekView = document.getElementById("nextWeekView");
         this.nextWeekHeaderTools = document.getElementById("nextWeekHeaderTools");
-        this.nextWeekNextLabel = document.getElementById("nextWeekNextLabel");
-        this.nextWeekBreadcrumb = document.getElementById("nextWeekBreadcrumb");
-        this.nextWeekCount = document.getElementById("nextWeekCount");
-        this.nextWeekLede = document.getElementById("nextWeekLede");
-        this.nextWeekPlannedVal = document.getElementById("nextWeekPlannedVal");
-        this.nextWeekPlannedSub = document.getElementById("nextWeekPlannedSub");
-        this.nextWeekDeadlinesVal = document.getElementById("nextWeekDeadlinesVal");
-        this.nextWeekDeadlinesSub = document.getElementById("nextWeekDeadlinesSub");
-        this.nextWeekFocusVal = document.getElementById("nextWeekFocusVal");
-        this.nextWeekFocusSub = document.getElementById("nextWeekFocusSub");
-        this.nextWeekFreeVal = document.getElementById("nextWeekFreeVal");
-        this.nextWeekFreeSub = document.getElementById("nextWeekFreeSub");
+        this.nextWeekLabel = document.getElementById("nextWeekLabel");
+        this.nextWeekPrevBtn = document.getElementById("nextWeekPrevBtn");
+        this.nextWeekNextBtn = document.getElementById("nextWeekNextBtn");
         this.nextWeekStrip = document.getElementById("nextWeekStrip");
         this.nextWeekDays = document.getElementById("nextWeekDays");
         this.nextWeekFootSummary = document.getElementById("nextWeekFootSummary");
+        this.nextWeekOffset = 1;
         // Today view (integrated)
         this.todayView = document.getElementById("todayView");
         this.todayHeadline = document.getElementById("todayHeadline");
@@ -738,14 +730,19 @@ class TodoApp {
         if (this.todayBellBtn) {
             this.todayBellBtn.addEventListener("click", () => this.setStatus("Geen nieuwe meldingen"));
         }
-        // Next-week header action buttons
-        const nwPrev = document.getElementById("nextWeekPrevBtn");
-        if (nwPrev) {
-            nwPrev.addEventListener("click", () => this.setView({ type: "view", value: "week" }));
+        // Next-week header week stepper
+        if (this.nextWeekPrevBtn) {
+            this.nextWeekPrevBtn.addEventListener("click", () => {
+                if (this.nextWeekOffset <= 1) return;
+                this.nextWeekOffset -= 1;
+                this.renderNextWeekView();
+            });
         }
-        const nwNext = document.getElementById("nextWeekNextBtn");
-        if (nwNext) {
-            nwNext.addEventListener("click", () => this.setStatus("Verder vooruit plannen komt nog"));
+        if (this.nextWeekNextBtn) {
+            this.nextWeekNextBtn.addEventListener("click", () => {
+                this.nextWeekOffset += 1;
+                this.renderNextWeekView();
+            });
         }
         const nwPlan = document.getElementById("nextWeekPlanBtn");
         if (nwPlan) {
@@ -4057,31 +4054,17 @@ class TodoApp {
     // ── Next week view ──────────────────────────────────────────────────
     async renderNextWeekView() {
         if (!this.nextWeekView) return;
-        const range = this.getWeekRange(1);
+        const range = this.getWeekRange(this.nextWeekOffset);
         const startDate = new Date(range.start);
-        const endDate = new Date(range.end);
 
-        // Header subtitle and "Wk N+1" label.
         const weekNo = this._isoWeekNumber(startDate);
-        const monthName = startDate.toLocaleDateString("nl-NL", { month: "long" });
-        const daysUntil = Math.max(
-            0,
-            Math.round((startDate - this._startOfToday()) / 86400000)
-        );
-        const fmtDay = (d) => `${d.getDate()}`;
-        const endMonth = endDate.toLocaleDateString("nl-NL", { month: "short" });
-        const rangeLabel = startDate.getMonth() === endDate.getMonth()
-            ? `${fmtDay(startDate)} — ${fmtDay(endDate)} ${endMonth}`
-            : `${fmtDay(startDate)} ${startDate.toLocaleDateString("nl-NL", { month: "short" })} — ${fmtDay(endDate)} ${endMonth}`;
         const sub = this.contentSubtitle || document.getElementById("contentSubtitle");
-        if (sub) {
-            sub.textContent = `Week ${weekNo} · ${rangeLabel} · over ${daysUntil} ${daysUntil === 1 ? "dag" : "dagen"}`;
+        if (sub) sub.textContent = "";
+        if (this.nextWeekLabel) {
+            this.nextWeekLabel.textContent = String(weekNo);
         }
-        if (this.nextWeekNextLabel) {
-            this.nextWeekNextLabel.textContent = String(weekNo + 1);
-        }
-        if (this.nextWeekBreadcrumb) {
-            this.nextWeekBreadcrumb.textContent = `Week ${weekNo} · ${monthName} ${startDate.getFullYear()}`;
+        if (this.nextWeekPrevBtn) {
+            this.nextWeekPrevBtn.disabled = this.nextWeekOffset <= 1;
         }
 
         // Load real calendar events for the next week.
@@ -4108,8 +4091,6 @@ class TodoApp {
 
         // Aggregate stats.
         let totalItems = 0;
-        let totalMinutes = 0;
-        let hardDeadlines = 0;
         let focusBlocks = 0;
         let focusMinutes = 0;
         let meetingMinutes = 0;
@@ -4140,11 +4121,9 @@ class TodoApp {
                 dayMinutes += dur;
                 focusMinutes += dur;
                 if (dur > 0) focusBlocks += 1;
-                if (t.deadline === key) hardDeadlines += 1;
             });
             const itemCount = dayEvents.length + dayTodos.length;
             totalItems += itemCount;
-            totalMinutes += dayMinutes;
             perDayMinutes.push(dayMinutes);
 
             // Combine + sort lines by start time.
@@ -4186,44 +4165,6 @@ class TodoApp {
             this.nextWeekDays.innerHTML = dayHtmls.join("")
                 || `<div class="nw-days-empty">Geen geplande items voor volgende week.</div>`;
         }
-
-        // Hero count + lede.
-        if (this.nextWeekCount) this.nextWeekCount.textContent = String(totalItems);
-        if (this.nextWeekLede) {
-            this.nextWeekLede.textContent = totalItems === 0
-                ? "Nog niets gepland — een rustige week om vooruit te kijken."
-                : `${totalItems} ${totalItems === 1 ? "item" : "items"} verspreid over de week, waarvan ${hardDeadlines} ${hardDeadlines === 1 ? "deadline" : "deadlines"}.`;
-        }
-
-        // Hero stats.
-        const totalH = Math.floor(totalMinutes / 60);
-        const totalM = Math.round(totalMinutes % 60);
-        if (this.nextWeekPlannedVal) {
-            this.nextWeekPlannedVal.innerHTML = `${totalH}<small>u${totalM ? ` ${totalM}m` : ""}</small>`;
-        }
-        if (this.nextWeekPlannedSub) {
-            const pct = Math.round((totalMinutes / (45 * 60)) * 100);
-            this.nextWeekPlannedSub.textContent = `van 45u capaciteit · ${pct}%`;
-        }
-        if (this.nextWeekDeadlinesVal) {
-            this.nextWeekDeadlinesVal.innerHTML = `${hardDeadlines}<small>hard</small>`;
-        }
-        if (this.nextWeekDeadlinesSub) {
-            this.nextWeekDeadlinesSub.textContent = hardDeadlines === 0 ? "geen deadlines" : "harde data";
-        }
-        if (this.nextWeekFocusVal) this.nextWeekFocusVal.textContent = String(focusBlocks);
-        if (this.nextWeekFocusSub) {
-            const fH = Math.floor(focusMinutes / 60);
-            const fM = Math.round(focusMinutes % 60);
-            this.nextWeekFocusSub.textContent = `${fH}u${fM ? ` ${fM}m` : ""} diep werk`;
-        }
-        const freeMinutes = Math.max(0, 45 * 60 - totalMinutes);
-        if (this.nextWeekFreeVal) {
-            const freeH = Math.floor(freeMinutes / 60);
-            const freeM = Math.round(freeMinutes % 60);
-            this.nextWeekFreeVal.innerHTML = `${freeH}<small>u${freeM ? ` ${freeM}m` : ""}</small>`;
-        }
-        if (this.nextWeekFreeSub) this.nextWeekFreeSub.textContent = "buffer";
 
         // Week strip.
         const maxDay = perDayMinutes.reduce((m, v) => Math.max(m, v), 0) || 1;

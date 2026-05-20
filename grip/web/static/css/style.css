@@ -4624,6 +4624,34 @@ body.auth-page {
 }
 .content-header-tools .icon-btn svg { width: 16px; height: 16px; }
 
+.nw-week-stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 2px;
+    background: transparent;
+}
+.nw-week-stepper .btn-ghost {
+    border: none;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1;
+}
+.nw-week-stepper .btn-ghost[disabled] {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+.nw-step-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    padding: 0 8px;
+    font-variant-numeric: tabular-nums;
+}
+
 /* Agenda */
 .agenda-panel { padding: 18px 18px 14px; }
 .agenda-now {
@@ -5270,97 +5298,17 @@ body.auth-page {
     background: var(--ink);
     color: #fff;
     border-radius: 24px;
-    padding: 24px 26px 22px;
-    display: grid;
-    grid-template-columns: 1.4fr 1fr;
-    gap: 28px;
+    padding: 18px 26px;
     margin-bottom: 18px;
     position: relative;
     overflow: hidden;
 }
-.nw-hero-intro { min-width: 0; }
-.nw-breadcrumb {
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: rgba(255,255,255,0.55);
-    font-weight: 700;
-    margin-bottom: 8px;
-}
-.nw-h1 {
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-size: 46px;
-    line-height: 1.05;
-    letter-spacing: -0.02em;
-    margin: 0;
-    text-wrap: balance;
-    color: #fff;
-}
-.nw-h1 em {
-    font-style: normal;
-    font-family: var(--font-body);
-    background: #fff;
-    color: var(--ink);
-    padding: 0 12px;
-    border-radius: 999px;
-    font-weight: 700;
-    font-size: 28px;
-    vertical-align: 5px;
-}
-.nw-lede {
-    font-size: 13.5px;
-    color: rgba(255,255,255,0.75);
-    line-height: 1.55;
-    margin: 12px 0 0;
-    max-width: 460px;
-}
-.nw-lede b { color: #fff; font-weight: 600; }
-
-.nw-hero-stats {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 18px;
-    align-self: end;
-}
-.nw-hero-stat .lbl {
-    font-size: 10.5px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: rgba(255,255,255,0.5);
-    font-weight: 700;
-}
-.nw-hero-stat .val {
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-size: 36px;
-    line-height: 1;
-    letter-spacing: -0.02em;
-    margin-top: 6px;
-}
-.nw-hero-stat .val small {
-    font-family: var(--font-body);
-    font-style: normal;
-    font-size: 13px;
-    color: rgba(255,255,255,0.55);
-    font-weight: 600;
-    margin-left: 4px;
-}
-.nw-hero-stat .sub {
-    font-size: 11.5px;
-    color: rgba(255,255,255,0.55);
-    margin-top: 4px;
-}
 
 /* Week strip */
 .nw-weekstrip {
-    grid-column: 1 / -1;
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 6px;
-    margin-top: 16px;
-    padding-top: 14px;
-    border-top: 1px solid rgba(255,255,255,0.12);
 }
 .nw-weekstrip .nwd {
     display: flex; flex-direction: column; gap: 4px;
@@ -5861,5 +5809,4 @@ body.auth-page {
 
 @media (max-width: 1100px) {
     .nw-page { grid-template-columns: 1fr; }
-    .nw-hero { grid-template-columns: 1fr; }
 }

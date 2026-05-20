@@ -217,12 +217,14 @@
                 <span class="content-task-count" id="itemCount">0 tasks</span>
             </div>
             <div class="content-header-tools" id="nextWeekHeaderTools" hidden>
-                <button type="button" class="btn-ghost" id="nextWeekPrevBtn">‹ Deze week</button>
-                <button type="button" class="btn-ghost" id="nextWeekNextBtn">Wk <span id="nextWeekNextLabel">22</span> ›</button>
+                <div class="nw-week-stepper" role="group" aria-label="Weeknavigatie">
+                    <button type="button" class="btn-ghost nw-step-prev" id="nextWeekPrevBtn" aria-label="Vorige week">‹</button>
+                    <span class="nw-step-label">Wk <span id="nextWeekLabel">22</span></span>
+                    <button type="button" class="btn-ghost nw-step-next" id="nextWeekNextBtn" aria-label="Volgende week">›</button>
+                </div>
                 <div class="tab-pill nw-tab-pill" role="tablist" aria-label="Weergave">
-                    <button type="button" class="on" data-nw-tab="blueprint">Blauwdruk</button>
                     <button type="button" data-nw-tab="agenda">Agenda</button>
-                    <button type="button" data-nw-tab="list">Lijst</button>
+                    <button type="button" class="on" data-nw-tab="list">Lijst</button>
                 </div>
                 <button type="button" class="btn-primary" id="nextWeekPlanBtn">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -389,33 +391,6 @@
                 <div class="nw-main">
                     <!-- Hero -->
                     <div class="nw-hero">
-                        <div class="nw-hero-intro">
-                            <div class="nw-breadcrumb" id="nextWeekBreadcrumb"></div>
-                            <h1 class="nw-h1">Volgende week<br>ligt er <em id="nextWeekCount">0</em> dingen klaar.</h1>
-                            <p class="nw-lede" id="nextWeekLede"></p>
-                        </div>
-                        <div class="nw-hero-stats">
-                            <div class="nw-hero-stat">
-                                <div class="lbl">Geplande tijd</div>
-                                <div class="val" id="nextWeekPlannedVal">0<small>u</small></div>
-                                <div class="sub" id="nextWeekPlannedSub">van 45u capaciteit</div>
-                            </div>
-                            <div class="nw-hero-stat">
-                                <div class="lbl">Deadlines</div>
-                                <div class="val" id="nextWeekDeadlinesVal">0<small>hard</small></div>
-                                <div class="sub" id="nextWeekDeadlinesSub">geen zachte</div>
-                            </div>
-                            <div class="nw-hero-stat">
-                                <div class="lbl">Focus-blokken</div>
-                                <div class="val" id="nextWeekFocusVal">0</div>
-                                <div class="sub" id="nextWeekFocusSub">diep werk</div>
-                            </div>
-                            <div class="nw-hero-stat">
-                                <div class="lbl">Vrije ruimte</div>
-                                <div class="val" id="nextWeekFreeVal">0<small>u</small></div>
-                                <div class="sub" id="nextWeekFreeSub">buffer</div>
-                            </div>
-                        </div>
                         <div class="nw-weekstrip" id="nextWeekStrip"></div>
                     </div>
 
