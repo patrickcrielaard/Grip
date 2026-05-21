@@ -181,7 +181,17 @@ class TodoApp {
         this.nextWeekStrip = document.getElementById("nextWeekStrip");
         this.nextWeekDays = document.getElementById("nextWeekDays");
         this.nextWeekFootSummary = document.getElementById("nextWeekFootSummary");
+        this.nextWeekBudgetBars = document.getElementById("nextWeekBudgetBars");
+        this.nextWeekBudgetLegend = document.getElementById("nextWeekBudgetLegend");
         this.nextWeekOffset = 1;
+        // Categories drive the dynamic Tijdsbudget block. The keyword is
+        // matched (case-insensitive) against the ICS DESCRIPTION field. Add
+        // more categories here as they become defined.
+        this.nextWeekBudgetCategories = [
+            { keyword: "DEEP", label: "Diep werk", className: "focus", color: "var(--ink)" },
+            { keyword: "MEET", label: "Meeting", className: "meet", color: "var(--ink-tertiary)" },
+        ];
+        this.nextWeekBudgetCapacityMinutes = 45 * 60;
         // Today view (integrated)
         this.todayView = document.getElementById("todayView");
         this.todayHeadline = document.getElementById("todayHeadline");
@@ -733,7 +743,7 @@ class TodoApp {
         // Next-week header week stepper
         if (this.nextWeekPrevBtn) {
             this.nextWeekPrevBtn.addEventListener("click", () => {
-                if (this.nextWeekOffset <= 1) return;
+                if (this.nextWeekOffset <= 0) return;
                 this.nextWeekOffset -= 1;
                 this.renderNextWeekView();
             });
@@ -4064,7 +4074,7 @@ class TodoApp {
             this.nextWeekLabel.textContent = String(weekNo);
         }
         if (this.nextWeekPrevBtn) {
-            this.nextWeekPrevBtn.disabled = this.nextWeekOffset <= 1;
+            this.nextWeekPrevBtn.disabled = this.nextWeekOffset <= 0;
         }
 
         // Load real calendar events for the next week.
@@ -4195,6 +4205,61 @@ class TodoApp {
                 `<b>${focusBlocks} focus-${focusBlocks === 1 ? "blok" : "blokken"}</b> · ` +
                 `<b>${Math.floor(focusMinutes / 60)}u ${String(Math.round(focusMinutes % 60)).padStart(2, "0")}m</b> diep werk · ` +
                 `<b>${Math.floor(meetingMinutes / 60)}u ${String(Math.round(meetingMinutes % 60)).padStart(2, "0")}m</b> meetings & afspraken`;
+        }
+
+        this._renderNextWeekBudget(events);
+    }
+
+    _renderNextWeekBudget(events) {
+        if (!this.nextWeekBudgetBars && !this.nextWeekBudgetLegend) return;
+        const categories = this.nextWeekBudgetCategories || [];
+        const capacity = this.nextWeekBudgetCapacityMinutes || 0;
+        const totals = new Map(categories.map((c) => [c.keyword, 0]));
+
+        events.forEach((ev) => {
+            if (ev.all_day) return;
+            const desc = (ev.description || "").toUpperCase();
+            if (!desc) return;
+            const match = categories.find((c) => desc.includes(c.keyword.toUpperCase()));
+            if (!match) return;
+            const dur = (Date.parse(ev.end_at) - Date.parse(ev.start_at)) / 60000;
+            if (!Number.isFinite(dur) || dur <= 0) return;
+            totals.set(match.keyword, totals.get(match.keyword) + dur);
+        });
+
+        const used = Array.from(totals.values()).reduce((a, b) => a + b, 0);
+        const freeMinutes = Math.max(0, capacity - used);
+
+        const pct = (mins) => (capacity > 0 ? (mins / capacity) * 100 : 0);
+        const fmt = (mins) => {
+            const h = Math.floor(mins / 60);
+            const m = Math.round(mins % 60);
+            return `${h}u ${String(m).padStart(2, "0")}m`;
+        };
+
+        if (this.nextWeekBudgetBars) {
+            const bars = categories
+                .map((c) => {
+                    const mins = totals.get(c.keyword) || 0;
+                    if (mins <= 0) return "";
+                    return `<i class="${c.className}" style="width:${pct(mins).toFixed(2)}%;"></i>`;
+                })
+                .join("");
+            const freeBar = freeMinutes > 0
+                ? `<i class="free" style="width:${pct(freeMinutes).toFixed(2)}%;"></i>`
+                : "";
+            this.nextWeekBudgetBars.innerHTML = bars + freeBar;
+        }
+
+        if (this.nextWeekBudgetLegend) {
+            const items = categories.map((c) => {
+                const mins = totals.get(c.keyword) || 0;
+                return `<span><i style="background:${c.color};"></i>${this.escapeHtml(c.label)} <b>${fmt(mins)}</b></span>`;
+            });
+            items.push(
+                `<span><i style="background:var(--border-strong);"></i>Vrij <b>${fmt(freeMinutes)}</b></span>`
+            );
+            this.nextWeekBudgetLegend.innerHTML = items.join("");
         }
     }
 
