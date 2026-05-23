@@ -183,6 +183,8 @@ class TodoApp {
         this.nextWeekFootSummary = document.getElementById("nextWeekFootSummary");
         this.nextWeekBudgetBars = document.getElementById("nextWeekBudgetBars");
         this.nextWeekBudgetLegend = document.getElementById("nextWeekBudgetLegend");
+        this.nextWeekDeadlinesList = document.getElementById("nextWeekDeadlinesList");
+        this.nextWeekDeadlinesSub = document.getElementById("nextWeekDeadlinesSub");
         this.nextWeekOffset = 1;
         // Categories drive the dynamic Tijdsbudget block. The keyword is
         // matched (case-insensitive) against the ICS DESCRIPTION field. Add
@@ -4165,7 +4167,6 @@ class TodoApp {
                     <div class="nw-day-lineup">${lineupHtml}</div>
                     <div class="nw-day-totals">
                         <span class="focus">${focusLabel}</span>
-                        <span class="meta"><b>${itemCount}</b> ${itemCount === 1 ? "item" : "items"}</span>
                     </div>
                 </div>
             `;
@@ -4174,6 +4175,10 @@ class TodoApp {
         if (this.nextWeekDays) {
             this.nextWeekDays.innerHTML = dayHtmls.join("")
                 || `<div class="nw-days-empty">Geen geplande items voor volgende week.</div>`;
+        }
+        const itemCountEl = document.getElementById("nextWeekItemCount");
+        if (itemCountEl) {
+            itemCountEl.textContent = `${totalItems} ${totalItems === 1 ? "item" : "items"}`;
         }
 
         // Week strip.
@@ -4208,6 +4213,56 @@ class TodoApp {
         }
 
         this._renderNextWeekBudget(events);
+        this._renderNextWeekDeadlines(range.start, range.end);
+    }
+
+    _renderNextWeekDeadlines(rangeStart, rangeEnd) {
+        if (!this.nextWeekDeadlinesList) return;
+        const weekdayShort = ["zo", "ma", "di", "wo", "do", "vr", "za"];
+        const todayKey = this._fmtDateKey(this._startOfToday());
+        const todayMs = this._startOfToday().getTime();
+
+        const deadlines = this.todos
+            .filter((t) => !t.completed && t.deadline
+                && t.deadline >= rangeStart && t.deadline <= rangeEnd)
+            .sort((a, b) => a.deadline.localeCompare(b.deadline));
+
+        if (this.nextWeekDeadlinesSub) {
+            this.nextWeekDeadlinesSub.textContent = deadlines.length === 0
+                ? "Geen deadlines deze week."
+                : `${deadlines.length} ${deadlines.length === 1 ? "niet-onderhandelbare datum" : "niet-onderhandelbare data"} deze week.`;
+        }
+
+        const escape = (s) => this.escapeHtml(s);
+        const rows = deadlines.map((t, idx) => {
+            const [y, m, d] = t.deadline.split("-").map((n) => parseInt(n, 10));
+            const dateObj = new Date(y, m - 1, d);
+            const day = dateObj.getDate();
+            const wd = weekdayShort[dateObj.getDay()];
+            const daysUntil = Math.round((dateObj.getTime() - todayMs) / 86400000);
+            let tag;
+            if (t.deadline === todayKey) tag = "vandaag";
+            else if (daysUntil === 1) tag = "morgen";
+            else if (daysUntil < 0) tag = `+ ${Math.abs(daysUntil)} dg te laat`;
+            else tag = `— ${daysUntil} dg`;
+            const area = this.areas.find((a) => a.id === t.area_id);
+            const areaColor = area ? area.color : "var(--ink-tertiary)";
+            const areaName = area ? area.name : "Geen gebied";
+            const timeBit = t.planned_time ? ` · ${t.planned_time.slice(0, 5)}` : "";
+            const urgent = idx === 0 && daysUntil <= 2;
+            return `
+                <div class="dl-row${urgent ? " urgent" : ""}">
+                    <div class="when">${day}<small>${wd}</small></div>
+                    <div>
+                        <div class="ti">${escape(t.title || "")}</div>
+                        <div class="ms"><span class="dot" style="background:${escape(areaColor)}"></span>${escape(areaName)}${escape(timeBit)}</div>
+                    </div>
+                    <span class="tag">${escape(tag)}</span>
+                </div>
+            `;
+        });
+
+        this.nextWeekDeadlinesList.innerHTML = rows.join("");
     }
 
     _renderNextWeekBudget(events) {
@@ -4301,10 +4356,11 @@ class TodoApp {
         const badge = isDeadlineToday
             ? `<span class="badge dl">Deadline</span>`
             : (dur >= 50 ? `<span class="badge">Focus</span>` : "");
+        const barColor = isDeadlineToday ? "var(--danger)" : areaColor;
         return `
             <div class="nw-line task${isDeadlineToday ? " deadline" : ""}">
                 <div class="t"><b>${escape(start)}</b><span>${escape(durLabel)}</span></div>
-                <div class="bar"${isDeadlineToday ? ' style="background:var(--danger);"' : ""}></div>
+                <div class="bar" style="background:${escape(barColor)};"></div>
                 <div class="body">
                     <div class="ti">${escape(t.title || "")}</div>
                     <div class="sub"><span class="dot" style="background:${escape(areaColor)}"></span>${areaName}</div>

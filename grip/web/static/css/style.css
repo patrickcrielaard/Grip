@@ -5382,8 +5382,8 @@ body.auth-page {
 }
 .nw-day-when .nm {
     font-family: var(--font-serif);
-    font-style: italic;
-    font-size: 28px;
+    font-style: normal;
+    font-size: 22px;
     line-height: 1;
     letter-spacing: -0.01em;
     color: var(--ink);
@@ -5395,7 +5395,13 @@ body.auth-page {
     color: var(--ink-tertiary);
     font-weight: 600;
     margin-left: 2px;
-    vertical-align: 8px;
+    vertical-align: 5px;
+}
+.nw-day-empty {
+    font-size: 10px;
+    color: var(--ink-tertiary);
+    opacity: 0.75;
+    padding: 4px 0;
 }
 .nw-day-when .dt {
     font-size: 11.5px; color: var(--ink-tertiary); font-weight: 600;

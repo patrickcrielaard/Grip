@@ -397,13 +397,7 @@
                     <!-- Per-day blueprint -->
                     <div class="nw-panel">
                         <div class="nw-panel-head">
-                            <div class="nw-panel-title">De week dag-voor-dag <span class="num">7 dagen · 34 items</span></div>
-                            <div class="nw-panel-tools">
-                                <div class="tab-pill nw-tab-pill">
-                                    <button type="button" class="on">Verdicht</button>
-                                    <button type="button">Volledig</button>
-                                </div>
-                            </div>
+                            <div class="nw-panel-title">De week dag-voor-dag <span class="num" id="nextWeekItemCount">0 items</span></div>
                         </div>
 
                         <!-- Day rows (rendered by JS) -->
@@ -421,39 +415,8 @@
                     <!-- Hard deadlines -->
                     <div class="rail-card">
                         <h4>Harde deadlines</h4>
-                        <div class="rail-sub">4 niet-onderhandelbare data deze week.</div>
-                        <div class="dl-row urgent">
-                            <div class="when">21<small>do</small></div>
-                            <div>
-                                <div class="ti">Marathon-inschrijving definitief</div>
-                                <div class="ms"><span class="dot" style="background:var(--area-1)"></span>Gezondheid · 17:00 sluit</div>
-                            </div>
-                            <span class="tag">— 5 dg</span>
-                        </div>
-                        <div class="dl-row">
-                            <div class="when">19<small>di</small></div>
-                            <div>
-                                <div class="ti">Sprint-rapport Q2 indienen</div>
-                                <div class="ms"><span class="dot" style="background:var(--area-2)"></span>Werk · 16:00</div>
-                            </div>
-                            <span class="tag">— 3 dg</span>
-                        </div>
-                        <div class="dl-row">
-                            <div class="when">24<small>zo</small></div>
-                            <div>
-                                <div class="ti">Reservering restaurant 6 pers.</div>
-                                <div class="ms"><span class="dot" style="background:var(--area-3)"></span>Familie · Eva's diner</div>
-                            </div>
-                            <span class="tag">— 8 dg</span>
-                        </div>
-                        <div class="dl-row">
-                            <div class="when">22<small>vr</small></div>
-                            <div>
-                                <div class="ti">Demo afronden vóór maandag</div>
-                                <div class="ms"><span class="dot" style="background:var(--area-2)"></span>Werk · v2 release</div>
-                            </div>
-                            <span class="tag">— 6 dg</span>
-                        </div>
+                        <div class="rail-sub" id="nextWeekDeadlinesSub">Geen deadlines deze week.</div>
+                        <div id="nextWeekDeadlinesList"></div>
                     </div>
 
                     <!-- Time budget -->
