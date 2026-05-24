@@ -5651,6 +5651,24 @@ body.auth-page {
     color: var(--ink-tertiary); background: var(--surface);
 }
 .next-week-view .dl-row.urgent .tag { background: var(--ink); color: #fff; }
+.next-week-view .dl-row[role="button"] { cursor: pointer; }
+.next-week-view .dl-row[role="button"]:hover {
+    background: color-mix(in srgb, var(--surface) 60%, white);
+}
+.next-week-view .dl-row[role="button"]:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+    border-radius: 6px;
+}
+.next-week-view .dl-status {
+    font-size: 11px;
+    font-weight: 600;
+    margin-top: 4px;
+    color: var(--ink-tertiary);
+}
+.next-week-view .dl-status.unscheduled { color: var(--danger); }
+.next-week-view .dl-status.late { color: var(--danger); }
+.next-week-view .dl-status.scheduled { color: var(--good); }
 
 /* Time budget */
 .next-week-view .budget {

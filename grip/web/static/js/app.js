@@ -760,6 +760,23 @@ class TodoApp {
         if (nwPlan) {
             nwPlan.addEventListener("click", () => this.toggleAddTask());
         }
+        if (this.nextWeekDeadlinesList) {
+            const openFromRow = (row) => {
+                const id = Number(row.dataset.todoId);
+                if (id) this.openModal(id);
+            };
+            this.nextWeekDeadlinesList.addEventListener("click", (e) => {
+                const row = e.target.closest(".dl-row[data-todo-id]");
+                if (row) openFromRow(row);
+            });
+            this.nextWeekDeadlinesList.addEventListener("keydown", (e) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                const row = e.target.closest(".dl-row[data-todo-id]");
+                if (!row) return;
+                e.preventDefault();
+                openFromRow(row);
+            });
+        }
         if (this.todayTasks) {
             this.todayTasks.addEventListener("click", (e) => this._onTodayTaskClick(e));
         }
@@ -4234,6 +4251,14 @@ class TodoApp {
         }
 
         const escape = (s) => this.escapeHtml(s);
+        const fmtDur = (mins) => {
+            const h = Math.floor(mins / 60);
+            const m = Math.round(mins % 60);
+            if (h && m) return `${h}u ${m}m`;
+            if (h) return `${h}u`;
+            return `${m}m`;
+        };
+
         const rows = deadlines.map((t, idx) => {
             const [y, m, d] = t.deadline.split("-").map((n) => parseInt(n, 10));
             const dateObj = new Date(y, m - 1, d);
@@ -4248,14 +4273,35 @@ class TodoApp {
             const area = this.areas.find((a) => a.id === t.area_id);
             const areaColor = area ? area.color : "var(--ink-tertiary)";
             const areaName = area ? area.name : "Geen gebied";
-            const timeBit = t.planned_time ? ` · ${t.planned_time.slice(0, 5)}` : "";
+
+            // Focus-tijd status.
+            const dur = Number(t.duration) || 0;
+            const plannedDate = t.planned_date || "";
+            const hasPlan = !!plannedDate && plannedDate <= t.deadline;
+            const lateplan = !!plannedDate && plannedDate > t.deadline;
+            let statusClass = "unscheduled";
+            let statusLabel;
+            if (hasPlan) {
+                statusClass = "scheduled";
+                const when = plannedDate === todayKey ? "vandaag" : `${plannedDate.slice(8, 10)}/${plannedDate.slice(5, 7)}`;
+                statusLabel = dur > 0
+                    ? `${fmtDur(dur)} gepland op ${when}`
+                    : `gepland op ${when} (geen duur)`;
+            } else if (lateplan) {
+                statusClass = "late";
+                statusLabel = `gepland NA deadline (${plannedDate.slice(8, 10)}/${plannedDate.slice(5, 7)})`;
+            } else {
+                statusLabel = dur > 0 ? `${fmtDur(dur)} nodig · plan tijd` : "plan tijd";
+            }
+
             const urgent = idx === 0 && daysUntil <= 2;
             return `
-                <div class="dl-row${urgent ? " urgent" : ""}">
+                <div class="dl-row${urgent ? " urgent" : ""} ${statusClass}" data-todo-id="${t.id}" role="button" tabindex="0">
                     <div class="when">${day}<small>${wd}</small></div>
                     <div>
                         <div class="ti">${escape(t.title || "")}</div>
-                        <div class="ms"><span class="dot" style="background:${escape(areaColor)}"></span>${escape(areaName)}${escape(timeBit)}</div>
+                        <div class="ms"><span class="dot" style="background:${escape(areaColor)}"></span>${escape(areaName)}</div>
+                        <div class="dl-status ${statusClass}">${escape(statusLabel)}</div>
                     </div>
                     <span class="tag">${escape(tag)}</span>
                 </div>
