@@ -5665,7 +5665,9 @@ class TodoApp {
     _tbBuildPoolFromTasks() {
         const today = this._tbActiveDateKey();
         const todays = (this.todos || []).filter((t) => this._tbIsTodoForActiveDate(t) && !t.completed);
-        const unscheduled = todays.filter((t) => !this._tbExtractTaskStart(t) && !this._tbScheduledTaskIds.has(t.id));
+        // Keep every task with no explicit start-time in the pool; tasks that
+        // were dragged onto the schema stay listed but are flagged as planned.
+        const unscheduled = todays.filter((t) => !this._tbExtractTaskStart(t));
         this._tbPool = unscheduled.map((t) => {
             const areaId = this.resolveTaskAreaId ? this.resolveTaskAreaId(t) : t.area_id;
             return {
@@ -5675,6 +5677,7 @@ class TodoApp {
                 meta: this._tbPoolMeta(t),
                 area: areaId || this._tbFallbackAreaId(),
                 est: Number(t.duration_minutes) || 30,
+                planned: this._tbScheduledTaskIds.has(t.id),
             };
         });
         // Suppress unused-var lint: ensure today referenced
@@ -5856,17 +5859,22 @@ class TodoApp {
 
     _tbRenderPool() {
         const total = this._tbPool.reduce((acc, p) => acc + p.est, 0);
+        const plannedCount = this._tbPool.filter((p) => p.planned).length;
         const badge = document.getElementById("tbPoolBadge");
-        if (badge) badge.textContent = `${this._tbPool.length} taken · ${this._tbFormatMins(total)}`;
+        if (badge) {
+            const base = `${this._tbPool.length} taken · ${this._tbFormatMins(total)}`;
+            badge.textContent = plannedCount ? `${base} · ${plannedCount} gepland` : base;
+        }
         const list = document.getElementById("tbPoolList");
         if (!list) return;
         list.innerHTML = this._tbPool.map((p) => `
-            <li class="tb-pool-item" draggable="true" data-tb-pool-id="${p.id}">
+            <li class="tb-pool-item${p.planned ? " is-planned" : ""}" draggable="true" data-tb-pool-id="${p.id}">
                 <span class="dot" style="background:${this._tbAreaColor(p.area)};"></span>
                 <span class="body">
                     <span class="t">${this.escapeHtml(p.title)}</span>
                     <span class="m">${this.escapeHtml(p.meta)}</span>
                 </span>
+                ${p.planned ? `<span class="tb-pool-planned">Gepland</span>` : ""}
                 <span class="est">${p.est}m</span>
                 <span class="grip" aria-hidden="true"><span><i></i><i></i></span><span><i></i><i></i></span><span><i></i><i></i></span></span>
             </li>
@@ -5972,35 +5980,8 @@ class TodoApp {
             `;
         }).join("");
 
-        // Gap slots
-        const gaps = [];
-        const dayStart = startHour * 60;
-        const dayEnd   = Math.floor((endHour + 0.5) * 60);
-        let cursor = dayStart;
-        for (const b of blocks) {
-            const s = this._tbParseTime(b.start);
-            if (s - cursor >= 25) {
-                gaps.push({ start: cursor, end: s });
-            }
-            cursor = Math.max(cursor, this._tbParseTime(b.end));
-        }
-        if (dayEnd - cursor >= 25) gaps.push({ start: cursor, end: dayEnd });
-        const gapHtml = gaps.map((g) => {
-            const top = minsToTop(g.start);
-            const height = ((g.end - g.start) / 60) * hourPx - 4;
-            const label = (() => {
-                const dur = g.end - g.start;
-                if (g.start < 12 * 60) return `Buffer · ${dur} min`;
-                if (g.start < 18 * 60) return `Pauze · ${dur} min`;
-                return `Vrij · ${dur} min`;
-            })();
-            return `
-                <div class="tb-gap" style="top:${top}px;height:${Math.max(28, height)}px;"
-                     data-tb-gap-start="${g.start}" data-tb-gap-end="${g.end}">
-                    <span class="plus">+</span> ${this.escapeHtml(label)}
-                </div>
-            `;
-        }).join("");
+        // Day end (used by the now-line bounds check)
+        const dayEnd = Math.floor((endHour + 0.5) * 60);
 
         // Now line
         let nuHtml = "";
@@ -6018,9 +5999,9 @@ class TodoApp {
         wrap.innerHTML = `
             <div class="tb-timeline-inner" style="height:${totalHeight}px;">
                 ${ticks}
-                ${gapHtml}
                 ${blockHtml}
                 ${nuHtml}
+                <div class="tb-drop-indicator" hidden><span class="tb-drop-label"></span></div>
             </div>
         `;
 
@@ -6083,35 +6064,63 @@ class TodoApp {
             }
         });
 
-        // Drag a pool item / template onto a gap to create a block
+        // Drag a pool item / template onto the timeline to schedule a block.
+        const computeDropMins = (clientY) => {
+            const inner = wrap.querySelector(".tb-timeline-inner");
+            if (!inner) return null;
+            const rect = inner.getBoundingClientRect();
+            const y = clientY - rect.top;
+            const hourPx = 52;
+            const startHour = 6;
+            let mins = startHour * 60 + (y / hourPx) * 60;
+            mins = Math.round(mins / 15) * 15;
+            const endHour = 22;
+            const dayStart = startHour * 60;
+            const dayEnd = Math.floor((endHour + 0.5) * 60);
+            mins = Math.max(dayStart, Math.min(dayEnd - 15, mins));
+            return mins;
+        };
+        const getDragMeta = () => this._tbDragMeta || null;
+
         wrap.addEventListener("dragover", (event) => {
-            const gap = event.target.closest(".tb-gap");
-            if (gap) {
-                event.preventDefault();
-                gap.classList.add("drag-over");
-            } else {
-                event.preventDefault();
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+            const meta = getDragMeta();
+            if (!meta) return;
+            const mins = computeDropMins(event.clientY);
+            if (mins == null) return;
+            const dur = meta.dur || 30;
+            const hourPx = 52;
+            const startHour = 6;
+            const top = ((mins - startHour * 60) / 60) * hourPx;
+            const height = (dur / 60) * hourPx - 4;
+            const ind = wrap.querySelector(".tb-drop-indicator");
+            if (!ind) return;
+            ind.hidden = false;
+            ind.style.top = `${top}px`;
+            ind.style.height = `${Math.max(22, height)}px`;
+            const label = ind.querySelector(".tb-drop-label");
+            if (label) {
+                label.textContent = `${this._tbFormatTime(mins)} — ${this._tbFormatTime(mins + dur)} · ${meta.title || ""}`;
             }
         });
         wrap.addEventListener("dragleave", (event) => {
-            const gap = event.target.closest(".tb-gap");
-            if (gap) gap.classList.remove("drag-over");
+            if (event.target === wrap || !wrap.contains(event.relatedTarget)) {
+                const ind = wrap.querySelector(".tb-drop-indicator");
+                if (ind) ind.hidden = true;
+            }
         });
         wrap.addEventListener("drop", (event) => {
             event.preventDefault();
+            const ind = wrap.querySelector(".tb-drop-indicator");
+            if (ind) ind.hidden = true;
             const data = event.dataTransfer.getData("text/plain");
             if (!data) return;
             const payload = (() => { try { return JSON.parse(data); } catch (_) { return null; } })();
             if (!payload) return;
 
-            // Determine drop position (snap to 15-min)
-            const inner = wrap.querySelector(".tb-timeline-inner");
-            const rect = inner.getBoundingClientRect();
-            const y = event.clientY - rect.top;
-            const hourPx = 52;
-            const startHour = 6;
-            let mins = startHour * 60 + (y / hourPx) * 60;
-            mins = Math.round(mins / 15) * 15;
+            const mins = computeDropMins(event.clientY);
+            if (mins == null) return;
 
             if (payload.kind === "pool") {
                 const item = this._tbPool.find((p) => p.id === payload.id);
@@ -6305,7 +6314,10 @@ class TodoApp {
             if (pool) {
                 pool.classList.add("dragging");
                 event.dataTransfer.setData("text/plain", JSON.stringify({ kind: "pool", id: pool.dataset.tbPoolId }));
-                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.effectAllowed = "copy";
+                const item = this._tbPool.find((p) => p.id === pool.dataset.tbPoolId);
+                this._tbDragMeta = item ? { dur: item.est, title: item.title } : null;
+                document.body.classList.add("tb-dragging");
                 return;
             }
             const tpl = event.target.closest("[data-tb-tpl-id]");
@@ -6313,18 +6325,24 @@ class TodoApp {
                 tpl.classList.add("dragging");
                 event.dataTransfer.setData("text/plain", JSON.stringify({ kind: "tpl", id: tpl.dataset.tbTplId }));
                 event.dataTransfer.effectAllowed = "copy";
+                const t = this._tbTemplates().find((x) => x.id === tpl.dataset.tbTplId);
+                this._tbDragMeta = t ? { dur: t.dur, title: t.name } : null;
+                document.body.classList.add("tb-dragging");
                 return;
             }
             const block = event.target.closest(".tb-block");
             if (block) {
                 block.classList.add("dragging");
-                event.dataTransfer.setData("text/plain", JSON.stringify({ kind: "block", id: Number(block.dataset.tbBlockId) }));
+                event.dataTransfer.setData("text/plain", JSON.stringify({ kind: "block", id: block.dataset.tbBlockId }));
                 event.dataTransfer.effectAllowed = "move";
+                this._tbDragMeta = null;
             }
         });
         document.addEventListener("dragend", (event) => {
             event.target.closest?.(".dragging")?.classList.remove("dragging");
-            document.querySelectorAll(".tb-gap.drag-over").forEach((g) => g.classList.remove("drag-over"));
+            this._tbDragMeta = null;
+            document.body.classList.remove("tb-dragging");
+            document.querySelectorAll(".tb-drop-indicator").forEach((el) => { el.hidden = true; });
         });
     }
 

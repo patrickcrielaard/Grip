@@ -235,6 +235,11 @@
                 </button>
             </div>
             <div class="content-header-tools" id="todayHeaderTools" hidden>
+                <div class="tb-day-stepper" role="group" aria-label="Dagnavigatie">
+                    <button type="button" class="btn-ghost tb-step-prev" id="tbPrevDayBtn" aria-label="Vorige dag">‹</button>
+                    <span class="tb-step-label" id="tbDayStepLabel">Vandaag</span>
+                    <button type="button" class="btn-ghost tb-step-next" id="tbNextDayBtn" aria-label="Volgende dag">›</button>
+                </div>
                 <button type="button" class="btn-ghost" id="todayFocusBtn" title="Start focus">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
@@ -319,11 +324,6 @@
                                 <span class="tb-card-sub" id="tbScheduleSub">06:00 – 22:30 · 0 blokken</span>
                             </div>
                             <div class="tb-card-tools">
-                                <div class="tb-day-stepper" role="group" aria-label="Dagnavigatie">
-                                    <button type="button" class="btn-ghost tb-step-prev" id="tbPrevDayBtn" aria-label="Vorige dag">‹</button>
-                                    <span class="tb-step-label" id="tbDayStepLabel">Vandaag</span>
-                                    <button type="button" class="btn-ghost tb-step-next" id="tbNextDayBtn" aria-label="Volgende dag">›</button>
-                                </div>
                                 <button type="button" class="btn-ghost" id="tbClearDayBtn">Wis dag</button>
                                 <button type="button" class="btn-ghost" id="tbImportCalBtn">Plak agenda</button>
                                 <button type="button" class="tb-autoplan-btn" id="tbAutoPlanBtn">
@@ -379,7 +379,7 @@
 
                     <section class="tb-rail-card panel" aria-labelledby="tbPoolTitle">
                         <div class="tb-rail-head">
-                            <span class="tb-rail-label" id="tbPoolTitle">Niet ingepland</span>
+                            <span class="tb-rail-label" id="tbPoolTitle">Te doen</span>
                             <span class="tb-rail-badge" id="tbPoolBadge">0 taken</span>
                         </div>
                         <p class="tb-rail-help">Sleep ze in je dag of laat Auto-plan beslissen.</p>
@@ -1348,5 +1348,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=31"></script>
+<script src="/static/js/app.js?v=32"></script>
 {% endblock %}

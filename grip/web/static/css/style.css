@@ -6736,3 +6736,57 @@ body.auth-page {
     .tb-stats { grid-template-columns: repeat(3, 1fr); }
     .tb-stat { border-top: 1px solid var(--border); }
 }
+
+/* Drop indicator while dragging onto the schema */
+.tb-drop-indicator {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border: 1.5px dashed var(--ink);
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    border-radius: 14px;
+    pointer-events: none;
+    z-index: 5;
+    transition: top 80ms ease, height 80ms ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.tb-drop-indicator[hidden] { display: none; }
+.tb-drop-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--content-bg);
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--ink);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Highlight the timeline area while a draggable is held */
+body.tb-dragging .tb-timeline-card {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+/* Pool item: planned chip + dimmed state */
+.tb-pool-item.is-planned {
+    opacity: 0.62;
+}
+.tb-pool-item.is-planned .t {
+    text-decoration: line-through;
+    text-decoration-color: var(--ink-tertiary);
+}
+.tb-pool-planned {
+    display: inline-flex;
+    align-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink);
+    background: var(--surface-2);
+    border-radius: 999px;
+    padding: 2px 7px;
+    margin-right: 4px;
+}
