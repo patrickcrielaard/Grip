@@ -4055,7 +4055,7 @@ class TodoApp {
 
     async refreshTodayAgenda(force = false) {
         if (!this.todayAgendaList) return;
-        const today = this.getToday();
+        const today = this._tbActiveDateKey ? this._tbActiveDateKey() : this.getToday();
         if (force) this.calendarEventsByRange.delete(`${today}|${today}`);
         const events = await this.loadCalendarEvents(today, today);
         const sameDay = events
@@ -5571,7 +5571,7 @@ class TodoApp {
 
     _tbBuildBlocksFromData() {
         // Combine calendar events (meeting) + planned tasks (focus/routine) + user extras.
-        const today = this.getToday ? this.getToday() : new Date().toISOString().slice(0, 10);
+        const today = this._tbActiveDateKey();
         const events = this.calendarEventsByRange?.get(`${today}|${today}`) || [];
         const blocks = [];
 
@@ -5598,7 +5598,7 @@ class TodoApp {
             });
         }
 
-        const todays = (this.todos || []).filter((t) => this._isTodoForToday?.(t) && !t.completed);
+        const todays = (this.todos || []).filter((t) => this._tbIsTodoForActiveDate(t) && !t.completed);
         for (const t of todays) {
             const startTime = this._tbExtractTaskStart(t);
             if (!startTime) continue;
@@ -5641,7 +5641,7 @@ class TodoApp {
 
     _tbExtractTaskStart(task) {
         // Tasks may store planned start as ISO datetime or "HH:MM" string.
-        const today = this.getToday ? this.getToday() : new Date().toISOString().slice(0, 10);
+        const today = this._tbActiveDateKey();
         const date = task.planned_date || task.planned_at?.slice(0, 10);
         if (date !== today) return null;
         const t = task.planned_time || (task.planned_at && task.planned_at.length > 10 ? task.planned_at.slice(11, 16) : null);
@@ -5651,14 +5651,20 @@ class TodoApp {
         return h * 60 + (m || 0);
     }
 
+    _tbIsTodoForActiveDate(t) {
+        if (t.project_id) return false;
+        const date = t.planned_date || (t.planned_at ? t.planned_at.slice(0, 10) : null);
+        return date === this._tbActiveDateKey();
+    }
+
     _tbFallbackAreaId() {
         const a = (this.areas || []).find((x) => !x.archived);
         return a ? a.id : 1;
     }
 
     _tbBuildPoolFromTasks() {
-        const today = this.getToday ? this.getToday() : new Date().toISOString().slice(0, 10);
-        const todays = (this.todos || []).filter((t) => this._isTodoForToday?.(t) && !t.completed);
+        const today = this._tbActiveDateKey();
+        const todays = (this.todos || []).filter((t) => this._tbIsTodoForActiveDate(t) && !t.completed);
         const unscheduled = todays.filter((t) => !this._tbExtractTaskStart(t) && !this._tbScheduledTaskIds.has(t.id));
         this._tbPool = unscheduled.map((t) => {
             const areaId = this.resolveTaskAreaId ? this.resolveTaskAreaId(t) : t.area_id;
@@ -5706,12 +5712,57 @@ class TodoApp {
 
     renderTodaySchema() {
         this._tbEnsureData();
+        this._tbRenderDayStep();
         this._tbRenderTimeline();
         this._tbRenderStats();
         this._tbRenderBalans();
         this._tbRenderPool();
         this._tbRenderTemplates();
         this._tbStartNuTicker();
+    }
+
+    _tbOffsetDays(delta) {
+        const next = new Date(this._tbDate.getTime() + delta * 86400000);
+        next.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (next.getTime() < today.getTime()) return; // floor at today
+        this._tbDate = next;
+        // Switching days invalidates per-day state.
+        this._tbBlocksOverrides = new Map();
+        this._tbExtraBlocks = [];
+        this._tbScheduledTaskIds = new Set();
+        // Trigger calendar fetch for the new day; refreshTodayAgenda re-renders schema.
+        if (typeof this.refreshTodayAgenda === "function") {
+            this.refreshTodayAgenda(true);
+        } else {
+            this.renderTodaySchema();
+        }
+    }
+
+    _tbActiveDateKey() {
+        const d = this._tbDate;
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+    }
+
+    _tbRenderDayStep() {
+        const label = document.getElementById("tbDayStepLabel");
+        const prev = document.getElementById("tbPrevDayBtn");
+        if (!label) return;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const days = ["zondag","maandag","dinsdag","woensdag","donderdag","vrijdag","zaterdag"];
+        const months = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+        const isToday = this._tbDate.getTime() === today.getTime();
+        if (isToday) {
+            label.textContent = "Vandaag";
+        } else {
+            label.textContent = `${days[this._tbDate.getDay()]} ${this._tbDate.getDate()} ${months[this._tbDate.getMonth()]}`;
+        }
+        if (prev) prev.disabled = isToday;
     }
 
     _tbStartNuTicker() {
@@ -6027,15 +6078,8 @@ class TodoApp {
         wrap.addEventListener("click", (event) => {
             const block = event.target.closest(".tb-block");
             if (block) {
-                const id = Number(block.dataset.tbBlockId);
+                const id = block.dataset.tbBlockId;
                 this._tbOpenSheet(id);
-                return;
-            }
-            const gap = event.target.closest(".tb-gap");
-            if (gap) {
-                const start = Number(gap.dataset.tbGapStart);
-                const end = Number(gap.dataset.tbGapEnd);
-                this._tbAddBlockAt(start, Math.min(end, start + 60));
             }
         });
 
@@ -6221,6 +6265,14 @@ class TodoApp {
     _tbBindOnce() {
         if (this._tbBound) return;
         this._tbBound = true;
+
+        // Day stepper (today + forward only)
+        document.getElementById("tbPrevDayBtn")?.addEventListener("click", () => {
+            this._tbOffsetDays(-1);
+        });
+        document.getElementById("tbNextDayBtn")?.addEventListener("click", () => {
+            this._tbOffsetDays(+1);
+        });
 
         // Header tools
         document.getElementById("tbAutoPlanBtn")?.addEventListener("click", () => {

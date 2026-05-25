@@ -312,14 +312,18 @@
         <div class="today-view" id="todayView" hidden>
             <div class="today-grid">
                 <div class="today-left">
-                    <div class="goals-stripe" id="todayGoals"></div>
                     <section class="tb-timeline-card" aria-labelledby="tbScheduleTitle">
                         <div class="tb-card-head">
                             <div class="tb-card-title-block">
-                                <h2 class="tb-card-title" id="tbScheduleTitle">Schema <span class="num" id="vandaagPanelCount"></span></h2>
+                                <h2 class="tb-card-title" id="tbScheduleTitle">Schema</h2>
                                 <span class="tb-card-sub" id="tbScheduleSub">06:00 – 22:30 · 0 blokken</span>
                             </div>
                             <div class="tb-card-tools">
+                                <div class="tb-day-stepper" role="group" aria-label="Dagnavigatie">
+                                    <button type="button" class="btn-ghost tb-step-prev" id="tbPrevDayBtn" aria-label="Vorige dag">‹</button>
+                                    <span class="tb-step-label" id="tbDayStepLabel">Vandaag</span>
+                                    <button type="button" class="btn-ghost tb-step-next" id="tbNextDayBtn" aria-label="Volgende dag">›</button>
+                                </div>
                                 <button type="button" class="btn-ghost" id="tbClearDayBtn">Wis dag</button>
                                 <button type="button" class="btn-ghost" id="tbImportCalBtn">Plak agenda</button>
                                 <button type="button" class="tb-autoplan-btn" id="tbAutoPlanBtn">
@@ -335,8 +339,10 @@
                             <!-- rendered by JS -->
                         </div>
                     </section>
-                    <!-- Hidden legacy container kept so existing renderers don't error -->
+                    <!-- Hidden legacy containers kept so existing renderers don't error -->
+                    <div id="todayGoals" hidden></div>
                     <div id="todayTasks" hidden></div>
+                    <div hidden><span id="vandaagPanelCount"></span></div>
                 </div>
                 <aside class="today-right-col" id="todayRightCol">
                     <section class="panel agenda-panel" aria-labelledby="todayAgendaTitle">
@@ -1342,5 +1348,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=30"></script>
+<script src="/static/js/app.js?v=31"></script>
 {% endblock %}

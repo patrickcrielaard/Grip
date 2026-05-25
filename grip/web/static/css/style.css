@@ -6666,6 +6666,36 @@ body.auth-page {
 .tb-day-nav { display: inline-flex; align-items: center; gap: 2px; }
 .tb-day-nav .btn-ghost { padding: 5px 10px; }
 
+/* Day stepper inside the schema card header */
+.tb-day-stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 2px 4px;
+    background: var(--content-bg);
+}
+.tb-day-stepper .btn-ghost {
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 14px;
+    line-height: 1;
+}
+.tb-day-stepper .btn-ghost[disabled] {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+.tb-day-stepper .tb-step-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink);
+    padding: 0 8px;
+    font-variant-numeric: tabular-nums;
+    min-width: 64px;
+    text-align: center;
+}
+
 /* Side-sheet */
 .tb-sheet-overlay {
     position: fixed; inset: 0;
