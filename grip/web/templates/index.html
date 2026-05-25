@@ -235,7 +235,11 @@
                 </button>
             </div>
             <div class="content-header-tools" id="todayHeaderTools" hidden>
-                <div class="tb-day-stepper" role="group" aria-label="Dagnavigatie">
+                <div class="tab-pill td-mode-pill" role="tablist" aria-label="Weergave">
+                    <button type="button" class="on" data-td-mode="agenda">Agenda</button>
+                    <button type="button" data-td-mode="list">Lijst</button>
+                </div>
+                <div class="tb-day-stepper" id="tbDayStepperWrap" role="group" aria-label="Dagnavigatie">
                     <button type="button" class="btn-ghost tb-step-prev" id="tbPrevDayBtn" aria-label="Vorige dag">‹</button>
                     <span class="tb-step-label" id="tbDayStepLabel">Vandaag</span>
                     <button type="button" class="btn-ghost tb-step-next" id="tbNextDayBtn" aria-label="Volgende dag">›</button>
@@ -317,32 +321,48 @@
         <div class="today-view" id="todayView" hidden>
             <div class="today-grid">
                 <div class="today-left">
-                    <section class="tb-timeline-card" aria-labelledby="tbScheduleTitle">
-                        <div class="tb-card-head">
-                            <div class="tb-card-title-block">
-                                <h2 class="tb-card-title" id="tbScheduleTitle">Schema</h2>
-                                <span class="tb-card-sub" id="tbScheduleSub">06:00 – 22:30 · 0 blokken</span>
+                    <div class="td-mode td-mode-agenda" id="todayAgendaPane">
+                        <section class="tb-timeline-card" aria-labelledby="tbScheduleTitle">
+                            <div class="tb-card-head">
+                                <div class="tb-card-title-block">
+                                    <h2 class="tb-card-title" id="tbScheduleTitle">Schema</h2>
+                                    <span class="tb-card-sub" id="tbScheduleSub">06:00 – 22:30 · 0 blokken</span>
+                                </div>
+                                <div class="tb-card-tools">
+                                    <button type="button" class="btn-ghost" id="tbClearDayBtn">Wis dag</button>
+                                    <button type="button" class="btn-ghost" id="tbImportCalBtn">Plak agenda</button>
+                                    <button type="button" class="tb-autoplan-btn" id="tbAutoPlanBtn">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M12 3v3M12 18v3M5 12H2M22 12h-3M6.3 6.3 4.5 4.5M19.5 19.5l-1.8-1.8M6.3 17.7l-1.8 1.8M19.5 4.5l-1.8 1.8"/>
+                                            <circle cx="12" cy="12" r="3"/>
+                                        </svg>
+                                        Auto-plan
+                                    </button>
+                                </div>
                             </div>
-                            <div class="tb-card-tools">
-                                <button type="button" class="btn-ghost" id="tbClearDayBtn">Wis dag</button>
-                                <button type="button" class="btn-ghost" id="tbImportCalBtn">Plak agenda</button>
-                                <button type="button" class="tb-autoplan-btn" id="tbAutoPlanBtn">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M12 3v3M12 18v3M5 12H2M22 12h-3M6.3 6.3 4.5 4.5M19.5 19.5l-1.8-1.8M6.3 17.7l-1.8 1.8M19.5 4.5l-1.8 1.8"/>
-                                        <circle cx="12" cy="12" r="3"/>
-                                    </svg>
-                                    Auto-plan
-                                </button>
+                            <div class="tb-timeline" id="tbTimeline">
+                                <!-- rendered by JS -->
+                            </div>
+                        </section>
+                    </div>
+                    <div class="td-mode td-mode-list" id="todayListPane" hidden>
+                        <div class="goals-stripe" id="todayGoals"></div>
+                        <div class="panel today-tasks-panel">
+                            <div class="panel-head">
+                                <div class="panel-title">Vandaag <span class="num" id="vandaagPanelCount"></span></div>
+                                <div class="panel-tools">
+                                    <div class="tab-pill" role="tablist" aria-label="Weergave">
+                                        <button type="button" class="on" data-today-tab="list">Lijst</button>
+                                        <button type="button" data-today-tab="timeline">Tijdslijn</button>
+                                        <button type="button" data-today-tab="area">Per gebied</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="tasks" id="todayTasks">
+                                <!-- rendered by JS -->
                             </div>
                         </div>
-                        <div class="tb-timeline" id="tbTimeline">
-                            <!-- rendered by JS -->
-                        </div>
-                    </section>
-                    <!-- Hidden legacy containers kept so existing renderers don't error -->
-                    <div id="todayGoals" hidden></div>
-                    <div id="todayTasks" hidden></div>
-                    <div hidden><span id="vandaagPanelCount"></span></div>
+                    </div>
                 </div>
                 <aside class="today-right-col" id="todayRightCol">
                     <section class="panel agenda-panel" aria-labelledby="todayAgendaTitle">
@@ -356,49 +376,61 @@
                         </ul>
                     </section>
 
-                    <section class="tb-rail-card panel" aria-labelledby="tbBalansTitle">
-                        <div class="tb-rail-head">
-                            <span class="tb-rail-label" id="tbBalansTitle">Balans · vandaag</span>
-                            <span class="tb-rail-badge">vandaag</span>
-                        </div>
-                        <div class="tb-balans-num" id="tbBalansNum"><em>0</em><span class="u">u</span> <em>00</em><sup>m</sup></div>
-                        <div class="tb-balans-sub">van je 10u capaciteit</div>
-                        <div class="tb-capacity">
-                            <div class="tb-capacity-bar" id="tbCapacityBar">
-                                <i class="seg seg-focus" style="width:0%;"></i>
-                                <i class="seg seg-meet" style="width:0%;"></i>
-                                <i class="seg seg-routine" style="width:0%;"></i>
-                                <i class="seg seg-free" style="width:100%;"></i>
+                    <div class="td-mode td-mode-agenda" id="todayAgendaRail">
+                        <section class="tb-rail-card panel" aria-labelledby="tbBalansTitle">
+                            <div class="tb-rail-head">
+                                <span class="tb-rail-label" id="tbBalansTitle">Balans · vandaag</span>
+                                <span class="tb-rail-badge">vandaag</span>
                             </div>
-                            <div class="tb-capacity-tick" style="left:80%;">
-                                <span>8u</span>
+                            <div class="tb-balans-num" id="tbBalansNum"><em>0</em><span class="u">u</span> <em>00</em><sup>m</sup></div>
+                            <div class="tb-balans-sub">van je 10u capaciteit</div>
+                            <div class="tb-capacity">
+                                <div class="tb-capacity-bar" id="tbCapacityBar">
+                                    <i class="seg seg-focus" style="width:0%;"></i>
+                                    <i class="seg seg-meet" style="width:0%;"></i>
+                                    <i class="seg seg-routine" style="width:0%;"></i>
+                                    <i class="seg seg-free" style="width:100%;"></i>
+                                </div>
+                                <div class="tb-capacity-tick" style="left:80%;">
+                                    <span>8u</span>
+                                </div>
                             </div>
-                        </div>
-                        <div class="tb-capacity-legend" id="tbCapacityLegend"></div>
-                    </section>
+                            <div class="tb-capacity-legend" id="tbCapacityLegend"></div>
+                        </section>
 
-                    <section class="tb-rail-card panel" aria-labelledby="tbPoolTitle">
-                        <div class="tb-rail-head">
-                            <span class="tb-rail-label" id="tbPoolTitle">Te doen</span>
-                            <span class="tb-rail-badge" id="tbPoolBadge">0 taken</span>
-                        </div>
-                        <p class="tb-rail-help">Sleep ze in je dag of laat Auto-plan beslissen.</p>
-                        <ul class="tb-pool-list" id="tbPoolList"></ul>
-                    </section>
+                        <section class="tb-rail-card panel" aria-labelledby="tbPoolTitle">
+                            <div class="tb-rail-head">
+                                <span class="tb-rail-label" id="tbPoolTitle">Te doen</span>
+                                <span class="tb-rail-badge" id="tbPoolBadge">0 taken</span>
+                            </div>
+                            <p class="tb-rail-help">Sleep ze in je dag of laat Auto-plan beslissen.</p>
+                            <ul class="tb-pool-list" id="tbPoolList"></ul>
+                        </section>
 
-                    <section class="tb-rail-card panel" aria-labelledby="tbTplTitle">
-                        <div class="tb-rail-head">
-                            <span class="tb-rail-label" id="tbTplTitle">Sjablonen</span>
-                            <span class="tb-rail-badge">sleep</span>
-                        </div>
-                        <ul class="tb-tpl-list" id="tbTplList"></ul>
-                    </section>
+                        <section class="tb-rail-card panel" aria-labelledby="tbTplTitle">
+                            <div class="tb-rail-head">
+                                <span class="tb-rail-label" id="tbTplTitle">Sjablonen</span>
+                                <span class="tb-rail-badge">sleep</span>
+                            </div>
+                            <ul class="tb-tpl-list" id="tbTplList"></ul>
+                        </section>
+                    </div>
 
-                    <!-- Hidden legacy streak elements kept so existing renderers don't error -->
-                    <div hidden>
-                        <span id="streakDaysNum"></span>
-                        <span id="streakTodayCount"></span>
-                        <div id="streakWeek"></div>
+                    <div class="td-mode td-mode-list" id="todayListRail" hidden>
+                        <section class="panel streak-panel" aria-labelledby="streakPanelTitle">
+                            <div class="panel-title streak-head" id="streakPanelTitle">
+                                Reeksen
+                                <span class="panel-title-meta">deze week</span>
+                            </div>
+                            <div class="streak-row">
+                                <div class="streak-num" id="streakDaysNum">0<small>DAGEN</small></div>
+                                <div class="streak-aside">
+                                    voltooid vandaag
+                                    <b id="streakTodayCount">0 taken</b>
+                                </div>
+                            </div>
+                            <div class="streak-week" id="streakWeek" aria-label="Voltooide dagen deze week"></div>
+                        </section>
                     </div>
 
                     <section class="panel focus-panel" aria-labelledby="focusPanelTitle">
@@ -1348,5 +1380,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=32"></script>
+<script src="/static/js/app.js?v=33"></script>
 {% endblock %}

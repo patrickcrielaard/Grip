@@ -412,6 +412,12 @@ class TodoApp {
         // Restore persisted theme/density on load
         this.applyTheme(localStorage.getItem("gripTheme") || "ink", false);
         this.applyDensity(localStorage.getItem("gripDensity") || "cozy", false);
+        this._todayMode = localStorage.getItem("gripTodayMode") === "list" ? "list" : "agenda";
+        document.addEventListener("click", (event) => {
+            const btn = event.target.closest("[data-td-mode]");
+            if (!btn) return;
+            this.setTodayMode(btn.dataset.tdMode);
+        });
 
         // Clear completed
         if (this.clearCompletedButton) {
@@ -4891,8 +4897,37 @@ class TodoApp {
             panelCount.textContent = open > 0 ? String(open) : "";
         }
 
-        this._renderTodayGoals();
-        this.renderTodaySchema();
+        this._applyTodayMode();
+
+        if (this._todayMode === "list") {
+            this._renderTodayGoals();
+            if (typeof this._renderTodayTasksList === "function") {
+                this._renderTodayTasksList(todays);
+            }
+            if (typeof this._renderStreaks === "function") this._renderStreaks();
+        } else {
+            this.renderTodaySchema();
+        }
+    }
+
+    _applyTodayMode() {
+        const mode = this._todayMode === "list" ? "list" : "agenda";
+        document.querySelectorAll(".td-mode").forEach((el) => {
+            if (el.classList.contains(`td-mode-${mode}`)) el.hidden = false;
+            else el.hidden = true;
+        });
+        document.querySelectorAll("[data-td-mode]").forEach((btn) => {
+            btn.classList.toggle("on", btn.dataset.tdMode === mode);
+        });
+        const stepper = document.getElementById("tbDayStepperWrap");
+        if (stepper) stepper.hidden = mode !== "agenda";
+    }
+
+    setTodayMode(mode) {
+        this._todayMode = mode === "list" ? "list" : "agenda";
+        localStorage.setItem("gripTodayMode", this._todayMode);
+        this.renderTodayView();
+        if (typeof this.refreshTodayAgenda === "function") this.refreshTodayAgenda();
     }
 
     _renderTodayHeadline(openCount, todays) {

@@ -6790,3 +6790,28 @@ body.tb-dragging .tb-timeline-card {
     padding: 2px 7px;
     margin-right: 4px;
 }
+
+/* Agenda/Lijst toggle on the today view */
+.td-mode[hidden] { display: none; }
+.td-mode-list { display: flex; flex-direction: column; gap: 16px; }
+.today-right-col .td-mode-list { gap: 16px; }
+.td-mode-pill {
+    display: inline-flex; gap: 2px;
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 2px;
+}
+.td-mode-pill button {
+    border: none; background: transparent;
+    padding: 5px 12px;
+    font-size: 12px; font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--ink-tertiary);
+    font-family: inherit;
+}
+.td-mode-pill button.on {
+    background: var(--content-bg);
+    color: var(--ink);
+    box-shadow: var(--shadow-card);
+}
