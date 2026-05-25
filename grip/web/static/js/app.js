@@ -39,6 +39,7 @@ class TodoApp {
 
         this.cacheElements();
         this.bindEvents();
+        this._tbBindOnce();
         this.boot();
     }
 
@@ -172,6 +173,15 @@ class TodoApp {
         this.projCols = document.getElementById("projCols");
         this.projectBackBtn = document.getElementById("projectBackBtn");
         this.contentTitleBlock = document.getElementById("contentTitleBlock");
+        // Tijdblokken (daily planner) — rendered inside the Today view
+        this._tbDate = new Date();
+        this._tbDate.setHours(0, 0, 0, 0);
+        this._tbBlocks = []; // built lazily from calendar + tasks
+        this._tbBlocksOverrides = new Map(); // user edits keyed by block id
+        this._tbExtraBlocks = []; // user-added (templates, manual) for today
+        this._tbScheduledTaskIds = new Set(); // pool items moved into the timeline
+        this._tbDateLabel = "";
+        this._tbNuTimer = null;
         // Next-week view (blueprint)
         this.nextWeekView = document.getElementById("nextWeekView");
         this.nextWeekHeaderTools = document.getElementById("nextWeekHeaderTools");
@@ -4085,8 +4095,8 @@ class TodoApp {
             }).join("");
         }
 
-        this._renderStreaks();
         this._renderFocusWidget();
+        if (this._isTodayView?.()) this.renderTodaySchema();
     }
 
     _fmtHm(ms) {
@@ -4882,7 +4892,7 @@ class TodoApp {
         }
 
         this._renderTodayGoals();
-        this._renderTodayTasksList(todays);
+        this.renderTodaySchema();
     }
 
     _renderTodayHeadline(openCount, todays) {
@@ -5437,6 +5447,868 @@ class TodoApp {
             return;
         }
         this.openModal(id);
+    }
+
+    // ===========================================================
+    // Tijdblokken (daily planner)
+    // ===========================================================
+    _tbDefaultBlocks() {
+        // Seed a believable day. Times are "HH:MM" 24h strings.
+        return [
+            { id: 1,  start: "06:30", end: "07:00", title: "Ochtendroutine",       type: "routine", area: 1, chip: "Routine", pomos: 0 },
+            { id: 2,  start: "07:00", end: "07:45", title: "Hardlopen",            type: "routine", area: 1, chip: "Routine", pomos: 0 },
+            { id: 3,  start: "08:00", end: "08:30", title: "Ontbijt met Lieke",    type: "routine", area: 3, chip: "Familie", pomos: 0 },
+            { id: 4,  start: "09:00", end: "11:00", title: "Diep werk · onboarding-flow", type: "focus",   area: 2, chip: "Diep werk", pomos: 4, pomosDone: 2, protect: true },
+            { id: 5,  start: "11:00", end: "11:15", title: "Koffie",               type: "routine", area: 5, chip: "Pauze",   pomos: 0 },
+            { id: 6,  start: "11:30", end: "12:00", title: "1:1 met Pieter",       type: "meeting", area: 2, chip: "Vergader", pomos: 0 },
+            { id: 7,  start: "12:00", end: "12:45", title: "Lunch",                type: "routine", area: 1, chip: "Routine", pomos: 0 },
+            { id: 8,  start: "13:00", end: "14:00", title: "Klantgesprek · Acme",  type: "meeting", area: 2, chip: "Vergader", pomos: 0 },
+            { id: 9,  start: "14:00", end: "15:30", title: "Diep werk · spec schrijven", type: "focus", area: 2, chip: "Diep werk", pomos: 3, pomosDone: 0, protect: true },
+            { id: 10, start: "15:45", end: "16:15", title: "Standup product",      type: "meeting", area: 2, chip: "Vergader", pomos: 0 },
+            { id: 11, start: "16:30", end: "17:15", title: "Spaans · les 14",      type: "focus",   area: 4, chip: "Leren",    pomos: 1, pomosDone: 0 },
+            { id: 12, start: "17:30", end: "18:30", title: "Krachttraining",       type: "routine", area: 1, chip: "Routine", pomos: 0 },
+            { id: 13, start: "19:00", end: "20:00", title: "Eten met familie",     type: "routine", area: 3, chip: "Familie", pomos: 0 },
+            { id: 14, start: "20:30", end: "21:30", title: "Lezen",                type: "routine", area: 5, chip: "Bescherm", pomos: 0, protect: true },
+        ];
+    }
+
+    _tbDefaultPool() {
+        return [
+            { id: "p1", title: "PR review · admin panel",        meta: "Werk · vandaag",  area: 2, est: 45 },
+            { id: "p2", title: "Belasting-aangifte voorbereiden",meta: "Persoonlijk",     area: 5, est: 60 },
+            { id: "p3", title: "Mail aan accountant",            meta: "Werk",            area: 2, est: 15 },
+            { id: "p4", title: "Boodschappen plannen",           meta: "Familie",         area: 3, est: 20 },
+            { id: "p5", title: "Spaans vocabulaire herhalen",    meta: "Leren · vandaag", area: 4, est: 30 },
+            { id: "p6", title: "Boek hoofdstuk 5",               meta: "Persoonlijk",     area: 5, est: 50 },
+        ];
+    }
+
+    _tbTemplates() {
+        return [
+            { id: "tplD", letter: "D", name: "Diep werk",   desc: "90 min focus + 5 min pauze", dur: 90,  type: "focus",   dark: true,  area: 2 },
+            { id: "tplP", letter: "P", name: "Pauze",       desc: "Korte ademruimte",           dur: 15,  type: "routine", dark: false, area: 5 },
+            { id: "tplW", letter: "W", name: "Workout",     desc: "Kracht of cardio",            dur: 60,  type: "routine", dark: false, area: 1 },
+            { id: "tplB", letter: "B", name: "Boek lezen",  desc: "Bescherm tegen vergader",    dur: 45,  type: "routine", dark: false, area: 5 },
+        ];
+    }
+
+    _tbAreas() {
+        // Use the real user-defined areas; fall back to defaults if none.
+        if (this.areas && this.areas.length) {
+            return this.areas
+                .filter((a) => !a.archived)
+                .map((a, idx) => ({
+                    id: a.id,
+                    name: a.name,
+                    color: a.color || `var(--area-${(idx % 5) + 1})`,
+                }));
+        }
+        return [
+            { id: 1, name: "Gezondheid",  color: "var(--area-1)" },
+            { id: 2, name: "Werk",        color: "var(--area-2)" },
+            { id: 3, name: "Familie",     color: "var(--area-3)" },
+            { id: 4, name: "Leren",       color: "var(--area-4)" },
+            { id: 5, name: "Persoonlijk", color: "var(--area-5)" },
+        ];
+    }
+
+    _tbAreaColor(id) {
+        const a = this._tbAreas().find((x) => x.id === id);
+        return a ? a.color : "var(--ink-tertiary)";
+    }
+
+    _tbAreaName(id) {
+        const a = this._tbAreas().find((x) => x.id === id);
+        return a ? a.name : "Gebied";
+    }
+
+    _tbParseTime(s) {
+        const [h, m] = s.split(":").map((n) => Number(n));
+        return h * 60 + m;
+    }
+
+    _tbFormatMins(mins) {
+        const h = Math.floor(mins / 60);
+        const m = mins % 60;
+        if (h === 0) return `${m}m`;
+        return `${h}u ${String(m).padStart(2, "0")}m`;
+    }
+
+    _tbFormatTime(mins) {
+        mins = Math.max(0, Math.min(24 * 60 - 1, Math.round(mins)));
+        const h = Math.floor(mins / 60);
+        const m = mins % 60;
+        return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    }
+
+    _tbWeekNumber(d) {
+        const target = new Date(d.valueOf());
+        const dayNr = (d.getDay() + 6) % 7;
+        target.setDate(target.getDate() - dayNr + 3);
+        const firstThursday = target.valueOf();
+        target.setMonth(0, 1);
+        if (target.getDay() !== 4) {
+            target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+        }
+        return 1 + Math.ceil((firstThursday - target) / 604800000);
+    }
+
+    _tbSeason(d) {
+        const m = d.getMonth() + 1;
+        if (m >= 3 && m <= 5) return "Lente";
+        if (m >= 6 && m <= 8) return "Zomer";
+        if (m >= 9 && m <= 11) return "Herfst";
+        return "Winter";
+    }
+
+    _tbDateLabels(d) {
+        const days = ["zondag","maandag","dinsdag","woensdag","donderdag","vrijdag","zaterdag"];
+        const months = ["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
+        const date = `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]}`;
+        const week = `Week ${this._tbWeekNumber(d)} · ${this._tbSeason(d)}`;
+        return { date, week };
+    }
+
+    _tbBuildBlocksFromData() {
+        // Combine calendar events (meeting) + planned tasks (focus/routine) + user extras.
+        const today = this.getToday ? this.getToday() : new Date().toISOString().slice(0, 10);
+        const events = this.calendarEventsByRange?.get(`${today}|${today}`) || [];
+        const blocks = [];
+
+        for (const ev of events) {
+            if (ev.all_day) continue;
+            const start = new Date(ev.start_at);
+            const end = new Date(ev.end_at);
+            if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue;
+            const sMin = start.getHours() * 60 + start.getMinutes();
+            const eMin = end.getHours() * 60 + end.getMinutes();
+            if (eMin <= sMin) continue;
+            const subscriptionAreaId = ev.subscription_area_id || null;
+            blocks.push({
+                id: `cal-${ev.id || ev.uid || `${ev.start_at}-${ev.summary || ""}`}`,
+                kind: "calendar",
+                start: this._tbFormatTime(sMin),
+                end: this._tbFormatTime(eMin),
+                title: ev.summary || "(geen titel)",
+                type: "meeting",
+                area: subscriptionAreaId || this._tbFallbackAreaId(),
+                chip: ev.subscription_name || "Vergader",
+                pomos: 0,
+                calendarColor: ev.subscription_color || null,
+            });
+        }
+
+        const todays = (this.todos || []).filter((t) => this._isTodoForToday?.(t) && !t.completed);
+        for (const t of todays) {
+            const startTime = this._tbExtractTaskStart(t);
+            if (!startTime) continue;
+            const dur = Number(t.duration_minutes) || 30;
+            const sMin = startTime;
+            const eMin = sMin + dur;
+            const areaId = this.resolveTaskAreaId ? this.resolveTaskAreaId(t) : t.area_id;
+            blocks.push({
+                id: `task-${t.id}`,
+                kind: "task",
+                taskId: t.id,
+                start: this._tbFormatTime(sMin),
+                end: this._tbFormatTime(eMin),
+                title: t.title || "(taak)",
+                type: dur >= 45 ? "focus" : "routine",
+                area: areaId || this._tbFallbackAreaId(),
+                chip: dur >= 45 ? "Diep werk" : "Taak",
+                pomos: dur >= 45 ? Math.max(1, Math.round(dur / 30)) : 0,
+                pomosDone: 0,
+            });
+        }
+
+        for (const extra of this._tbExtraBlocks) {
+            blocks.push({ ...extra });
+        }
+
+        // Apply user overrides; drop blocks marked hidden
+        const filtered = [];
+        for (const b of blocks) {
+            const ov = this._tbBlocksOverrides.get(String(b.id));
+            if (ov) {
+                if (ov._hidden) continue;
+                Object.assign(b, ov);
+            }
+            filtered.push(b);
+        }
+
+        this._tbBlocks = filtered.sort((a, b) => this._tbParseTime(a.start) - this._tbParseTime(b.start));
+    }
+
+    _tbExtractTaskStart(task) {
+        // Tasks may store planned start as ISO datetime or "HH:MM" string.
+        const today = this.getToday ? this.getToday() : new Date().toISOString().slice(0, 10);
+        const date = task.planned_date || task.planned_at?.slice(0, 10);
+        if (date !== today) return null;
+        const t = task.planned_time || (task.planned_at && task.planned_at.length > 10 ? task.planned_at.slice(11, 16) : null);
+        if (!t) return null;
+        const [h, m] = t.split(":").map(Number);
+        if (Number.isNaN(h)) return null;
+        return h * 60 + (m || 0);
+    }
+
+    _tbFallbackAreaId() {
+        const a = (this.areas || []).find((x) => !x.archived);
+        return a ? a.id : 1;
+    }
+
+    _tbBuildPoolFromTasks() {
+        const today = this.getToday ? this.getToday() : new Date().toISOString().slice(0, 10);
+        const todays = (this.todos || []).filter((t) => this._isTodoForToday?.(t) && !t.completed);
+        const unscheduled = todays.filter((t) => !this._tbExtractTaskStart(t) && !this._tbScheduledTaskIds.has(t.id));
+        this._tbPool = unscheduled.map((t) => {
+            const areaId = this.resolveTaskAreaId ? this.resolveTaskAreaId(t) : t.area_id;
+            return {
+                id: `task-${t.id}`,
+                taskId: t.id,
+                title: t.title || "(taak)",
+                meta: this._tbPoolMeta(t),
+                area: areaId || this._tbFallbackAreaId(),
+                est: Number(t.duration_minutes) || 30,
+            };
+        });
+        // Suppress unused-var lint: ensure today referenced
+        void today;
+    }
+
+    _tbPoolMeta(task) {
+        const parts = [];
+        if (task.list === "today") parts.push("Vandaag");
+        else if (task.list === "inbox") parts.push("Inbox");
+        const areaId = this.resolveTaskAreaId ? this.resolveTaskAreaId(task) : task.area_id;
+        const area = (this.areas || []).find((a) => a.id === areaId);
+        if (area && area.name) parts.unshift(area.name);
+        return parts.join(" · ");
+    }
+
+    _tbEnsureData() {
+        this._tbBuildBlocksFromData();
+        this._tbBuildPoolFromTasks();
+    }
+
+    _tbStats() {
+        const totals = { focus: 0, meeting: 0, routine: 0, total: 0 };
+        const perArea = {};
+        for (const b of this._tbBlocks) {
+            const dur = this._tbParseTime(b.end) - this._tbParseTime(b.start);
+            totals[b.type] = (totals[b.type] || 0) + dur;
+            totals.total += dur;
+            perArea[b.area] = (perArea[b.area] || 0) + dur;
+        }
+        const cap = 10 * 60;
+        const free = Math.max(0, cap - totals.total);
+        return { totals, free, cap, perArea };
+    }
+
+    renderTodaySchema() {
+        this._tbEnsureData();
+        this._tbRenderTimeline();
+        this._tbRenderStats();
+        this._tbRenderBalans();
+        this._tbRenderPool();
+        this._tbRenderTemplates();
+        this._tbStartNuTicker();
+    }
+
+    _tbStartNuTicker() {
+        if (this._tbNuTimer) clearInterval(this._tbNuTimer);
+        const tick = () => {
+            if (!this.todayView || this.todayView.hidden) {
+                clearInterval(this._tbNuTimer);
+                this._tbNuTimer = null;
+                return;
+            }
+            this._tbUpdateNu();
+        };
+        this._tbNuTimer = setInterval(tick, 60 * 1000);
+    }
+
+    _tbRenderStats() {
+        const subEl = document.getElementById("tbScheduleSub");
+        if (!subEl) return;
+        if (this._tbBlocks.length === 0) {
+            subEl.textContent = "Nog niets gepland vandaag.";
+            return;
+        }
+        const first = this._tbBlocks.reduce((acc, b) => Math.min(acc, this._tbParseTime(b.start)), 24*60);
+        const last  = this._tbBlocks.reduce((acc, b) => Math.max(acc, this._tbParseTime(b.end)), 0);
+        const buffers = this._tbCountBuffers();
+        subEl.textContent = `${this._tbFormatTime(first)} – ${this._tbFormatTime(last)} · ${this._tbBlocks.length} blokken · ${buffers} buffers`;
+    }
+
+    _tbCountBuffers() {
+        const sorted = [...this._tbBlocks].sort((a, b) => this._tbParseTime(a.start) - this._tbParseTime(b.start));
+        let buffers = 0;
+        for (let i = 1; i < sorted.length; i++) {
+            const gap = this._tbParseTime(sorted[i].start) - this._tbParseTime(sorted[i-1].end);
+            if (gap >= 15 && gap <= 45) buffers++;
+        }
+        return buffers;
+    }
+
+    _tbRenderBalans() {
+        const s = this._tbStats();
+        const numEl = document.getElementById("tbBalansNum");
+        if (numEl) {
+            const h = Math.floor(s.totals.total / 60);
+            const m = s.totals.total % 60;
+            numEl.innerHTML = `<em>${h}</em><span class="u">u</span> <em>${String(m).padStart(2, "0")}</em><sup>m</sup>`;
+        }
+        const total = s.totals.total || 1;
+        const focusPct   = ((s.totals.focus   || 0) / total) * 100;
+        const meetPct    = ((s.totals.meeting || 0) / total) * 100;
+        const routinePct = ((s.totals.routine || 0) / total) * 100;
+        const freePct    = Math.max(0, 100 - focusPct - meetPct - routinePct);
+        const bar = document.getElementById("tbCapacityBar");
+        if (bar) {
+            bar.innerHTML = `
+                <i class="seg seg-focus" style="width:${focusPct}%;"></i>
+                <i class="seg seg-meet" style="width:${meetPct}%;"></i>
+                <i class="seg seg-routine" style="width:${routinePct}%;"></i>
+                <i class="seg seg-free" style="width:${freePct}%;"></i>
+            `;
+        }
+        const legend = document.getElementById("tbCapacityLegend");
+        if (legend) {
+            legend.innerHTML = `
+                <span><i style="background:var(--ink);"></i>Diep <b>${this._tbFormatMins(s.totals.focus || 0)}</b></span>
+                <span><i style="background:var(--ink-secondary);"></i>Vergader <b>${this._tbFormatMins(s.totals.meeting || 0)}</b></span>
+                <span><i style="background:var(--ink-tertiary);"></i>Routine <b>${this._tbFormatMins(s.totals.routine || 0)}</b></span>
+                <span><i style="background:var(--border-strong);"></i>Vrij <b>${this._tbFormatMins(s.free)}</b></span>
+            `;
+        }
+    }
+
+    _tbRenderAreas() {
+        const s = this._tbStats();
+        const areas = this._tbAreas();
+        const rows = areas
+            .map((a) => ({ ...a, mins: s.perArea[a.id] || 0 }))
+            .sort((x, y) => y.mins - x.mins);
+        const maxMins = Math.max(1, ...rows.map((r) => r.mins));
+        const list = document.getElementById("tbAreaList");
+        if (!list) return;
+        list.innerHTML = rows.map((r) => `
+            <li class="tb-area-row">
+                <div class="tb-area-head">
+                    <span class="name"><span class="dot" style="background:${r.color};"></span>${this.escapeHtml(r.name)}</span>
+                    <span class="hrs">${this._tbFormatMins(r.mins)}</span>
+                </div>
+                <div class="tb-area-bar"><i style="width:${(r.mins / maxMins) * 100}%;background:${r.color};"></i></div>
+            </li>
+        `).join("");
+    }
+
+    _tbRenderPool() {
+        const total = this._tbPool.reduce((acc, p) => acc + p.est, 0);
+        const badge = document.getElementById("tbPoolBadge");
+        if (badge) badge.textContent = `${this._tbPool.length} taken · ${this._tbFormatMins(total)}`;
+        const list = document.getElementById("tbPoolList");
+        if (!list) return;
+        list.innerHTML = this._tbPool.map((p) => `
+            <li class="tb-pool-item" draggable="true" data-tb-pool-id="${p.id}">
+                <span class="dot" style="background:${this._tbAreaColor(p.area)};"></span>
+                <span class="body">
+                    <span class="t">${this.escapeHtml(p.title)}</span>
+                    <span class="m">${this.escapeHtml(p.meta)}</span>
+                </span>
+                <span class="est">${p.est}m</span>
+                <span class="grip" aria-hidden="true"><span><i></i><i></i></span><span><i></i><i></i></span><span><i></i><i></i></span></span>
+            </li>
+        `).join("");
+    }
+
+    _tbRenderTemplates() {
+        const list = document.getElementById("tbTplList");
+        if (!list) return;
+        list.innerHTML = this._tbTemplates().map((t) => `
+            <li class="tb-tpl-item" draggable="true" data-tb-tpl-id="${t.id}">
+                <span class="tb-tpl-icon ${t.dark ? "dark" : ""}">${t.letter}</span>
+                <span class="tb-tpl-body">
+                    <span class="tb-tpl-name">${this.escapeHtml(t.name)}</span>
+                    <span class="tb-tpl-desc">${this.escapeHtml(t.desc)}</span>
+                </span>
+                <span class="tb-tpl-dur">${t.dur}m</span>
+            </li>
+        `).join("");
+    }
+
+    _tbRenderTimeline() {
+        const startHour = 6;
+        const endHour = 22;   // last full hour mark (22:00) shown; bottom is 22:30
+        const hourPx = 52;
+        const totalMinutes = (endHour + 0.5 - startHour) * 60; // 16.5h → 990 min
+        const totalHeight = (totalMinutes / 60) * hourPx;
+        const wrap = document.getElementById("tbTimeline");
+        if (!wrap) return;
+
+        const minsToTop = (mins) => ((mins - startHour * 60) / 60) * hourPx;
+
+        // Hour ticks
+        let ticks = "";
+        for (let h = startHour; h <= endHour; h++) {
+            const top = (h - startHour) * hourPx;
+            ticks += `
+                <div class="tb-hour-row" style="top:${top}px;">
+                    <span class="tb-hour-label">${String(h).padStart(2,"0")}:00</span>
+                    <span class="tb-hour-line ${h === 12 ? "midday" : ""}"></span>
+                </div>
+            `;
+            const halfTop = top + 26;
+            if (h < endHour + 0.5) {
+                ticks += `<div class="tb-hour-row" style="top:${halfTop}px;"><span class="tb-hour-line half"></span></div>`;
+            }
+        }
+
+        // Sort blocks by start
+        const blocks = [...this._tbBlocks].sort((a, b) => this._tbParseTime(a.start) - this._tbParseTime(b.start));
+
+        const nowMins = (() => {
+            const isToday = this._tbDate.toDateString() === new Date().toDateString();
+            if (!isToday) return null;
+            const n = new Date();
+            return n.getHours() * 60 + n.getMinutes();
+        })();
+
+        // Block HTML
+        const blockHtml = blocks.map((b) => {
+            const s = this._tbParseTime(b.start);
+            const e = this._tbParseTime(b.end);
+            const dur = e - s;
+            const top = minsToTop(s);
+            const height = (dur / 60) * hourPx - 4;
+            const isPast = nowMins != null && e < nowMins;
+            const isCurrent = nowMins != null && s <= nowMins && e > nowMins;
+            const isTiny = dur <= 15;
+            const isShort = dur < 30;
+            const accent = this._tbAreaColor(b.area);
+
+            let pomos = "";
+            if ((b.pomos || 0) > 0) {
+                const done = b.pomosDone || 0;
+                const items = [];
+                for (let i = 0; i < b.pomos; i++) {
+                    items.push(`<i class="${i < done ? "on" : ""}"></i>`);
+                }
+                pomos = `<span class="pomos">${items.join("")}</span>`;
+            }
+
+            const meta = isShort ? "" : `
+                <div class="tb-block-meta">
+                    <span class="area-tag"><span class="dot" style="background:${accent};"></span>${this.escapeHtml(this._tbAreaName(b.area))}</span>
+                    ${b.chip ? `<span class="chip">${this.escapeHtml(b.chip)}</span>` : ""}
+                    ${b.protect ? `<span class="chip">Bescherm</span>` : ""}
+                    ${pomos}
+                </div>
+            `;
+
+            return `
+                <div class="tb-block ${b.type} ${isPast ? "past" : ""} ${isCurrent ? "current" : ""} ${isTiny ? "tiny" : ""} ${b.calendarImported ? "calendar-imported" : ""}"
+                     style="top:${top}px;height:${Math.max(22, height)}px;"
+                     data-tb-block-id="${b.id}" draggable="true">
+                    <span class="tb-rail-accent" style="background:${accent};"></span>
+                    <div class="tb-block-row">
+                        <span class="tb-block-title">${this.escapeHtml(b.title)}${isCurrent ? `<span class="bezig-badge"><span class="live"></span>Bezig</span>` : ""}</span>
+                        <span class="tb-block-time">${b.start} — ${b.end}</span>
+                    </div>
+                    ${meta}
+                    <span class="tb-resize" data-tb-resize="${b.id}"></span>
+                </div>
+            `;
+        }).join("");
+
+        // Gap slots
+        const gaps = [];
+        const dayStart = startHour * 60;
+        const dayEnd   = Math.floor((endHour + 0.5) * 60);
+        let cursor = dayStart;
+        for (const b of blocks) {
+            const s = this._tbParseTime(b.start);
+            if (s - cursor >= 25) {
+                gaps.push({ start: cursor, end: s });
+            }
+            cursor = Math.max(cursor, this._tbParseTime(b.end));
+        }
+        if (dayEnd - cursor >= 25) gaps.push({ start: cursor, end: dayEnd });
+        const gapHtml = gaps.map((g) => {
+            const top = minsToTop(g.start);
+            const height = ((g.end - g.start) / 60) * hourPx - 4;
+            const label = (() => {
+                const dur = g.end - g.start;
+                if (g.start < 12 * 60) return `Buffer · ${dur} min`;
+                if (g.start < 18 * 60) return `Pauze · ${dur} min`;
+                return `Vrij · ${dur} min`;
+            })();
+            return `
+                <div class="tb-gap" style="top:${top}px;height:${Math.max(28, height)}px;"
+                     data-tb-gap-start="${g.start}" data-tb-gap-end="${g.end}">
+                    <span class="plus">+</span> ${this.escapeHtml(label)}
+                </div>
+            `;
+        }).join("");
+
+        // Now line
+        let nuHtml = "";
+        if (nowMins != null && nowMins >= startHour * 60 && nowMins <= dayEnd) {
+            const top = minsToTop(nowMins);
+            nuHtml = `
+                <div class="tb-nu-line" style="top:${top - 9}px;height:18px;">
+                    <span class="tb-nu-label">NU ${this._tbFormatTime(nowMins)}</span>
+                    <span class="dot"></span>
+                    <span class="line"></span>
+                </div>
+            `;
+        }
+
+        wrap.innerHTML = `
+            <div class="tb-timeline-inner" style="height:${totalHeight}px;">
+                ${ticks}
+                ${gapHtml}
+                ${blockHtml}
+                ${nuHtml}
+            </div>
+        `;
+
+        this._tbBindTimelineEvents();
+    }
+
+    _tbUpdateNu() {
+        const wrap = document.getElementById("tbTimeline");
+        if (!wrap) return;
+        const isToday = this._tbDate.toDateString() === new Date().toDateString();
+        const old = wrap.querySelector(".tb-nu-line");
+        if (old) old.remove();
+        if (!isToday) {
+            this._tbRefreshCurrentRing(null);
+            return;
+        }
+        const n = new Date();
+        const nowMins = n.getHours() * 60 + n.getMinutes();
+        const hourPx = 52;
+        const startHour = 6;
+        const top = ((nowMins - startHour * 60) / 60) * hourPx;
+        const inner = wrap.querySelector(".tb-timeline-inner");
+        if (!inner) return;
+        const html = `
+            <div class="tb-nu-line" style="top:${top - 9}px;height:18px;">
+                <span class="tb-nu-label">NU ${this._tbFormatTime(nowMins)}</span>
+                <span class="dot"></span>
+                <span class="line"></span>
+            </div>
+        `;
+        inner.insertAdjacentHTML("beforeend", html);
+        this._tbRefreshCurrentRing(nowMins);
+    }
+
+    _tbRefreshCurrentRing(nowMins) {
+        const wrap = document.getElementById("tbTimeline");
+        if (!wrap) return;
+        wrap.querySelectorAll(".tb-block").forEach((el) => {
+            el.classList.remove("current", "past");
+            const id = Number(el.dataset.tbBlockId);
+            const block = this._tbBlocks.find((b) => b.id === id);
+            if (!block || nowMins == null) return;
+            const s = this._tbParseTime(block.start);
+            const e = this._tbParseTime(block.end);
+            if (e < nowMins) el.classList.add("past");
+            else if (s <= nowMins && e > nowMins) el.classList.add("current");
+        });
+    }
+
+    _tbBindTimelineEvents() {
+        const wrap = document.getElementById("tbTimeline");
+        if (!wrap) return;
+
+        // Block click → open sheet
+        wrap.addEventListener("click", (event) => {
+            const block = event.target.closest(".tb-block");
+            if (block) {
+                const id = Number(block.dataset.tbBlockId);
+                this._tbOpenSheet(id);
+                return;
+            }
+            const gap = event.target.closest(".tb-gap");
+            if (gap) {
+                const start = Number(gap.dataset.tbGapStart);
+                const end = Number(gap.dataset.tbGapEnd);
+                this._tbAddBlockAt(start, Math.min(end, start + 60));
+            }
+        });
+
+        // Drag a pool item / template onto a gap to create a block
+        wrap.addEventListener("dragover", (event) => {
+            const gap = event.target.closest(".tb-gap");
+            if (gap) {
+                event.preventDefault();
+                gap.classList.add("drag-over");
+            } else {
+                event.preventDefault();
+            }
+        });
+        wrap.addEventListener("dragleave", (event) => {
+            const gap = event.target.closest(".tb-gap");
+            if (gap) gap.classList.remove("drag-over");
+        });
+        wrap.addEventListener("drop", (event) => {
+            event.preventDefault();
+            const data = event.dataTransfer.getData("text/plain");
+            if (!data) return;
+            const payload = (() => { try { return JSON.parse(data); } catch (_) { return null; } })();
+            if (!payload) return;
+
+            // Determine drop position (snap to 15-min)
+            const inner = wrap.querySelector(".tb-timeline-inner");
+            const rect = inner.getBoundingClientRect();
+            const y = event.clientY - rect.top;
+            const hourPx = 52;
+            const startHour = 6;
+            let mins = startHour * 60 + (y / hourPx) * 60;
+            mins = Math.round(mins / 15) * 15;
+
+            if (payload.kind === "pool") {
+                const item = this._tbPool.find((p) => p.id === payload.id);
+                if (!item) return;
+                this._tbInsertBlock({
+                    title: item.title,
+                    type: "focus",
+                    area: item.area,
+                    durMin: item.est,
+                    startMin: mins,
+                    chip: "Diep werk",
+                });
+                if (item.taskId != null) this._tbScheduledTaskIds.add(item.taskId);
+            } else if (payload.kind === "tpl") {
+                const tpl = this._tbTemplates().find((t) => t.id === payload.id);
+                if (!tpl) return;
+                this._tbInsertBlock({
+                    title: tpl.name,
+                    type: tpl.type,
+                    area: tpl.area,
+                    durMin: tpl.dur,
+                    startMin: mins,
+                    chip: tpl.name,
+                });
+            }
+            this._tbRender();
+        });
+    }
+
+    _tbInsertBlock(opts) {
+        const start = Math.max(0, Math.min(24 * 60 - opts.durMin, opts.startMin));
+        this._tbExtraSeq = (this._tbExtraSeq || 0) + 1;
+        const id = `extra-${this._tbExtraSeq}`;
+        const block = {
+            id,
+            kind: "extra",
+            start: this._tbFormatTime(start),
+            end: this._tbFormatTime(start + opts.durMin),
+            title: opts.title,
+            type: opts.type,
+            area: opts.area || this._tbFallbackAreaId(),
+            chip: opts.chip,
+            pomos: opts.type === "focus" ? Math.max(1, Math.round(opts.durMin / 30)) : 0,
+            pomosDone: 0,
+        };
+        this._tbExtraBlocks.push(block);
+        return id;
+    }
+
+    _tbAddBlockAt(start, end) {
+        const id = this._tbInsertBlock({
+            title: "Nieuw blok",
+            type: "focus",
+            area: this._tbFallbackAreaId(),
+            durMin: end - start,
+            startMin: start,
+            chip: "Diep werk",
+        });
+        this._tbRender();
+        this._tbOpenSheet(id);
+    }
+
+    _tbRender() {
+        this._tbEnsureData();
+        this._tbRenderTimeline();
+        this._tbRenderStats();
+        this._tbRenderBalans();
+        this._tbRenderPool();
+    }
+
+    _tbOpenSheet(id) {
+        const block = this._tbBlocks.find((b) => String(b.id) === String(id));
+        if (!block) return;
+        this._tbEditingId = String(id);
+        const sheet = document.getElementById("tbSheet");
+        if (!sheet) return;
+        const titleInput = document.getElementById("tbSheetTitleInput");
+        const startInput = document.getElementById("tbSheetStart");
+        const durInput = document.getElementById("tbSheetDuration");
+        const typeSel = document.getElementById("tbSheetType");
+        const areaSel = document.getElementById("tbSheetArea");
+        const pomosInput = document.getElementById("tbSheetPomos");
+        const protectInput = document.getElementById("tbSheetProtect");
+        if (titleInput) titleInput.value = block.title;
+        if (startInput) startInput.value = block.start;
+        if (durInput) durInput.value = String(this._tbParseTime(block.end) - this._tbParseTime(block.start));
+        if (typeSel) typeSel.value = block.type;
+        if (areaSel) {
+            areaSel.innerHTML = this._tbAreas().map((a) => `<option value="${a.id}">${a.name}</option>`).join("");
+            areaSel.value = String(block.area);
+        }
+        if (pomosInput) pomosInput.value = String(block.pomos || 0);
+        if (protectInput) protectInput.checked = !!block.protect;
+        sheet.hidden = false;
+    }
+
+    _tbCloseSheet() {
+        const sheet = document.getElementById("tbSheet");
+        if (sheet) sheet.hidden = true;
+        this._tbEditingId = null;
+    }
+
+    _tbSaveSheet() {
+        if (!this._tbEditingId) return;
+        const id = this._tbEditingId;
+        const titleInput = document.getElementById("tbSheetTitleInput");
+        const startInput = document.getElementById("tbSheetStart");
+        const durInput = document.getElementById("tbSheetDuration");
+        const typeSel = document.getElementById("tbSheetType");
+        const areaSel = document.getElementById("tbSheetArea");
+        const pomosInput = document.getElementById("tbSheetPomos");
+        const protectInput = document.getElementById("tbSheetProtect");
+        const current = this._tbBlocks.find((b) => String(b.id) === id);
+        if (!current) return;
+        const startMin = this._tbParseTime(startInput.value || current.start);
+        const dur = Math.max(15, Number(durInput.value) || 30);
+        const snappedDur = Math.round(dur / 15) * 15;
+        const patch = {
+            title: titleInput.value.trim() || "Blok",
+            start: this._tbFormatTime(startMin),
+            end: this._tbFormatTime(startMin + snappedDur),
+            type: typeSel.value,
+            area: Number(areaSel.value),
+            pomos: Math.max(0, Number(pomosInput.value) || 0),
+            protect: protectInput.checked,
+        };
+        const extra = this._tbExtraBlocks.find((b) => String(b.id) === id);
+        if (extra) {
+            Object.assign(extra, patch);
+        } else {
+            this._tbBlocksOverrides.set(id, { ...(this._tbBlocksOverrides.get(id) || {}), ...patch });
+        }
+        this._tbCloseSheet();
+        this._tbRender();
+    }
+
+    _tbDeleteSheet() {
+        if (!this._tbEditingId) return;
+        const id = this._tbEditingId;
+        const extraIdx = this._tbExtraBlocks.findIndex((b) => String(b.id) === id);
+        if (extraIdx >= 0) {
+            this._tbExtraBlocks.splice(extraIdx, 1);
+        } else {
+            // For calendar/task blocks we don't truly delete — just hide via override.
+            this._tbBlocksOverrides.set(id, { ...(this._tbBlocksOverrides.get(id) || {}), _hidden: true });
+        }
+        this._tbCloseSheet();
+        this._tbRender();
+    }
+
+    _tbBindOnce() {
+        if (this._tbBound) return;
+        this._tbBound = true;
+
+        // Header tools
+        document.getElementById("tbAutoPlanBtn")?.addEventListener("click", () => {
+            this._tbAutoPlan();
+        });
+        document.getElementById("tbClearDayBtn")?.addEventListener("click", () => {
+            // Hide all currently-rendered blocks for today
+            for (const b of this._tbBlocks) {
+                this._tbBlocksOverrides.set(String(b.id), { ...(this._tbBlocksOverrides.get(String(b.id)) || {}), _hidden: true });
+            }
+            this._tbExtraBlocks = [];
+            this._tbRender();
+        });
+        document.getElementById("tbImportCalBtn")?.addEventListener("click", () => {
+            // Force-refresh of today's agenda events
+            if (typeof this.refreshTodayAgenda === "function") this.refreshTodayAgenda(true);
+        });
+
+        // Sheet
+        document.getElementById("tbSheetClose")?.addEventListener("click", () => this._tbCloseSheet());
+        document.getElementById("tbSheetSave")?.addEventListener("click", () => this._tbSaveSheet());
+        document.getElementById("tbSheetDelete")?.addEventListener("click", () => this._tbDeleteSheet());
+        document.getElementById("tbSheet")?.addEventListener("click", (event) => {
+            if (event.target.id === "tbSheet") this._tbCloseSheet();
+        });
+
+        // Drag start for pool + templates (delegated)
+        document.addEventListener("dragstart", (event) => {
+            const pool = event.target.closest("[data-tb-pool-id]");
+            if (pool) {
+                pool.classList.add("dragging");
+                event.dataTransfer.setData("text/plain", JSON.stringify({ kind: "pool", id: pool.dataset.tbPoolId }));
+                event.dataTransfer.effectAllowed = "move";
+                return;
+            }
+            const tpl = event.target.closest("[data-tb-tpl-id]");
+            if (tpl) {
+                tpl.classList.add("dragging");
+                event.dataTransfer.setData("text/plain", JSON.stringify({ kind: "tpl", id: tpl.dataset.tbTplId }));
+                event.dataTransfer.effectAllowed = "copy";
+                return;
+            }
+            const block = event.target.closest(".tb-block");
+            if (block) {
+                block.classList.add("dragging");
+                event.dataTransfer.setData("text/plain", JSON.stringify({ kind: "block", id: Number(block.dataset.tbBlockId) }));
+                event.dataTransfer.effectAllowed = "move";
+            }
+        });
+        document.addEventListener("dragend", (event) => {
+            event.target.closest?.(".dragging")?.classList.remove("dragging");
+            document.querySelectorAll(".tb-gap.drag-over").forEach((g) => g.classList.remove("drag-over"));
+        });
+    }
+
+    _tbAutoPlan() {
+        // Simple heuristic: move all pool items into available gaps,
+        // earliest-first; focus blocks before lunch, others after.
+        const blocks = [...this._tbBlocks].sort((a, b) => this._tbParseTime(a.start) - this._tbParseTime(b.start));
+        const startHour = 6;
+        const endHour = 22.5;
+        const gaps = [];
+        let cursor = startHour * 60;
+        for (const b of blocks) {
+            const s = this._tbParseTime(b.start);
+            if (s > cursor) gaps.push({ start: cursor, end: s });
+            cursor = Math.max(cursor, this._tbParseTime(b.end));
+        }
+        if (cursor < endHour * 60) gaps.push({ start: cursor, end: endHour * 60 });
+
+        const pool = [...this._tbPool].sort((a, b) => b.est - a.est);
+        for (const item of pool) {
+            const fitIdx = gaps.findIndex((g) => g.end - g.start >= item.est);
+            if (fitIdx < 0) continue;
+            const g = gaps[fitIdx];
+            this._tbInsertBlock({
+                title: item.title,
+                type: "focus",
+                area: item.area,
+                durMin: item.est,
+                startMin: g.start,
+                chip: "Diep werk",
+            });
+            if (item.taskId != null) this._tbScheduledTaskIds.add(item.taskId);
+            g.start += item.est;
+            if (g.end - g.start < 15) gaps.splice(fitIdx, 1);
+        }
+        this._tbRender();
     }
 
 }
