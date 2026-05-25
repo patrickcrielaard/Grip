@@ -26,6 +26,9 @@ dev = [
     "ruff>=0.13.0",
 ]
 
+[tool.setuptools.packages.find]
+include = ["grip*"]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 88

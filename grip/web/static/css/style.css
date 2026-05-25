@@ -5834,3 +5834,111 @@ body.auth-page {
 @media (max-width: 1100px) {
     .nw-page { grid-template-columns: 1fr; }
 }
+
+/* ── Plan week modal ────────────────────────────────────────────────────── */
+.pw-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.32);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 20px;
+}
+.pw-overlay[hidden] { display: none; }
+
+.pw-modal {
+    background: var(--content-bg);
+    border-radius: 22px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.18);
+    overflow: hidden;
+}
+.pw-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 24px 24px 0;
+}
+.pw-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 0;
+    flex: 1;
+}
+.pw-sub {
+    font-size: 12px;
+    color: var(--ink-tertiary);
+    margin: 4px 0 0;
+    flex-basis: 100%;
+    order: 3;
+}
+.pw-close {
+    width: 30px; height: 30px;
+    border: none; background: none; cursor: pointer;
+    border-radius: 8px; color: var(--ink-tertiary);
+    display: grid; place-items: center; flex-shrink: 0;
+}
+.pw-close svg { width: 16px; height: 16px; }
+.pw-close:hover { background: var(--surface); color: var(--ink); }
+
+.pw-body { padding: 20px 24px 24px; }
+
+.pw-rows { display: flex; flex-direction: column; gap: 0; }
+.pw-day-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 80px;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+}
+.pw-day-row:first-child { border-top: none; }
+.pw-day-row.weekend .pw-day-name { color: var(--ink-tertiary); }
+.pw-day-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+}
+.pw-day-date {
+    font-size: 11.5px;
+    color: var(--ink-tertiary);
+}
+.pw-hours-input {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--ink);
+    background: var(--content-bg);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    -moz-appearance: textfield;
+}
+.pw-hours-input::-webkit-inner-spin-button,
+.pw-hours-input::-webkit-outer-spin-button { opacity: 1; }
+.pw-hours-input:focus {
+    outline: none;
+    border-color: var(--ink);
+}
+.pw-hours-label {
+    font-size: 12px;
+    color: var(--ink-tertiary);
+    text-align: right;
+}
+
+.pw-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+.pw-total { font-size: 13px; color: var(--ink-secondary); }
+.pw-total b { color: var(--ink); font-weight: 700; }

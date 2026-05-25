@@ -21,6 +21,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from grip.calendar_service import sync_subscription
 from grip.configuration import settings
 from grip.routes.areas import router as area_router
+from grip.routes.availability import router as availability_router
 from grip.routes.authentication import (
     get_or_create_csrf_token,
     limiter,
@@ -120,6 +121,7 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 app.include_router(auth_router)
 app.include_router(todo_router)
+app.include_router(availability_router)
 app.include_router(project_router)
 app.include_router(area_router)
 app.include_router(goal_router)

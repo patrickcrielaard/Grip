@@ -1239,5 +1239,62 @@ class SupabaseService:
             self.logger.exception("time_summary failed: %s", exc)
             return []
 
+    # ── Week availability ────────────────────────────────────────────────────
+
+    def get_week_availability(
+        self, user_id: str, week_start: str, week_end: str
+    ) -> Dict[str, float]:
+        """Return {day_date: hours} for all days in [week_start, week_end].
+
+        Missing days are filled with defaults: 8 h Mon–Fri, 0 h Sat–Sun.
+        """
+        from datetime import date, timedelta
+
+        defaults: Dict[str, float] = {}
+        start = date.fromisoformat(week_start)
+        end = date.fromisoformat(week_end)
+        cursor = start
+        while cursor <= end:
+            # weekday(): Mon=0 … Sun=6
+            defaults[cursor.isoformat()] = 0.0 if cursor.weekday() >= 5 else 8.0
+            cursor += timedelta(days=1)
+
+        try:
+            result = (
+                self.supabase.table("week_availability")
+                .select("day_date, hours")
+                .eq("user_id", user_id)
+                .gte("day_date", week_start)
+                .lte("day_date", week_end)
+                .execute()
+            )
+            for row in result.data or []:
+                typed_row = cast(Dict[str, Any], row)
+                defaults[str(typed_row["day_date"])] = float(typed_row["hours"])
+        except Exception as exc:
+            self.logger.exception("get_week_availability failed: %s", exc)
+
+        return defaults
+
+    def upsert_week_availability(self, user_id: str, days: Dict[str, float]) -> bool:
+        """Upsert one row per day in *days* ({day_date: hours}).
+
+        Handles the unique constraint (user_id, day_date) via ON CONFLICT.
+        """
+        if not days:
+            return True
+        payload: List[Dict[str, Any]] = [
+            {"user_id": user_id, "day_date": day, "hours": hours}
+            for day, hours in days.items()
+        ]
+        try:
+            self.supabase.table("week_availability").upsert(
+                cast(Any, payload), on_conflict="user_id,day_date"
+            ).execute()
+            return True
+        except Exception as exc:
+            self.logger.exception("upsert_week_availability failed: %s", exc)
+            return False
+
 
 supabase_service = SupabaseService()

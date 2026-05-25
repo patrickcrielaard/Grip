@@ -421,7 +421,7 @@
 
                     <!-- Time budget -->
                     <div class="rail-card">
-                        <h4>Tijdsbudget · 45u</h4>
+                        <h4>Tijdsbudget · <span id="nextWeekBudgetCapLabel">45u</span></h4>
                         <div class="budget" id="nextWeekBudgetBars"></div>
                         <div class="budget-legend" id="nextWeekBudgetLegend"></div>
                     </div>
@@ -656,6 +656,30 @@
             <line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
     </button>
+
+    <!-- Plan week modal -->
+    <div class="pw-overlay" id="planWeekModal" hidden role="dialog" aria-modal="true" aria-labelledby="planWeekTitle">
+        <div class="pw-modal">
+            <div class="pw-header">
+                <h2 class="pw-title" id="planWeekTitle">Beschikbaarheid plannen</h2>
+                <p class="pw-sub" id="planWeekSub">Week · —</p>
+                <button type="button" class="pw-close" id="planWeekClose" aria-label="Sluiten">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="pw-body">
+                <div class="pw-rows" id="planWeekRows">
+                    <!-- Rendered by JS -->
+                </div>
+                <div class="pw-footer">
+                    <span class="pw-total">Totaal: <b id="planWeekTotal">—</b></span>
+                    <button type="button" class="btn-primary" id="planWeekSave">Opslaan</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Task detail modal -->
     <div class="task-modal-overlay" id="taskModal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitleInput">

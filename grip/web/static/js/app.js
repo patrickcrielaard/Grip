@@ -183,8 +183,16 @@ class TodoApp {
         this.nextWeekFootSummary = document.getElementById("nextWeekFootSummary");
         this.nextWeekBudgetBars = document.getElementById("nextWeekBudgetBars");
         this.nextWeekBudgetLegend = document.getElementById("nextWeekBudgetLegend");
+        this.nextWeekBudgetCapLabel = document.getElementById("nextWeekBudgetCapLabel");
         this.nextWeekDeadlinesList = document.getElementById("nextWeekDeadlinesList");
         this.nextWeekDeadlinesSub = document.getElementById("nextWeekDeadlinesSub");
+        // Plan week modal
+        this.planWeekModal = document.getElementById("planWeekModal");
+        this.planWeekRows = document.getElementById("planWeekRows");
+        this.planWeekSub = document.getElementById("planWeekSub");
+        this.planWeekTotal = document.getElementById("planWeekTotal");
+        this.planWeekSave = document.getElementById("planWeekSave");
+        this.planWeekClose = document.getElementById("planWeekClose");
         this.nextWeekOffset = 1;
         // Categories drive the dynamic Tijdsbudget block. The keyword is
         // matched (case-insensitive) against the ICS DESCRIPTION field. Add
@@ -192,6 +200,7 @@ class TodoApp {
         this.nextWeekBudgetCategories = [
             { keyword: "DEEP", label: "Diep werk", className: "focus", color: "var(--ink)" },
             { keyword: "MEET", label: "Meeting", className: "meet", color: "var(--ink-tertiary)" },
+            { keyword: "FAM",  label: "Familie & vrienden", className: "life", color: "var(--area-3)" },
         ];
         this.nextWeekBudgetCapacityMinutes = 45 * 60;
         // Today view (integrated)
@@ -758,7 +767,18 @@ class TodoApp {
         }
         const nwPlan = document.getElementById("nextWeekPlanBtn");
         if (nwPlan) {
-            nwPlan.addEventListener("click", () => this.toggleAddTask());
+            nwPlan.addEventListener("click", () => this.openPlanWeekModal());
+        }
+        if (this.planWeekClose) {
+            this.planWeekClose.addEventListener("click", () => this.closePlanWeekModal());
+        }
+        if (this.planWeekModal) {
+            this.planWeekModal.addEventListener("click", (e) => {
+                if (e.target === this.planWeekModal) this.closePlanWeekModal();
+            });
+        }
+        if (this.planWeekSave) {
+            this.planWeekSave.addEventListener("click", () => this.savePlanWeekModal());
         }
         if (this.nextWeekDeadlinesList) {
             const openFromRow = (row) => {
@@ -4096,8 +4116,20 @@ class TodoApp {
             this.nextWeekPrevBtn.disabled = this.nextWeekOffset <= 0;
         }
 
-        // Load real calendar events for the next week.
-        const events = await this.loadCalendarEvents(range.start, range.end);
+        // Load real calendar events and week availability in parallel.
+        const [events, availabilityData] = await Promise.all([
+            this.loadCalendarEvents(range.start, range.end),
+            this.loadWeekAvailability(range.start),
+        ]);
+
+        // Update budget capacity from saved availability.
+        const totalHours = Object.values(availabilityData).reduce((s, h) => s + h, 0);
+        this.nextWeekBudgetCapacityMinutes = Math.round(totalHours * 60);
+        if (this.nextWeekBudgetCapLabel) {
+            const h = Math.floor(totalHours);
+            const m = Math.round((totalHours - h) * 60);
+            this.nextWeekBudgetCapLabel.textContent = m ? `${h}u ${m}m` : `${h}u`;
+        }
 
         // Build per-day buckets.
         const dayKeys = [];
@@ -4231,6 +4263,112 @@ class TodoApp {
 
         this._renderNextWeekBudget(events);
         this._renderNextWeekDeadlines(range.start, range.end);
+    }
+
+    // ── Plan week availability ───────────────────────────────────────────────
+
+    async loadWeekAvailability(weekStart) {
+        try {
+            const data = await this.request(
+                `/api/availability?week_start=${encodeURIComponent(weekStart)}`
+            );
+            return data.days || {};
+        } catch (err) {
+            console.warn("loadWeekAvailability failed", err);
+            return {};
+        }
+    }
+
+    openPlanWeekModal() {
+        if (!this.planWeekModal) return;
+        const range = this.getWeekRange(this.nextWeekOffset);
+        const startDate = new Date(range.start);
+        const weekNo = this._isoWeekNumber(startDate);
+        const endDate = new Date(range.end);
+
+        if (this.planWeekSub) {
+            const fmt = (d) => `${d.getDate()} ${d.toLocaleDateString("nl-NL", { month: "short" })}`;
+            this.planWeekSub.textContent =
+                `Week ${weekNo} · ${fmt(startDate)} – ${fmt(endDate)} ${endDate.getFullYear()}`;
+        }
+
+        const dayNames = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"];
+        // Load current saved values (or defaults) then render rows.
+        this.loadWeekAvailability(range.start).then((saved) => {
+            if (!this.planWeekRows) return;
+            const rows = [];
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(startDate);
+                d.setDate(startDate.getDate() + i);
+                const key = this._fmtDateKey(d);
+                const isWeekend = i >= 5;
+                const defaultHours = saved[key] ?? (isWeekend ? 0 : 8);
+                const dateLabel = d.toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
+                rows.push(`
+                    <div class="pw-day-row${isWeekend ? " weekend" : ""}">
+                        <div>
+                            <div class="pw-day-name">${dayNames[i]}</div>
+                            <div class="pw-day-date">${dateLabel}</div>
+                        </div>
+                        <div></div>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <input type="number" class="pw-hours-input" data-day="${key}"
+                                min="0" max="24" step="0.5" value="${defaultHours}">
+                            <span class="pw-hours-label">u</span>
+                        </div>
+                    </div>
+                `);
+            }
+            this.planWeekRows.innerHTML = rows.join("");
+            this._updatePlanWeekTotal();
+            this.planWeekRows.addEventListener("input", () => this._updatePlanWeekTotal());
+        });
+
+        this.planWeekModal.hidden = false;
+    }
+
+    _updatePlanWeekTotal() {
+        if (!this.planWeekRows || !this.planWeekTotal) return;
+        const inputs = this.planWeekRows.querySelectorAll(".pw-hours-input");
+        let total = 0;
+        inputs.forEach((inp) => { total += parseFloat(inp.value) || 0; });
+        const h = Math.floor(total);
+        const m = Math.round((total - h) * 60);
+        this.planWeekTotal.textContent = m ? `${h}u ${m}m` : `${h}u`;
+    }
+
+    closePlanWeekModal() {
+        if (this.planWeekModal) this.planWeekModal.hidden = true;
+    }
+
+    async savePlanWeekModal() {
+        if (!this.planWeekRows || !this.planWeekSave) return;
+        const range = this.getWeekRange(this.nextWeekOffset);
+        const inputs = this.planWeekRows.querySelectorAll(".pw-hours-input");
+        const days = {};
+        inputs.forEach((inp) => {
+            const day = inp.dataset.day;
+            const val = parseFloat(inp.value);
+            if (day) days[day] = isNaN(val) ? 0 : Math.min(24, Math.max(0, val));
+        });
+
+        this.planWeekSave.disabled = true;
+        this.planWeekSave.textContent = "Opslaan…";
+        try {
+            await this.request("/api/availability", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ week_start: range.start, days }),
+            });
+            this.closePlanWeekModal();
+            // Re-render so the budget capacity updates immediately.
+            await this.renderNextWeekView();
+        } catch (err) {
+            this.setStatus("Opslaan mislukt — probeer opnieuw.");
+        } finally {
+            this.planWeekSave.disabled = false;
+            this.planWeekSave.textContent = "Opslaan";
+        }
     }
 
     _renderNextWeekDeadlines(rangeStart, rangeEnd) {
