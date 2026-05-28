@@ -874,6 +874,7 @@ class SupabaseService:
                 if meta:
                     row["subscription_name"] = meta.get("name")
                     area_id = meta.get("area_id")
+                    row["subscription_area_id"] = area_id
                     if area_id is not None and area_colors.get(int(area_id)):
                         row["subscription_color"] = area_colors[int(area_id)]
                     else:

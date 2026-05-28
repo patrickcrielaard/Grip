@@ -4330,7 +4330,7 @@ body.auth-page {
 .today-right-col {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 24px;
     min-width: 0;
 }
 
@@ -6152,7 +6152,7 @@ body.auth-page {
     left: -58px;
     right: 0;
     pointer-events: none;
-    z-index: 6;
+    z-index: 20;
 }
 .tb-nu-line .line {
     position: absolute;
@@ -6161,10 +6161,11 @@ body.auth-page {
     top: 50%;
     height: 1.5px;
     background: var(--ink);
+    z-index: 1;
 }
 .tb-nu-line .dot {
     position: absolute;
-    left: 56px;
+    left: 58px;
     top: 50%;
     width: 9px;
     height: 9px;
@@ -6172,20 +6173,24 @@ body.auth-page {
     background: var(--ink);
     transform: translate(-50%, -50%);
     box-shadow: 0 0 0 4px rgba(17,17,17,0.12);
+    z-index: 2;
 }
 .tb-nu-label {
     position: absolute;
-    left: 0;
+    left: 70px;
     top: 50%;
     transform: translateY(-50%);
     background: var(--ink);
     color: #fff;
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0.05em;
-    padding: 3px 7px;
+    letter-spacing: 0.06em;
+    padding: 3px 8px;
     border-radius: 999px;
     font-variant-numeric: tabular-nums;
+    box-shadow: 0 0 0 2px var(--content-bg);
+    z-index: 3;
+    white-space: nowrap;
 }
 
 /* Blocks */
@@ -6804,8 +6809,9 @@ body.tb-dragging .tb-timeline-card {
 
 /* Agenda/Lijst toggle on the today view */
 .td-mode[hidden] { display: none; }
-.td-mode-list { display: flex; flex-direction: column; gap: 16px; }
-.today-right-col .td-mode-list { gap: 16px; }
+.td-mode { display: flex; flex-direction: column; gap: 24px; }
+.td-mode-list { display: flex; flex-direction: column; gap: 24px; }
+.today-right-col .td-mode { gap: 24px; }
 .td-mode-pill {
     display: inline-flex; gap: 2px;
     background: var(--surface);

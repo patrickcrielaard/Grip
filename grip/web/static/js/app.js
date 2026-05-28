@@ -5520,9 +5520,8 @@ class TodoApp {
 
     _tbTemplates() {
         return [
-            { id: "tplD", letter: "D", name: "Diep werk",   desc: "90 min focus + 5 min pauze", dur: 90,  type: "focus",   dark: true,  area: 2 },
+            { id: "tplD", letter: "D", name: "Diep werk",   desc: "25 min focus + 5 min pauze", dur: 30,  type: "focus",   dark: true,  area: 2 },
             { id: "tplP", letter: "P", name: "Pauze",       desc: "Korte ademruimte",           dur: 15,  type: "routine", dark: false, area: 5 },
-            { id: "tplW", letter: "W", name: "Workout",     desc: "Kracht of cardio",            dur: 60,  type: "routine", dark: false, area: 1 },
             { id: "tplB", letter: "B", name: "Boek lezen",  desc: "Bescherm tegen vergader",    dur: 45,  type: "routine", dark: false, area: 5 },
         ];
     }
@@ -5735,14 +5734,45 @@ class TodoApp {
     }
 
     _tbStats() {
-        const totals = { focus: 0, meeting: 0, routine: 0, total: 0 };
+        // Build interval lists per type so overlapping events are not double counted.
+        const byType = { focus: [], meeting: [], routine: [] };
+        const allIntervals = [];
+        for (const b of this._tbBlocks) {
+            const s = this._tbParseTime(b.start);
+            const e = this._tbParseTime(b.end);
+            if (e <= s) continue;
+            const list = byType[b.type] || (byType[b.type] = []);
+            list.push([s, e]);
+            allIntervals.push([s, e]);
+        }
+        const unionMinutes = (intervals) => {
+            if (!intervals.length) return 0;
+            const sorted = intervals.slice().sort((a, b) => a[0] - b[0]);
+            let total = 0;
+            let [curS, curE] = sorted[0];
+            for (let i = 1; i < sorted.length; i++) {
+                const [s, e] = sorted[i];
+                if (s <= curE) curE = Math.max(curE, e);
+                else { total += curE - curS; curS = s; curE = e; }
+            }
+            total += curE - curS;
+            return total;
+        };
+        const totals = {
+            focus:   unionMinutes(byType.focus),
+            meeting: unionMinutes(byType.meeting),
+            routine: unionMinutes(byType.routine),
+            total:   unionMinutes(allIntervals),
+        };
+
+        // Per-area is informational; sum durations weighted by share of overlap.
         const perArea = {};
         for (const b of this._tbBlocks) {
             const dur = this._tbParseTime(b.end) - this._tbParseTime(b.start);
-            totals[b.type] = (totals[b.type] || 0) + dur;
-            totals.total += dur;
+            if (dur <= 0) continue;
             perArea[b.area] = (perArea[b.area] || 0) + dur;
         }
+
         const cap = 10 * 60;
         const free = Math.max(0, cap - totals.total);
         return { totals, free, cap, perArea };
@@ -6348,23 +6378,6 @@ class TodoApp {
         });
         document.getElementById("tbNextDayBtn")?.addEventListener("click", () => {
             this._tbOffsetDays(+1);
-        });
-
-        // Header tools
-        document.getElementById("tbAutoPlanBtn")?.addEventListener("click", () => {
-            this._tbAutoPlan();
-        });
-        document.getElementById("tbClearDayBtn")?.addEventListener("click", () => {
-            // Hide all currently-rendered blocks for today
-            for (const b of this._tbBlocks) {
-                this._tbBlocksOverrides.set(String(b.id), { ...(this._tbBlocksOverrides.get(String(b.id)) || {}), _hidden: true });
-            }
-            this._tbExtraBlocks = [];
-            this._tbRender();
-        });
-        document.getElementById("tbImportCalBtn")?.addEventListener("click", () => {
-            // Force-refresh of today's agenda events
-            if (typeof this.refreshTodayAgenda === "function") this.refreshTodayAgenda(true);
         });
 
         // Sheet
