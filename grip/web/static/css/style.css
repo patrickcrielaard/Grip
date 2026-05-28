@@ -6313,6 +6313,11 @@ body.auth-page {
     border-color: var(--border);
     color: var(--ink);
 }
+.tb-block.family {
+    background: color-mix(in srgb, var(--area-3) 12%, white);
+    border-color: color-mix(in srgb, var(--area-3) 35%, var(--border));
+    color: var(--ink);
+}
 .tb-block.calendar-imported {
     background: repeating-linear-gradient(135deg,
         var(--surface) 0,
@@ -6490,8 +6495,9 @@ body.auth-page {
 }
 .tb-capacity-bar .seg { display: block; height: 100%; }
 .tb-capacity-bar .seg-focus   { background: var(--ink); }
-.tb-capacity-bar .seg-meet    { background: var(--ink-secondary); }
-.tb-capacity-bar .seg-rust    { background: var(--ink-tertiary); }
+.tb-capacity-bar .seg-meet    { background: var(--ink-tertiary); }
+.tb-capacity-bar .seg-family  { background: var(--area-3); }
+.tb-capacity-bar .seg-rust    { background: var(--ink-secondary); }
 .tb-capacity-bar .seg-routine { background: var(--ink-tertiary); }
 .tb-capacity-bar .seg-free    { background: var(--border-strong); }
 .tb-capacity-tick {

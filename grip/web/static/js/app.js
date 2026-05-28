@@ -5618,15 +5618,33 @@ class TodoApp {
             const eMin = end.getHours() * 60 + end.getMinutes();
             if (eMin <= sMin) continue;
             const subscriptionAreaId = ev.subscription_area_id || null;
+            // Shortcode in the event description maps to a balance category
+            // (mirrors the categories used by the next-week time-budget block):
+            //   DEEP → Diep werk (focus)
+            //   FAM  → Familie & vrienden
+            //   MEET → Meeting (also the default for untagged events)
+            const desc = (ev.description || "").toString();
+            let evType = "meeting";
+            let evChipDefault = "Meeting";
+            if (/\bDEEP\b/i.test(desc)) {
+                evType = "focus";
+                evChipDefault = "Diep werk";
+            } else if (/\bFAM\b/i.test(desc)) {
+                evType = "family";
+                evChipDefault = "Familie & vrienden";
+            } else if (/\bMEET\b/i.test(desc)) {
+                evType = "meeting";
+                evChipDefault = "Meeting";
+            }
             blocks.push({
                 id: `cal-${ev.id || ev.uid || `${ev.start_at}-${ev.summary || ""}`}`,
                 kind: "calendar",
                 start: this._tbFormatTime(sMin),
                 end: this._tbFormatTime(eMin),
                 title: ev.summary || "(geen titel)",
-                type: "meeting",
+                type: evType,
                 area: subscriptionAreaId || this._tbFallbackAreaId(),
-                chip: ev.subscription_name || "Vergader",
+                chip: ev.subscription_name || evChipDefault,
                 pomos: 0,
                 calendarColor: ev.subscription_color || null,
             });
@@ -5735,7 +5753,7 @@ class TodoApp {
 
     _tbStats() {
         // Build interval lists per type so overlapping events are not double counted.
-        const byType = { focus: [], meeting: [], rust: [] };
+        const byType = { focus: [], meeting: [], rust: [], family: [] };
         const allIntervals = [];
         for (const b of this._tbBlocks) {
             const s = this._tbParseTime(b.start);
@@ -5762,6 +5780,7 @@ class TodoApp {
             focus:   unionMinutes(byType.focus),
             meeting: unionMinutes(byType.meeting),
             rust:    unionMinutes(byType.rust),
+            family:  unionMinutes(byType.family),
             total:   unionMinutes(allIntervals),
         };
 
@@ -5883,17 +5902,20 @@ class TodoApp {
             const m = s.totals.total % 60;
             numEl.innerHTML = `<em>${h}</em><span class="u">u</span> <em>${String(m).padStart(2, "0")}</em><sup>m</sup>`;
         }
+        // Categories mirror the next-week time-budget block (labels + colors).
         const cap = s.cap || 1;
-        const focusPct = Math.min(100, ((s.totals.focus   || 0) / cap) * 100);
-        const meetPct  = Math.min(100, ((s.totals.meeting || 0) / cap) * 100);
-        const rustPct  = Math.min(100, ((s.totals.rust    || 0) / cap) * 100);
-        const usedPct  = focusPct + meetPct + rustPct;
-        const freePct  = Math.max(0, 100 - usedPct);
+        const focusPct  = Math.min(100, ((s.totals.focus   || 0) / cap) * 100);
+        const meetPct   = Math.min(100, ((s.totals.meeting || 0) / cap) * 100);
+        const familyPct = Math.min(100, ((s.totals.family  || 0) / cap) * 100);
+        const rustPct   = Math.min(100, ((s.totals.rust    || 0) / cap) * 100);
+        const usedPct   = focusPct + meetPct + familyPct + rustPct;
+        const freePct   = Math.max(0, 100 - usedPct);
         const bar = document.getElementById("tbCapacityBar");
         if (bar) {
             bar.innerHTML = `
                 <i class="seg seg-focus" style="width:${focusPct}%;"></i>
                 <i class="seg seg-meet" style="width:${meetPct}%;"></i>
+                <i class="seg seg-family" style="width:${familyPct}%;"></i>
                 <i class="seg seg-rust" style="width:${rustPct}%;"></i>
                 <i class="seg seg-free" style="width:${freePct}%;"></i>
             `;
@@ -5901,9 +5923,10 @@ class TodoApp {
         const legend = document.getElementById("tbCapacityLegend");
         if (legend) {
             legend.innerHTML = `
-                <span><i style="background:var(--ink);"></i>Diep <b>${this._tbFormatMins(s.totals.focus || 0)}</b></span>
-                <span><i style="background:var(--ink-secondary);"></i>Vergader <b>${this._tbFormatMins(s.totals.meeting || 0)}</b></span>
-                <span><i style="background:var(--ink-tertiary);"></i>Rust <b>${this._tbFormatMins(s.totals.rust || 0)}</b></span>
+                <span><i style="background:var(--ink);"></i>Diep werk <b>${this._tbFormatMins(s.totals.focus || 0)}</b></span>
+                <span><i style="background:var(--ink-tertiary);"></i>Meeting <b>${this._tbFormatMins(s.totals.meeting || 0)}</b></span>
+                <span><i style="background:var(--area-3);"></i>Familie &amp; vrienden <b>${this._tbFormatMins(s.totals.family || 0)}</b></span>
+                <span><i style="background:var(--ink-secondary);"></i>Rust <b>${this._tbFormatMins(s.totals.rust || 0)}</b></span>
                 <span><i style="background:var(--border-strong);"></i>Vrij <b>${this._tbFormatMins(s.free)}</b></span>
             `;
         }
