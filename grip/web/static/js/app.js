@@ -4935,7 +4935,7 @@ class TodoApp {
         const projectsOnToday = this.projects.filter((p) =>
             this.todayProjectIds.has(p.id) && (!p.status || p.status === "active")
         ).length;
-        const minutes = todays.reduce((sum, t) => sum + (Number(t.duration_minutes) || 0), 0);
+        const minutes = todays.reduce((sum, t) => sum + (Number(t.duration) || Number(t.duration_minutes) || 0), 0);
         const hours = Math.floor(minutes / 60);
         const mins = minutes % 60;
         const focusLabel = hours > 0 ? `${hours}u ${mins}m` : `${mins}m`;
@@ -5636,7 +5636,7 @@ class TodoApp {
         for (const t of todays) {
             const startTime = this._tbExtractTaskStart(t);
             if (!startTime) continue;
-            const dur = Number(t.duration_minutes) || 30;
+            const dur = Number(t.duration) || Number(t.duration_minutes) || 30;
             const sMin = startTime;
             const eMin = sMin + dur;
             const areaId = this.resolveTaskAreaId ? this.resolveTaskAreaId(t) : t.area_id;
@@ -5710,7 +5710,7 @@ class TodoApp {
                 title: t.title || "(taak)",
                 meta: this._tbPoolMeta(t),
                 area: areaId || this._tbFallbackAreaId(),
-                est: Number(t.duration_minutes) || 30,
+                est: Number(t.duration) || Number(t.duration_minutes) || 30,
                 planned: this._tbScheduledTaskIds.has(t.id),
             };
         });
@@ -5877,11 +5877,12 @@ class TodoApp {
             const m = s.totals.total % 60;
             numEl.innerHTML = `<em>${h}</em><span class="u">u</span> <em>${String(m).padStart(2, "0")}</em><sup>m</sup>`;
         }
-        const total = s.totals.total || 1;
-        const focusPct   = ((s.totals.focus   || 0) / total) * 100;
-        const meetPct    = ((s.totals.meeting || 0) / total) * 100;
-        const routinePct = ((s.totals.routine || 0) / total) * 100;
-        const freePct    = Math.max(0, 100 - focusPct - meetPct - routinePct);
+        const cap = s.cap || 1;
+        const focusPct   = Math.min(100, ((s.totals.focus   || 0) / cap) * 100);
+        const meetPct    = Math.min(100, ((s.totals.meeting || 0) / cap) * 100);
+        const routinePct = Math.min(100, ((s.totals.routine || 0) / cap) * 100);
+        const usedPct    = focusPct + meetPct + routinePct;
+        const freePct    = Math.max(0, 100 - usedPct);
         const bar = document.getElementById("tbCapacityBar");
         if (bar) {
             bar.innerHTML = `
@@ -6030,10 +6031,11 @@ class TodoApp {
                 </div>
             `;
 
+            const draggable = b.kind !== "calendar";
             return `
-                <div class="tb-block ${b.type} ${isPast ? "past" : ""} ${isCurrent ? "current" : ""} ${isTiny ? "tiny" : ""} ${isShort ? "short" : ""} ${b.calendarImported ? "calendar-imported" : ""}"
+                <div class="tb-block ${b.type} ${isPast ? "past" : ""} ${isCurrent ? "current" : ""} ${isTiny ? "tiny" : ""} ${isShort ? "short" : ""} ${b.calendarImported ? "calendar-imported" : ""} ${draggable ? "is-movable" : "is-locked"}"
                      style="top:${top}px;height:${Math.max(22, height)}px;"
-                     data-tb-block-id="${b.id}" draggable="true">
+                     data-tb-block-id="${b.id}" data-tb-block-kind="${b.kind || "extra"}" draggable="${draggable}">
                     <span class="tb-rail-accent" style="background:${accent};"></span>
                     <div class="tb-block-row">
                         <span class="tb-block-title">${this.escapeHtml(b.title)}${isCurrent ? `<span class="bezig-badge"><span class="live"></span>Bezig</span>` : ""}</span>
@@ -6150,7 +6152,9 @@ class TodoApp {
 
         wrap.addEventListener("dragover", (event) => {
             event.preventDefault();
-            event.dataTransfer.dropEffect = "copy";
+            // "move" so a successful timeline drop is distinguishable from a
+            // cancelled drag (dropEffect="none") in the dragend handler.
+            event.dataTransfer.dropEffect = "move";
             const meta = getDragMeta();
             if (!meta) return;
             const mins = computeDropMins(event.clientY);
@@ -6188,7 +6192,11 @@ class TodoApp {
             const mins = computeDropMins(event.clientY);
             if (mins == null) return;
 
-            if (payload.kind === "pool") {
+            if (payload.kind === "block") {
+                this._tbMoveBlock(payload.id, mins);
+                this._tbDropHandled = true;
+                return;
+            } else if (payload.kind === "pool") {
                 const item = this._tbPool.find((p) => p.id === payload.id);
                 if (!item) return;
                 const newId = this._tbInsertBlock({
@@ -6326,6 +6334,31 @@ class TodoApp {
         this._tbRender();
     }
 
+    _tbMoveBlock(id, newStartMin) {
+        const block = this._tbBlocks.find((b) => String(b.id) === String(id));
+        if (!block) return;
+        const dur = this._tbParseTime(block.end) - this._tbParseTime(block.start);
+        const startHour = 6;
+        const endHour = 22;
+        const dayStart = startHour * 60;
+        const dayEnd = Math.floor((endHour + 0.5) * 60);
+        const newStart = Math.max(dayStart, Math.min(dayEnd - dur, newStartMin));
+        const patch = {
+            start: this._tbFormatTime(newStart),
+            end: this._tbFormatTime(newStart + dur),
+        };
+        const extra = this._tbExtraBlocks.find((b) => String(b.id) === String(id));
+        if (extra) {
+            Object.assign(extra, patch);
+        } else {
+            this._tbBlocksOverrides.set(String(id), {
+                ...(this._tbBlocksOverrides.get(String(id)) || {}),
+                ...patch,
+            });
+        }
+        this._tbRender();
+    }
+
     _tbRemoveBlock(id) {
         // Find block by id across the rendered set to know its kind.
         const block = this._tbBlocks.find((b) => String(b.id) === String(id));
@@ -6412,14 +6445,38 @@ class TodoApp {
             }
             const block = event.target.closest(".tb-block");
             if (block) {
+                const blockKind = block.dataset.tbBlockKind || "extra";
+                if (blockKind === "calendar") {
+                    event.preventDefault();
+                    return;
+                }
                 block.classList.add("dragging");
-                event.dataTransfer.setData("text/plain", JSON.stringify({ kind: "block", id: block.dataset.tbBlockId }));
+                const id = block.dataset.tbBlockId;
+                const data = this._tbBlocks.find((b) => String(b.id) === String(id));
+                const dur = data
+                    ? this._tbParseTime(data.end) - this._tbParseTime(data.start)
+                    : 30;
+                event.dataTransfer.setData("text/plain", JSON.stringify({ kind: "block", id, blockKind }));
                 event.dataTransfer.effectAllowed = "move";
-                this._tbDragMeta = null;
+                this._tbDragMeta = { dur, title: data ? data.title : "" };
+                document.body.classList.add("tb-dragging");
             }
         });
         document.addEventListener("dragend", (event) => {
-            event.target.closest?.(".dragging")?.classList.remove("dragging");
+            const dragged = event.target.closest?.(".dragging");
+            // Drop off the schedule removes a task/extra block.
+            if (
+                dragged &&
+                dragged.classList.contains("tb-block") &&
+                event.dataTransfer &&
+                event.dataTransfer.dropEffect === "none"
+            ) {
+                const kind = dragged.dataset.tbBlockKind;
+                if (kind === "task" || kind === "extra") {
+                    this._tbRemoveBlock(dragged.dataset.tbBlockId);
+                }
+            }
+            dragged?.classList.remove("dragging");
             this._tbDragMeta = null;
             document.body.classList.remove("tb-dragging");
             document.querySelectorAll(".tb-drop-indicator").forEach((el) => { el.hidden = true; });

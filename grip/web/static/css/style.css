@@ -6177,7 +6177,7 @@ body.auth-page {
 }
 .tb-nu-label {
     position: absolute;
-    left: 70px;
+    left: 0;
     top: 50%;
     transform: translateY(-50%);
     background: var(--ink);
@@ -6832,3 +6832,8 @@ body.tb-dragging .tb-timeline-card {
     color: var(--ink);
     box-shadow: var(--shadow-card);
 }
+
+/* Calendar-derived blocks cannot be moved */
+.tb-block.is-locked { cursor: default; }
+.tb-block.is-movable { cursor: grab; }
+.tb-block.is-movable:active { cursor: grabbing; }
