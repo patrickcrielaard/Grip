@@ -6307,7 +6307,8 @@ body.auth-page {
     border-color: var(--border-strong);
     color: var(--ink);
 }
-.tb-block.routine {
+.tb-block.routine,
+.tb-block.rust {
     background: var(--content-bg);
     border-color: var(--border);
     color: var(--ink);
@@ -6490,6 +6491,7 @@ body.auth-page {
 .tb-capacity-bar .seg { display: block; height: 100%; }
 .tb-capacity-bar .seg-focus   { background: var(--ink); }
 .tb-capacity-bar .seg-meet    { background: var(--ink-secondary); }
+.tb-capacity-bar .seg-rust    { background: var(--ink-tertiary); }
 .tb-capacity-bar .seg-routine { background: var(--ink-tertiary); }
 .tb-capacity-bar .seg-free    { background: var(--border-strong); }
 .tb-capacity-tick {

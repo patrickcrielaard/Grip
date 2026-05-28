@@ -5520,9 +5520,9 @@ class TodoApp {
 
     _tbTemplates() {
         return [
-            { id: "tplD", letter: "D", name: "Diep werk",   desc: "25 min focus + 5 min pauze", dur: 30,  type: "focus",   dark: true,  area: 2 },
-            { id: "tplP", letter: "P", name: "Pauze",       desc: "Korte ademruimte",           dur: 15,  type: "routine", dark: false, area: 5 },
-            { id: "tplB", letter: "B", name: "Boek lezen",  desc: "Bescherm tegen vergader",    dur: 45,  type: "routine", dark: false, area: 5 },
+            { id: "tplD", letter: "D", name: "Diep werk",   desc: "25 min focus + 5 min pauze", dur: 30,  type: "focus", dark: true,  area: 2 },
+            { id: "tplP", letter: "P", name: "Pauze",       desc: "Korte ademruimte",           dur: 15,  type: "rust",  dark: false, area: 5 },
+            { id: "tplB", letter: "B", name: "Boek lezen",  desc: "Bescherm tegen vergader",    dur: 45,  type: "rust",  dark: false, area: 5 },
         ];
     }
 
@@ -5735,7 +5735,7 @@ class TodoApp {
 
     _tbStats() {
         // Build interval lists per type so overlapping events are not double counted.
-        const byType = { focus: [], meeting: [], routine: [] };
+        const byType = { focus: [], meeting: [], rust: [] };
         const allIntervals = [];
         for (const b of this._tbBlocks) {
             const s = this._tbParseTime(b.start);
@@ -5761,7 +5761,7 @@ class TodoApp {
         const totals = {
             focus:   unionMinutes(byType.focus),
             meeting: unionMinutes(byType.meeting),
-            routine: unionMinutes(byType.routine),
+            rust:    unionMinutes(byType.rust),
             total:   unionMinutes(allIntervals),
         };
 
@@ -5878,17 +5878,17 @@ class TodoApp {
             numEl.innerHTML = `<em>${h}</em><span class="u">u</span> <em>${String(m).padStart(2, "0")}</em><sup>m</sup>`;
         }
         const cap = s.cap || 1;
-        const focusPct   = Math.min(100, ((s.totals.focus   || 0) / cap) * 100);
-        const meetPct    = Math.min(100, ((s.totals.meeting || 0) / cap) * 100);
-        const routinePct = Math.min(100, ((s.totals.routine || 0) / cap) * 100);
-        const usedPct    = focusPct + meetPct + routinePct;
-        const freePct    = Math.max(0, 100 - usedPct);
+        const focusPct = Math.min(100, ((s.totals.focus   || 0) / cap) * 100);
+        const meetPct  = Math.min(100, ((s.totals.meeting || 0) / cap) * 100);
+        const rustPct  = Math.min(100, ((s.totals.rust    || 0) / cap) * 100);
+        const usedPct  = focusPct + meetPct + rustPct;
+        const freePct  = Math.max(0, 100 - usedPct);
         const bar = document.getElementById("tbCapacityBar");
         if (bar) {
             bar.innerHTML = `
                 <i class="seg seg-focus" style="width:${focusPct}%;"></i>
                 <i class="seg seg-meet" style="width:${meetPct}%;"></i>
-                <i class="seg seg-routine" style="width:${routinePct}%;"></i>
+                <i class="seg seg-rust" style="width:${rustPct}%;"></i>
                 <i class="seg seg-free" style="width:${freePct}%;"></i>
             `;
         }
@@ -5897,7 +5897,7 @@ class TodoApp {
             legend.innerHTML = `
                 <span><i style="background:var(--ink);"></i>Diep <b>${this._tbFormatMins(s.totals.focus || 0)}</b></span>
                 <span><i style="background:var(--ink-secondary);"></i>Vergader <b>${this._tbFormatMins(s.totals.meeting || 0)}</b></span>
-                <span><i style="background:var(--ink-tertiary);"></i>Routine <b>${this._tbFormatMins(s.totals.routine || 0)}</b></span>
+                <span><i style="background:var(--ink-tertiary);"></i>Rust <b>${this._tbFormatMins(s.totals.rust || 0)}</b></span>
                 <span><i style="background:var(--border-strong);"></i>Vrij <b>${this._tbFormatMins(s.free)}</b></span>
             `;
         }
@@ -6012,25 +6012,6 @@ class TodoApp {
             const isShort = dur <= 30;
             const accent = this._tbAreaColor(b.area);
 
-            let pomos = "";
-            if ((b.pomos || 0) > 0) {
-                const done = b.pomosDone || 0;
-                const items = [];
-                for (let i = 0; i < b.pomos; i++) {
-                    items.push(`<i class="${i < done ? "on" : ""}"></i>`);
-                }
-                pomos = `<span class="pomos">${items.join("")}</span>`;
-            }
-
-            const meta = isShort ? "" : `
-                <div class="tb-block-meta">
-                    <span class="area-tag"><span class="dot" style="background:${accent};"></span>${this.escapeHtml(this._tbAreaName(b.area))}</span>
-                    ${b.chip ? `<span class="chip">${this.escapeHtml(b.chip)}</span>` : ""}
-                    ${b.protect ? `<span class="chip">Bescherm</span>` : ""}
-                    ${pomos}
-                </div>
-            `;
-
             const draggable = b.kind !== "calendar";
             return `
                 <div class="tb-block ${b.type} ${isPast ? "past" : ""} ${isCurrent ? "current" : ""} ${isTiny ? "tiny" : ""} ${isShort ? "short" : ""} ${b.calendarImported ? "calendar-imported" : ""} ${draggable ? "is-movable" : "is-locked"}"
@@ -6041,7 +6022,6 @@ class TodoApp {
                         <span class="tb-block-title">${this.escapeHtml(b.title)}${isCurrent ? `<span class="bezig-badge"><span class="live"></span>Bezig</span>` : ""}</span>
                         <span class="tb-block-time">${b.start} — ${b.end}</span>
                     </div>
-                    ${meta}
                     <span class="tb-resize" data-tb-resize="${b.id}"></span>
                 </div>
             `;
@@ -6192,9 +6172,9 @@ class TodoApp {
             const mins = computeDropMins(event.clientY);
             if (mins == null) return;
 
+            this._tbDropHandled = true;
             if (payload.kind === "block") {
                 this._tbMoveBlock(payload.id, mins);
-                this._tbDropHandled = true;
                 return;
             } else if (payload.kind === "pool") {
                 const item = this._tbPool.find((p) => p.id === payload.id);
@@ -6430,6 +6410,7 @@ class TodoApp {
                 event.dataTransfer.effectAllowed = "copy";
                 const item = this._tbPool.find((p) => p.id === pool.dataset.tbPoolId);
                 this._tbDragMeta = item ? { dur: item.est, title: item.title } : null;
+                this._tbDropHandled = false;
                 document.body.classList.add("tb-dragging");
                 return;
             }
@@ -6440,6 +6421,7 @@ class TodoApp {
                 event.dataTransfer.effectAllowed = "copy";
                 const t = this._tbTemplates().find((x) => x.id === tpl.dataset.tbTplId);
                 this._tbDragMeta = t ? { dur: t.dur, title: t.name } : null;
+                this._tbDropHandled = false;
                 document.body.classList.add("tb-dragging");
                 return;
             }
@@ -6459,17 +6441,19 @@ class TodoApp {
                 event.dataTransfer.setData("text/plain", JSON.stringify({ kind: "block", id, blockKind }));
                 event.dataTransfer.effectAllowed = "move";
                 this._tbDragMeta = { dur, title: data ? data.title : "" };
+                this._tbDropHandled = false;
                 document.body.classList.add("tb-dragging");
             }
         });
         document.addEventListener("dragend", (event) => {
             const dragged = event.target.closest?.(".dragging");
-            // Drop off the schedule removes a task/extra block.
+            // If the drop did not land on a recognised target, remove the block
+            // (task / extra only). Calendar blocks aren't draggable.
+            const handled = this._tbDropHandled === true;
             if (
                 dragged &&
                 dragged.classList.contains("tb-block") &&
-                event.dataTransfer &&
-                event.dataTransfer.dropEffect === "none"
+                !handled
             ) {
                 const kind = dragged.dataset.tbBlockKind;
                 if (kind === "task" || kind === "extra") {
@@ -6478,6 +6462,7 @@ class TodoApp {
             }
             dragged?.classList.remove("dragging");
             this._tbDragMeta = null;
+            this._tbDropHandled = false;
             document.body.classList.remove("tb-dragging");
             document.querySelectorAll(".tb-drop-indicator").forEach((el) => { el.hidden = true; });
             document.querySelectorAll(".tb-pool-list.drag-over").forEach((el) => el.classList.remove("drag-over"));
@@ -6503,6 +6488,7 @@ class TodoApp {
                 if (!data) return;
                 const payload = (() => { try { return JSON.parse(data); } catch (_) { return null; } })();
                 if (!payload || payload.kind !== "block") return;
+                this._tbDropHandled = true;
                 this._tbRemoveBlock(String(payload.id));
             });
         }
