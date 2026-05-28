@@ -5789,7 +5789,7 @@ class TodoApp {
         this._tbStartNuTicker();
     }
 
-    _tbOffsetDays(delta) {
+    async _tbOffsetDays(delta) {
         const next = new Date(this._tbDate.getTime() + delta * 86400000);
         next.setHours(0, 0, 0, 0);
         const today = new Date();
@@ -5800,10 +5800,17 @@ class TodoApp {
         this._tbBlocksOverrides = new Map();
         this._tbExtraBlocks = [];
         this._tbScheduledTaskIds = new Set();
-        // Trigger calendar fetch for the new day; refreshTodayAgenda re-renders schema.
+        // Immediate render so the schema reflects the new active date even
+        // before the calendar fetch completes (empty calendar events shown).
+        this.renderTodaySchema();
+        // Fetch the new day's calendar events; the function calls
+        // renderTodaySchema again after the events land.
         if (typeof this.refreshTodayAgenda === "function") {
-            this.refreshTodayAgenda(true);
-        } else {
+            await this.refreshTodayAgenda(true);
+            // Defensive: ensure the schema (and balance) reflect the freshly
+            // loaded events. refreshTodayAgenda only re-renders when in the
+            // today view, but we call it again here unconditionally because
+            // we know we are on Today (the stepper isn't shown otherwise).
             this.renderTodaySchema();
         }
     }
@@ -5855,8 +5862,7 @@ class TodoApp {
         }
         const first = this._tbBlocks.reduce((acc, b) => Math.min(acc, this._tbParseTime(b.start)), 24*60);
         const last  = this._tbBlocks.reduce((acc, b) => Math.max(acc, this._tbParseTime(b.end)), 0);
-        const buffers = this._tbCountBuffers();
-        subEl.textContent = `${this._tbFormatTime(first)} – ${this._tbFormatTime(last)} · ${this._tbBlocks.length} blokken · ${buffers} buffers`;
+        subEl.textContent = `${this._tbFormatTime(first)} – ${this._tbFormatTime(last)} · ${this._tbBlocks.length} blokken`;
     }
 
     _tbCountBuffers() {
