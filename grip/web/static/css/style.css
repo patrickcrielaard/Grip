@@ -6350,6 +6350,17 @@ body.auth-page {
 .tb-block.tiny { padding: 4px 10px; }
 .tb-block.tiny .tb-block-meta { display: none; }
 
+/* Compact layout for ≤30-min blocks so the title doesn't get clipped */
+.tb-block.short { padding: 6px 10px 6px 12px; }
+.tb-block.short .tb-block-row { gap: 6px; }
+.tb-block.short .tb-block-title { font-size: 11.5px; line-height: 1.2; }
+.tb-block.short .tb-block-time {
+    font-size: 10px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+.tb-block.short .tb-rail-accent { top: 4px; bottom: 4px; }
+
 /* Gap slot */
 .tb-gap {
     position: absolute;

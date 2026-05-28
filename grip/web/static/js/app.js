@@ -5978,7 +5978,7 @@ class TodoApp {
             const isPast = nowMins != null && e < nowMins;
             const isCurrent = nowMins != null && s <= nowMins && e > nowMins;
             const isTiny = dur <= 15;
-            const isShort = dur < 30;
+            const isShort = dur <= 30;
             const accent = this._tbAreaColor(b.area);
 
             let pomos = "";
@@ -6001,7 +6001,7 @@ class TodoApp {
             `;
 
             return `
-                <div class="tb-block ${b.type} ${isPast ? "past" : ""} ${isCurrent ? "current" : ""} ${isTiny ? "tiny" : ""} ${b.calendarImported ? "calendar-imported" : ""}"
+                <div class="tb-block ${b.type} ${isPast ? "past" : ""} ${isCurrent ? "current" : ""} ${isTiny ? "tiny" : ""} ${isShort ? "short" : ""} ${b.calendarImported ? "calendar-imported" : ""}"
                      style="top:${top}px;height:${Math.max(22, height)}px;"
                      data-tb-block-id="${b.id}" draggable="true">
                     <span class="tb-rail-accent" style="background:${accent};"></span>
@@ -6088,7 +6088,8 @@ class TodoApp {
 
     _tbBindTimelineEvents() {
         const wrap = document.getElementById("tbTimeline");
-        if (!wrap) return;
+        if (!wrap || wrap.dataset.tbBound === "1") return;
+        wrap.dataset.tbBound = "1";
 
         // Block click → open sheet
         wrap.addEventListener("click", (event) => {
@@ -6160,15 +6161,17 @@ class TodoApp {
             if (payload.kind === "pool") {
                 const item = this._tbPool.find((p) => p.id === payload.id);
                 if (!item) return;
-                this._tbInsertBlock({
+                const newId = this._tbInsertBlock({
                     title: item.title,
                     type: "focus",
                     area: item.area,
                     durMin: item.est,
                     startMin: mins,
                     chip: "Diep werk",
+                    fromTaskId: item.taskId,
                 });
                 if (item.taskId != null) this._tbScheduledTaskIds.add(item.taskId);
+                void newId;
             } else if (payload.kind === "tpl") {
                 const tpl = this._tbTemplates().find((t) => t.id === payload.id);
                 if (!tpl) return;
@@ -6200,6 +6203,7 @@ class TodoApp {
             chip: opts.chip,
             pomos: opts.type === "focus" ? Math.max(1, Math.round(opts.durMin / 30)) : 0,
             pomosDone: 0,
+            fromTaskId: opts.fromTaskId ?? null,
         };
         this._tbExtraBlocks.push(block);
         return id;
@@ -6292,6 +6296,34 @@ class TodoApp {
         this._tbRender();
     }
 
+    _tbRemoveBlock(id) {
+        // Find block by id across the rendered set to know its kind.
+        const block = this._tbBlocks.find((b) => String(b.id) === String(id));
+        if (!block) return;
+        // Extras: drop from the in-memory list.
+        const extraIdx = this._tbExtraBlocks.findIndex((b) => String(b.id) === String(id));
+        if (extraIdx >= 0) {
+            const removed = this._tbExtraBlocks.splice(extraIdx, 1)[0];
+            if (removed && removed.fromTaskId != null) {
+                this._tbScheduledTaskIds.delete(removed.fromTaskId);
+            }
+        } else if (block.kind === "task" && block.taskId != null) {
+            // Task block dropped onto the pool → unschedule (becomes pool item again).
+            this._tbScheduledTaskIds.delete(block.taskId);
+            this._tbBlocksOverrides.set(String(id), {
+                ...(this._tbBlocksOverrides.get(String(id)) || {}),
+                _hidden: true,
+            });
+        } else {
+            // Calendar (or other derived) → hide via override.
+            this._tbBlocksOverrides.set(String(id), {
+                ...(this._tbBlocksOverrides.get(String(id)) || {}),
+                _hidden: true,
+            });
+        }
+        this._tbRender();
+    }
+
     _tbDeleteSheet() {
         if (!this._tbEditingId) return;
         const id = this._tbEditingId;
@@ -6378,7 +6410,32 @@ class TodoApp {
             this._tbDragMeta = null;
             document.body.classList.remove("tb-dragging");
             document.querySelectorAll(".tb-drop-indicator").forEach((el) => { el.hidden = true; });
+            document.querySelectorAll(".tb-pool-list.drag-over").forEach((el) => el.classList.remove("drag-over"));
         });
+
+        // Drop a block back onto the Te doen pool → remove the block & unplan the task.
+        const poolList = document.getElementById("tbPoolList");
+        if (poolList) {
+            poolList.addEventListener("dragover", (event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                poolList.classList.add("drag-over");
+            });
+            poolList.addEventListener("dragleave", (event) => {
+                if (!poolList.contains(event.relatedTarget)) {
+                    poolList.classList.remove("drag-over");
+                }
+            });
+            poolList.addEventListener("drop", (event) => {
+                event.preventDefault();
+                poolList.classList.remove("drag-over");
+                const data = event.dataTransfer.getData("text/plain");
+                if (!data) return;
+                const payload = (() => { try { return JSON.parse(data); } catch (_) { return null; } })();
+                if (!payload || payload.kind !== "block") return;
+                this._tbRemoveBlock(String(payload.id));
+            });
+        }
     }
 
     _tbAutoPlan() {

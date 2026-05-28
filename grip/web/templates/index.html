@@ -365,16 +365,18 @@
                     </div>
                 </div>
                 <aside class="today-right-col" id="todayRightCol">
-                    <section class="panel agenda-panel" aria-labelledby="todayAgendaTitle">
-                        <div class="agenda-now" id="agendaNow">
-                            <span class="dot" aria-hidden="true"></span>
-                            <span id="agendaNowLabel">Nu · --:--</span>
-                        </div>
-                        <h2 class="panel-title" id="todayAgendaTitle">Agenda</h2>
-                        <ul class="agenda-list" id="todayAgendaList">
-                            <!-- rendered by JS -->
-                        </ul>
-                    </section>
+                    <div class="td-mode td-mode-list" id="todayListAgendaTop" hidden>
+                        <section class="panel agenda-panel" aria-labelledby="todayAgendaTitle">
+                            <div class="agenda-now" id="agendaNow">
+                                <span class="dot" aria-hidden="true"></span>
+                                <span id="agendaNowLabel">Nu · --:--</span>
+                            </div>
+                            <h2 class="panel-title" id="todayAgendaTitle">Agenda</h2>
+                            <ul class="agenda-list" id="todayAgendaList">
+                                <!-- rendered by JS -->
+                            </ul>
+                        </section>
+                    </div>
 
                     <div class="td-mode td-mode-agenda" id="todayAgendaRail">
                         <section class="tb-rail-card panel" aria-labelledby="tbBalansTitle">
@@ -1380,5 +1382,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=33"></script>
+<script src="/static/js/app.js?v=34"></script>
 {% endblock %}
