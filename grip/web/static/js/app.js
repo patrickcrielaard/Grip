@@ -5902,6 +5902,12 @@ class TodoApp {
             const m = s.totals.total % 60;
             numEl.innerHTML = `<em>${h}</em><span class="u">u</span> <em>${String(m).padStart(2, "0")}</em><sup>m</sup>`;
         }
+        const pctEl = document.getElementById("tbBalansPct");
+        if (pctEl) {
+            const cap = s.cap || 1;
+            const pct = Math.min(100, Math.round((s.totals.total / cap) * 100));
+            pctEl.textContent = `${pct}%`;
+        }
         // Categories mirror the next-week time-budget block (labels + colors).
         const cap = s.cap || 1;
         const focusPct  = Math.min(100, ((s.totals.focus   || 0) / cap) * 100);
