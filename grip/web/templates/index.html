@@ -686,10 +686,14 @@
         <section class="stats-view" id="statsView" hidden aria-label="Inzichten">
             <header class="stats-header">
                 <div class="stats-week-nav">
-                    <button type="button" class="stats-nav-btn" id="statsPrevWeek" aria-label="Vorige week">&#8249;</button>
+                    <button type="button" class="stats-nav-btn" id="statsPrevWeek" aria-label="Vorige periode">&#8249;</button>
                     <span class="stats-range-label" id="statsRangeLabel">—</span>
-                    <button type="button" class="stats-nav-btn" id="statsNextWeek" aria-label="Volgende week">&#8250;</button>
-                    <button type="button" class="stats-nav-btn stats-today-btn" id="statsTodayBtn">Deze week</button>
+                    <button type="button" class="stats-nav-btn" id="statsNextWeek" aria-label="Volgende periode">&#8250;</button>
+                    <button type="button" class="stats-nav-btn stats-today-btn" id="statsTodayBtn">Nu</button>
+                </div>
+                <div class="stats-period-toggle" role="tablist" aria-label="Periode">
+                    <button type="button" class="stats-period-btn is-active" data-period="week">Week</button>
+                    <button type="button" class="stats-period-btn" data-period="month">Maand</button>
                 </div>
                 <div class="stats-kind-toggle" role="tablist" aria-label="Filter">
                     <button type="button" class="stats-kind-btn is-active" data-kind="all">Alles</button>
@@ -722,6 +726,17 @@
                 <h3 class="stats-section-title">Per dag</h3>
                 <svg class="stats-chart" id="statsChart" viewBox="0 0 700 200" preserveAspectRatio="none"></svg>
                 <div class="stats-chart-legend" id="statsChartLegend"></div>
+            </div>
+            <div class="stats-chart-wrap stats-plan-wrap">
+                <div class="stats-plan-head">
+                    <h3 class="stats-section-title">Plan-consistentie</h3>
+                    <span class="stats-plan-sub" id="statsPlanSub">0 van 0 dagen gepland</span>
+                </div>
+                <div class="stats-plan-body">
+                    <div class="stats-plan-pct" id="statsPlanPct">0%</div>
+                    <div class="stats-plan-bar"><i id="statsPlanFill" style="width:0%;"></i></div>
+                    <div class="stats-plan-grid" id="statsPlanGrid" aria-label="Per dag een blokje: gevuld = gepland"></div>
+                </div>
             </div>
             <div class="stats-breakdown-grid">
                 <div class="stats-breakdown">
@@ -1373,5 +1388,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=45"></script>
+<script src="/static/js/app.js?v=47"></script>
 {% endblock %}

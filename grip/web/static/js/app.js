@@ -34,7 +34,8 @@ class TodoApp {
         this._chimeAudioCtx = null;      // lazy WebAudio fallback when no MP3
         this._notifyAsked = false;
         this.timeEntriesByTask = new Map();  // task_id -> array (cached for modal)
-        this.statsRangeOffset = 0;       // 0 = current week, -1 = previous, +1 = next
+        this.statsRangeOffset = 0;       // 0 = current period, -1 = previous, +1 = next
+        this.statsPeriod = localStorage.getItem("gripStatsPeriod") === "month" ? "month" : "week";
         this.statsKindFilter = "all";    // all | stopwatch | pomodoro
 
         this.cacheElements();
@@ -288,6 +289,11 @@ class TodoApp {
         this.statsByProject = document.getElementById("statsByProject");
         this.statsByTask = document.getElementById("statsByTask");
         this.statsKindButtons = Array.from(document.querySelectorAll(".stats-kind-btn"));
+        this.statsPeriodButtons = Array.from(document.querySelectorAll(".stats-period-btn"));
+        this.statsPlanPct = document.getElementById("statsPlanPct");
+        this.statsPlanFill = document.getElementById("statsPlanFill");
+        this.statsPlanSub = document.getElementById("statsPlanSub");
+        this.statsPlanGrid = document.getElementById("statsPlanGrid");
         this.openPomodoroSettings = document.getElementById("openPomodoroSettings");
         // Pomodoro settings modal
         this.pomodoroSettingsModal = document.getElementById("pomodoroSettingsModal");
@@ -1198,6 +1204,21 @@ class TodoApp {
                 this.renderStats();
             });
         }
+        this.statsPeriodButtons.forEach((btn) => {
+            const initialIsActive = btn.dataset.period === this.statsPeriod;
+            btn.classList.toggle("is-active", initialIsActive);
+            btn.addEventListener("click", () => {
+                const next = btn.dataset.period === "month" ? "month" : "week";
+                if (next === this.statsPeriod) return;
+                this.statsPeriod = next;
+                this.statsRangeOffset = 0;
+                localStorage.setItem("gripStatsPeriod", next);
+                this.statsPeriodButtons.forEach((b) =>
+                    b.classList.toggle("is-active", b === btn)
+                );
+                this.renderStats();
+            });
+        });
         this.statsKindButtons.forEach((btn) => {
             btn.addEventListener("click", () => {
                 this.statsKindFilter = btn.dataset.kind || "all";
@@ -3931,11 +3952,19 @@ class TodoApp {
         const { start, end } = this.getStatsRange();
         // Update header label
         if (this.statsRangeLabel) {
-            const fmt = (s) => {
-                const d = new Date(`${s}T00:00:00`);
-                return d.toLocaleDateString("nl-NL", { day: "2-digit", month: "short" });
-            };
-            this.statsRangeLabel.textContent = `${fmt(start)} – ${fmt(end)}`;
+            const d0 = new Date(`${start}T00:00:00`);
+            const d1 = new Date(`${end}T00:00:00`);
+            if (this.statsPeriod === "month") {
+                this.statsRangeLabel.textContent = d0
+                    .toLocaleDateString("nl-NL", { month: "long", year: "numeric" });
+            } else {
+                const fmt = (d) => d.toLocaleDateString("nl-NL", { day: "2-digit", month: "short" });
+                this.statsRangeLabel.textContent = `${fmt(d0)} – ${fmt(d1)}`;
+            }
+        }
+        if (this.statsTodayBtn) {
+            this.statsTodayBtn.textContent =
+                this.statsPeriod === "month" ? "Deze maand" : "Deze week";
         }
         // Fetch the four summaries in parallel.
         let day, area, project, task;
@@ -3979,6 +4008,58 @@ class TodoApp {
         this._renderStatsBreakdown(this.statsByArea, area, totalSec);
         this._renderStatsBreakdown(this.statsByProject, project, totalSec);
         this._renderStatsBreakdown(this.statsByTask, task.slice(0, 10), totalSec);
+        this._renderPlanningConsistency(start, end);
+    }
+
+    async _renderPlanningConsistency(start, end) {
+        if (!this.statsPlanPct && !this.statsPlanGrid) return;
+        let rows = [];
+        try {
+            const data = await this.request(
+                `/api/day-plan-events/summary?from=${start}&to=${end}`
+            );
+            rows = data.rows || [];
+        } catch (_) {
+            rows = [];
+        }
+        const plannedSet = new Set(rows.map((r) => r.planned_for));
+
+        // Build the day list within [start, end].
+        const days = [];
+        const cursor = new Date(`${start}T00:00:00`);
+        const endDate = new Date(`${end}T00:00:00`);
+        const todayKey = new Date().toISOString().split("T")[0];
+        while (cursor <= endDate) {
+            const key = cursor.toISOString().split("T")[0];
+            days.push({
+                key,
+                planned: plannedSet.has(key),
+                future: key > todayKey,
+                weekday: cursor.toLocaleDateString("nl-NL", { weekday: "short" }),
+                day: cursor.getDate(),
+            });
+            cursor.setDate(cursor.getDate() + 1);
+        }
+        // Percentage only counts past + today; future days are neutral.
+        const past = days.filter((d) => !d.future);
+        const plannedDays = past.filter((d) => d.planned).length;
+        const pct = past.length === 0
+            ? 0
+            : Math.round((plannedDays / past.length) * 100);
+
+        if (this.statsPlanPct) this.statsPlanPct.textContent = `${pct}%`;
+        if (this.statsPlanFill) this.statsPlanFill.style.width = `${pct}%`;
+        if (this.statsPlanSub) {
+            this.statsPlanSub.textContent =
+                `${plannedDays} van ${past.length} dagen gepland`;
+        }
+        if (this.statsPlanGrid) {
+            this.statsPlanGrid.innerHTML = days.map((d) => {
+                const cls = d.future ? "future" : (d.planned ? "on" : "off");
+                const label = `${d.weekday} ${d.day}: ${d.planned ? "gepland" : (d.future ? "toekomst" : "niet gepland")}`;
+                return `<span class="stats-plan-cell ${cls}" title="${this.escapeHtml(label)}"></span>`;
+            }).join("");
+        }
     }
 
     async _fetchSummary(from, to, groupBy) {
@@ -3989,8 +4070,23 @@ class TodoApp {
     }
 
     getStatsRange() {
-        const { start, end } = this.getWeekRange(this.statsRangeOffset);
-        return { start, end };
+        if (this.statsPeriod === "month") {
+            return this.getMonthRange(this.statsRangeOffset);
+        }
+        return this.getWeekRange(this.statsRangeOffset);
+    }
+
+    getMonthRange(offset = 0) {
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+        const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+        const fmt = (d) => {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, "0");
+            const day = String(d.getDate()).padStart(2, "0");
+            return `${y}-${m}-${day}`;
+        };
+        return { start: fmt(start), end: fmt(end) };
     }
 
     _renderStatsChart(dayRows, start, end) {
@@ -6214,7 +6310,7 @@ class TodoApp {
             } else if (payload.kind === "pool") {
                 const item = this._tbPool.find((p) => p.id === payload.id);
                 if (!item) return;
-                const newId = this._tbInsertBlock({
+                this._tbInsertBlock({
                     title: item.title,
                     type: "focus",
                     area: item.area,
@@ -6224,7 +6320,14 @@ class TodoApp {
                     fromTaskId: item.taskId,
                 });
                 if (item.taskId != null) this._tbScheduledTaskIds.add(item.taskId);
-                void newId;
+                this._tbLogPlanEvent({
+                    source_kind: "task",
+                    source_id: item.taskId != null ? String(item.taskId) : String(item.id),
+                    title: item.title,
+                    block_type: "focus",
+                    start_min: mins,
+                    dur_min: item.est,
+                });
             } else if (payload.kind === "tpl") {
                 const tpl = this._tbTemplates().find((t) => t.id === payload.id);
                 if (!tpl) return;
@@ -6236,8 +6339,39 @@ class TodoApp {
                     startMin: mins,
                     chip: tpl.name,
                 });
+                this._tbLogPlanEvent({
+                    source_kind: "template",
+                    source_id: tpl.id,
+                    title: tpl.name,
+                    block_type: tpl.type,
+                    start_min: mins,
+                    dur_min: tpl.dur,
+                });
             }
             this._tbRender();
+        });
+    }
+
+    _tbLogPlanEvent(opts) {
+        // Persist a single planning event. Fire-and-forget: any backend issue
+        // is logged but never blocks the UI update.
+        const startMin = Math.max(0, Math.min(24 * 60 - 1, Math.round(opts.start_min)));
+        const payload = {
+            source_kind: opts.source_kind,
+            source_id: String(opts.source_id),
+            title: opts.title,
+            block_type: opts.block_type,
+            planned_for: this._tbActiveDateKey(),
+            start_time: this._tbFormatTime(startMin),
+            duration_minutes: Math.max(1, Math.round(opts.dur_min)),
+        };
+        fetch("/api/day-plan-events", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify(payload),
+        }).catch((err) => {
+            console.warn("day-plan-event log failed", err);
         });
     }
 

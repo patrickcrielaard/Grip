@@ -884,6 +884,79 @@ class SupabaseService:
             self.logger.exception("list_calendar_events failed: %s", exc)
             return []
 
+    # ── Day-plan events: log every time a block is placed on the schedule ──
+
+    def create_day_plan_event(
+        self,
+        user_id: str,
+        *,
+        source_kind: str,
+        source_id: str,
+        title: str,
+        block_type: str,
+        planned_for: str,
+        start_time: str,
+        duration_minutes: int,
+    ) -> Optional[Dict[str, Any]]:
+        """Insert a single planning event and return the row.
+
+        ``source_kind`` is either ``"task"`` or ``"template"``. ``source_id``
+        is the originating task id (as string) or template id (e.g. ``"tplD"``).
+        Each scheduled block creates exactly one row.
+        """
+        try:
+            payload: Dict[str, Any] = {
+                "user_id": user_id,
+                "source_kind": source_kind,
+                "source_id": source_id,
+                "title": title,
+                "block_type": block_type,
+                "planned_for": planned_for,
+                "start_time": start_time,
+                "duration_minutes": int(duration_minutes),
+            }
+            result = self.supabase.table("day_plan_events").insert(payload).execute()
+            if not result.data:
+                return None
+            if isinstance(result.data, list):
+                return cast(Dict[str, Any], result.data[0])
+            return cast(Dict[str, Any], result.data)
+        except Exception as exc:
+            self.logger.exception("create_day_plan_event failed: %s", exc)
+            return None
+
+    def list_day_plan_event_summary(
+        self, user_id: str, start: str, end: str
+    ) -> List[Dict[str, Any]]:
+        """Return a per-day summary of planning events for [start, end].
+
+        Each item: ``{"planned_for": "YYYY-MM-DD", "event_count": int}``.
+        Days without any event are not included; callers compute "did the
+        user plan that day" by checking membership.
+        """
+        try:
+            result = (
+                self.supabase.table("day_plan_events")
+                .select("planned_for")
+                .eq("user_id", user_id)
+                .gte("planned_for", start)
+                .lte("planned_for", end)
+                .execute()
+            )
+            counts: Dict[str, int] = {}
+            for raw in result.data or []:
+                row = cast(Dict[str, Any], raw)
+                key = row.get("planned_for")
+                if not isinstance(key, str):
+                    continue
+                counts[key] = counts.get(key, 0) + 1
+            return [
+                {"planned_for": k, "event_count": v} for k, v in sorted(counts.items())
+            ]
+        except Exception as exc:
+            self.logger.exception("list_day_plan_event_summary failed: %s", exc)
+            return []
+
     # ── Timer: active sessions, time entries, pomodoro settings ─────────────
 
     def get_active_session(self, user_id: str) -> Optional[Dict[str, Any]]:

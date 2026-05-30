@@ -29,6 +29,7 @@ from grip.routes.authentication import (
     router as auth_router,
 )
 from grip.routes.calendar import router as calendar_router
+from grip.routes.day_plan_events import router as day_plan_event_router
 from grip.routes.goals import router as goal_router
 from grip.routes.projects import router as project_router
 from grip.routes.timer import router as timer_router
@@ -126,6 +127,7 @@ app.include_router(project_router)
 app.include_router(area_router)
 app.include_router(goal_router)
 app.include_router(calendar_router)
+app.include_router(day_plan_event_router)
 app.include_router(timer_router)
 
 app.mount("/mcp", _mcp_sub_app)
