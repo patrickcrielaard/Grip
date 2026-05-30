@@ -1,7 +1,23 @@
+/* ===== Self-hosted fonts ===== */
+@font-face {
+    font-family: "Bridgeport Sans";
+    src: url("/static/fonts/bridgeportsans-regular.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Bridgeport Sans";
+    src: url("/static/fonts/bridgeportsans-semibold.woff2") format("woff2");
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
 /* ===== Design Tokens ===== */
 :root {
-    --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
-    --font-body: "Plus Jakarta Sans", system-ui, sans-serif;
+    --font-display: "Bridgeport Sans", system-ui, sans-serif;
+    --font-body: "Bridgeport Sans", system-ui, sans-serif;
     /* Display headlines previously used Instrument Serif italic. We now use
        the same body font everywhere — the variable is kept so existing rules
        still resolve, and italics are reset on the elements that opted in. */
