@@ -738,6 +738,16 @@
                     <div class="stats-plan-grid" id="statsPlanGrid" aria-label="Per dag een blokje: gevuld = gepland"></div>
                 </div>
             </div>
+            <div class="stats-chart-wrap stats-cap-wrap">
+                <div class="stats-plan-head">
+                    <h3 class="stats-section-title">Capaciteits-benutting</h3>
+                    <span class="stats-plan-sub" id="statsCapSub">0u 00m van 0u beschikbaar</span>
+                </div>
+                <div class="stats-plan-body">
+                    <div class="stats-plan-pct" id="statsCapPct">0%</div>
+                    <svg class="stats-chart stats-cap-chart" id="statsCapChart" viewBox="0 0 700 200" preserveAspectRatio="xMidYMid meet"></svg>
+                </div>
+            </div>
             <div class="stats-breakdown-grid">
                 <div class="stats-breakdown">
                     <h3 class="stats-section-title">Per gebied</h3>
@@ -1388,5 +1398,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=48"></script>
+<script src="/static/js/app.js?v=49"></script>
 {% endblock %}

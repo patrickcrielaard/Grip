@@ -6957,3 +6957,7 @@ body.tb-dragging .tb-timeline-card {
     border-style: dashed;
     border-color: var(--border);
 }
+
+/* Capaciteits-benutting chart */
+.stats-cap-chart { margin-top: 8px; }
+.stats-bar.future { fill: var(--surface); stroke: var(--border); stroke-width: 1; }

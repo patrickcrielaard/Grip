@@ -930,28 +930,43 @@ class SupabaseService:
     ) -> List[Dict[str, Any]]:
         """Return a per-day summary of planning events for [start, end].
 
-        Each item: ``{"planned_for": "YYYY-MM-DD", "event_count": int}``.
+        Each item:
+        ``{"planned_for": "YYYY-MM-DD", "event_count": int, "total_minutes": int}``.
+
         Days without any event are not included; callers compute "did the
-        user plan that day" by checking membership.
+        user plan that day" by membership, and capacity utilisation from
+        ``total_minutes``.
         """
         try:
             result = (
                 self.supabase.table("day_plan_events")
-                .select("planned_for")
+                .select("planned_for, duration_minutes")
                 .eq("user_id", user_id)
                 .gte("planned_for", start)
                 .lte("planned_for", end)
                 .execute()
             )
             counts: Dict[str, int] = {}
+            minutes: Dict[str, int] = {}
             for raw in result.data or []:
                 row = cast(Dict[str, Any], raw)
                 key = row.get("planned_for")
                 if not isinstance(key, str):
                     continue
                 counts[key] = counts.get(key, 0) + 1
+                try:
+                    dur = int(row.get("duration_minutes") or 0)
+                except (TypeError, ValueError):
+                    dur = 0
+                if dur > 0:
+                    minutes[key] = minutes.get(key, 0) + dur
             return [
-                {"planned_for": k, "event_count": v} for k, v in sorted(counts.items())
+                {
+                    "planned_for": k,
+                    "event_count": counts[k],
+                    "total_minutes": minutes.get(k, 0),
+                }
+                for k in sorted(counts.keys())
             ]
         except Exception as exc:
             self.logger.exception("list_day_plan_event_summary failed: %s", exc)

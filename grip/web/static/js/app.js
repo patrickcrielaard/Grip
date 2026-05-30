@@ -294,6 +294,9 @@ class TodoApp {
         this.statsPlanFill = document.getElementById("statsPlanFill");
         this.statsPlanSub = document.getElementById("statsPlanSub");
         this.statsPlanGrid = document.getElementById("statsPlanGrid");
+        this.statsCapPct = document.getElementById("statsCapPct");
+        this.statsCapSub = document.getElementById("statsCapSub");
+        this.statsCapChart = document.getElementById("statsCapChart");
         this.openPomodoroSettings = document.getElementById("openPomodoroSettings");
         // Pomodoro settings modal
         this.pomodoroSettingsModal = document.getElementById("pomodoroSettingsModal");
@@ -4015,11 +4018,10 @@ class TodoApp {
         this._renderStatsBreakdown(this.statsByArea, area, totalSec);
         this._renderStatsBreakdown(this.statsByProject, project, totalSec);
         this._renderStatsBreakdown(this.statsByTask, task.slice(0, 10), totalSec);
-        this._renderPlanningConsistency(start, end);
+        this._renderPlanCharts(start, end);
     }
 
-    async _renderPlanningConsistency(start, end) {
-        if (!this.statsPlanPct && !this.statsPlanGrid) return;
+    async _renderPlanCharts(start, end) {
         let rows = [];
         try {
             const data = await this.request(
@@ -4029,6 +4031,13 @@ class TodoApp {
         } catch (_) {
             rows = [];
         }
+        this._renderPlanningConsistency(start, end, rows);
+        this._renderCapacityUtilization(start, end, rows);
+    }
+
+    _renderPlanningConsistency(start, end, rows) {
+        if (!this.statsPlanPct && !this.statsPlanGrid) return;
+        rows = rows || [];
         const plannedSet = new Set(rows.map((r) => r.planned_for));
 
         // Build the day list within [start, end]. Use local-date components
@@ -4076,6 +4085,94 @@ class TodoApp {
                 return `<span class="stats-plan-cell ${cls}" title="${this.escapeHtml(label)}"></span>`;
             }).join("");
         }
+    }
+
+    _renderCapacityUtilization(start, end, rows) {
+        if (!this.statsCapChart && !this.statsCapPct) return;
+        const CAP_MIN_PER_DAY = 10 * 60; // 08:00 – 18:00 = 10h
+
+        const minutesByDay = new Map(
+            (rows || []).map((r) => [r.planned_for, Number(r.total_minutes || 0)])
+        );
+
+        // Same local-date helper as the consistency chart.
+        const fmtLocal = (d) => {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, "0");
+            const day = String(d.getDate()).padStart(2, "0");
+            return `${y}-${m}-${day}`;
+        };
+        const days = [];
+        const cursor = new Date(`${start}T00:00:00`);
+        const endDate = new Date(`${end}T00:00:00`);
+        const todayKey = fmtLocal(new Date());
+        while (cursor <= endDate) {
+            const key = fmtLocal(cursor);
+            days.push({
+                key,
+                minutes: minutesByDay.get(key) || 0,
+                future: key > todayKey,
+                weekday: cursor.toLocaleDateString("nl-NL", { weekday: "short" }),
+                day: cursor.getDate(),
+            });
+            cursor.setDate(cursor.getDate() + 1);
+        }
+
+        // Aggregate percentage uses only past + today.
+        const past = days.filter((d) => !d.future);
+        const totalMin = past.reduce((s, d) => s + d.minutes, 0);
+        const totalCap = past.length * CAP_MIN_PER_DAY;
+        const pct = totalCap === 0 ? 0 : Math.round((totalMin / totalCap) * 100);
+
+        if (this.statsCapPct) this.statsCapPct.textContent = `${pct}%`;
+        if (this.statsCapSub) {
+            this.statsCapSub.textContent =
+                `${this._formatPlanMinutes(totalMin)} van ${this._formatPlanMinutes(totalCap)} beschikbaar`;
+        }
+
+        if (!this.statsCapChart) return;
+        // SVG bar chart: one bar per day, height capped at 100% of 10h.
+        const W = 700, H = 200;
+        const paddingLeft = 36, paddingRight = 8, paddingBottom = 24, paddingTop = 8;
+        const innerW = W - paddingLeft - paddingRight;
+        const innerH = H - paddingBottom - paddingTop;
+        const slot = innerW / Math.max(1, days.length);
+        const barWidth = Math.min(28, slot * 0.65);
+        const baseY = paddingTop + innerH;
+
+        let svg = "";
+        // Y-axis: 0 / 50% / 100%
+        for (let i = 0; i <= 2; i++) {
+            const y = paddingTop + innerH * (1 - i / 2);
+            svg += `<line x1="${paddingLeft}" y1="${y}" x2="${W - paddingRight}" y2="${y}" class="stats-grid-line"/>`;
+            svg += `<text x="${paddingLeft - 6}" y="${y + 3}" class="stats-axis-label" text-anchor="end">${i * 50}%</text>`;
+        }
+
+        days.forEach((d, i) => {
+            const x = paddingLeft + slot * i + (slot - barWidth) / 2;
+            const rawPct = CAP_MIN_PER_DAY > 0 ? (d.minutes / CAP_MIN_PER_DAY) : 0;
+            const cappedPct = Math.min(1, rawPct);
+            const h = innerH * cappedPct;
+            const y = baseY - h;
+            const cls = d.future ? "stats-bar future" : "stats-bar";
+            const tooltipPct = Math.round(rawPct * 100);
+            const tooltipMin = this._formatPlanMinutes(d.minutes);
+            svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${Math.max(2, h)}" rx="3" class="${cls}"><title>${d.key}: ${tooltipMin} (${tooltipPct}%)</title></rect>`;
+            // Only label every other day on month view to avoid clutter.
+            const showLabel = days.length <= 16 || i % 3 === 0;
+            if (showLabel) {
+                const labelText = days.length <= 8 ? d.weekday : String(d.day);
+                svg += `<text x="${x + barWidth / 2}" y="${baseY + 16}" class="stats-axis-label" text-anchor="middle">${labelText}</text>`;
+            }
+        });
+        this.statsCapChart.innerHTML = svg;
+    }
+
+    _formatPlanMinutes(mins) {
+        const m = Math.max(0, Math.round(mins));
+        const h = Math.floor(m / 60);
+        const r = m % 60;
+        return `${h}u ${String(r).padStart(2, "0")}m`;
     }
 
     async _fetchSummary(from, to, groupBy) {
