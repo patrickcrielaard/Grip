@@ -2549,7 +2549,14 @@ class TodoApp {
         start.setDate(now.getDate() - daysFromMonday + offset * 7);
         const end = new Date(start);
         end.setDate(start.getDate() + 6);
-        const fmt = (d) => d.toISOString().split("T")[0];
+        // Use local date components, not toISOString (which converts to UTC
+        // and can shift the day in offsets east of UTC).
+        const fmt = (d) => {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, "0");
+            const day = String(d.getDate()).padStart(2, "0");
+            return `${y}-${m}-${day}`;
+        };
         return { start: fmt(start), end: fmt(end) };
     }
 
@@ -4024,13 +4031,22 @@ class TodoApp {
         }
         const plannedSet = new Set(rows.map((r) => r.planned_for));
 
-        // Build the day list within [start, end].
+        // Build the day list within [start, end]. Use local-date components
+        // because planned_for is stored in the user's local date (see
+        // _tbActiveDateKey); toISOString would shift the day when the local
+        // offset is positive (e.g. CEST).
+        const fmtLocal = (d) => {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, "0");
+            const day = String(d.getDate()).padStart(2, "0");
+            return `${y}-${m}-${day}`;
+        };
         const days = [];
         const cursor = new Date(`${start}T00:00:00`);
         const endDate = new Date(`${end}T00:00:00`);
-        const todayKey = new Date().toISOString().split("T")[0];
+        const todayKey = fmtLocal(new Date());
         while (cursor <= endDate) {
-            const key = cursor.toISOString().split("T")[0];
+            const key = fmtLocal(cursor);
             days.push({
                 key,
                 planned: plannedSet.has(key),
