@@ -83,3 +83,23 @@ async def day_plan_event_summary(
         raise HTTPException(status_code=400, detail="`to` must be on or after `from`")
     rows = supabase_service.list_day_plan_event_summary(user["id"], from_, to)
     return {"rows": rows}
+
+
+@router.get("/api/insights/capacity")
+async def capacity_breakdown(
+    request: Request,
+    from_: str = Query(..., alias="from", min_length=10, max_length=10),
+    to: str = Query(..., min_length=10, max_length=10),
+) -> Dict[str, Any]:
+    """Per-day planned minutes split by block type.
+
+    Combines ``day_plan_events`` with the user's calendar events. Used by
+    the capacity-utilisation chart on the insights page.
+    """
+    user = _require_user(request)
+    if not _DATE_RE.match(from_) or not _DATE_RE.match(to):
+        raise HTTPException(status_code=400, detail="from/to must be YYYY-MM-DD")
+    if to < from_:
+        raise HTTPException(status_code=400, detail="`to` must be on or after `from`")
+    rows = supabase_service.list_day_capacity_breakdown(user["id"], from_, to)
+    return {"rows": rows}

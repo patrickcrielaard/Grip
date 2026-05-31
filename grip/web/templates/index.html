@@ -727,25 +727,37 @@
                 <svg class="stats-chart" id="statsChart" viewBox="0 0 700 200" preserveAspectRatio="xMidYMid meet"></svg>
                 <div class="stats-chart-legend" id="statsChartLegend"></div>
             </div>
-            <div class="stats-chart-wrap stats-plan-wrap">
-                <div class="stats-plan-head">
-                    <h3 class="stats-section-title">Plan-consistentie</h3>
-                    <span class="stats-plan-sub" id="statsPlanSub">0 van 0 dagen gepland</span>
+            <div class="stats-plan-row">
+                <div class="stats-chart-wrap stats-plan-wrap">
+                    <div class="stats-plan-head">
+                        <h3 class="stats-section-title">Plan-consistentie</h3>
+                        <span class="stats-plan-sub" id="statsPlanSub">0 van 0 dagen gepland</span>
+                    </div>
+                    <div class="stats-plan-body">
+                        <div class="stats-plan-pct" id="statsPlanPct">0%</div>
+                        <div class="stats-plan-bar"><i id="statsPlanFill" style="width:0%;"></i></div>
+                        <div class="stats-plan-grid" id="statsPlanGrid" aria-label="Per dag een blokje: gevuld = gepland"></div>
+                    </div>
                 </div>
-                <div class="stats-plan-body">
-                    <div class="stats-plan-pct" id="statsPlanPct">0%</div>
-                    <div class="stats-plan-bar"><i id="statsPlanFill" style="width:0%;"></i></div>
-                    <div class="stats-plan-grid" id="statsPlanGrid" aria-label="Per dag een blokje: gevuld = gepland"></div>
-                </div>
-            </div>
-            <div class="stats-chart-wrap stats-cap-wrap">
-                <div class="stats-plan-head">
-                    <h3 class="stats-section-title">Capaciteits-benutting</h3>
-                    <span class="stats-plan-sub" id="statsCapSub">0u 00m van 0u beschikbaar</span>
-                </div>
-                <div class="stats-plan-body">
-                    <div class="stats-plan-pct" id="statsCapPct">0%</div>
-                    <svg class="stats-chart stats-cap-chart" id="statsCapChart" viewBox="0 0 700 200" preserveAspectRatio="xMidYMid meet"></svg>
+                <div class="stats-chart-wrap stats-cap-wrap">
+                    <div class="stats-plan-head">
+                        <h3 class="stats-section-title">Capaciteits-benutting</h3>
+                        <span class="stats-plan-sub" id="statsCapSub">0u 00m van 0u beschikbaar</span>
+                    </div>
+                    <label class="stats-cap-toggle">
+                        <input type="checkbox" id="statsCapWeekends">
+                        <span>Weekenden meetellen</span>
+                    </label>
+                    <div class="stats-plan-body">
+                        <div class="stats-plan-pct" id="statsCapPct">0%</div>
+                        <svg class="stats-chart stats-cap-chart" id="statsCapChart" viewBox="0 0 700 200" preserveAspectRatio="xMidYMid meet"></svg>
+                        <div class="stats-cap-legend">
+                            <span><i class="seg-focus"></i>Diep werk</span>
+                            <span><i class="seg-meet"></i>Meeting</span>
+                            <span><i class="seg-family"></i>Familie</span>
+                            <span><i class="seg-rust"></i>Rust</span>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="stats-breakdown-grid">
@@ -1398,5 +1410,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=49"></script>
+<script src="/static/js/app.js?v=50"></script>
 {% endblock %}

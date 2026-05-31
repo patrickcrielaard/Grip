@@ -972,6 +972,118 @@ class SupabaseService:
             self.logger.exception("list_day_plan_event_summary failed: %s", exc)
             return []
 
+    def list_day_capacity_breakdown(
+        self, user_id: str, start: str, end: str
+    ) -> List[Dict[str, Any]]:
+        """Return per-day planned minutes broken down by block type.
+
+        Combines two sources:
+          1. ``day_plan_events`` rows (tasks + templates the user dragged
+             onto the schedule), where ``block_type`` is already stored.
+          2. ``calendar_events`` for the user's enabled subscriptions, with
+             type derived from a description shortcode (DEEP/MEET/FAM —
+             default ``meeting``).
+
+        Output: ``[{"date": "YYYY-MM-DD", "focus": int, "meeting": int,
+                  "family": int, "rust": int}, ...]`` (only days with data).
+        """
+        import re as _re
+
+        bucket: Dict[str, Dict[str, int]] = {}
+
+        def _add(date: str, block_type: str, minutes: int) -> None:
+            if minutes <= 0:
+                return
+            entry = bucket.setdefault(
+                date, {"focus": 0, "meeting": 0, "family": 0, "rust": 0}
+            )
+            key = block_type if block_type in entry else "meeting"
+            entry[key] += minutes
+
+        # 1) day_plan_events
+        try:
+            plan_result = (
+                self.supabase.table("day_plan_events")
+                .select("planned_for, block_type, duration_minutes")
+                .eq("user_id", user_id)
+                .gte("planned_for", start)
+                .lte("planned_for", end)
+                .execute()
+            )
+            for raw in plan_result.data or []:
+                row = cast(Dict[str, Any], raw)
+                date = row.get("planned_for")
+                btype = row.get("block_type") or "meeting"
+                try:
+                    mins = int(row.get("duration_minutes") or 0)
+                except (TypeError, ValueError):
+                    mins = 0
+                if isinstance(date, str):
+                    _add(date, btype, mins)
+        except Exception as exc:
+            self.logger.exception("capacity day_plan_events failed: %s", exc)
+
+        # 2) calendar_events from this user's enabled subscriptions
+        try:
+            sub_result = (
+                self.supabase.table("calendar_subscriptions")
+                .select("id")
+                .eq("user_id", user_id)
+                .eq("enabled", True)
+                .execute()
+            )
+            sub_ids = [
+                int(cast(Dict[str, Any], r)["id"])
+                for r in sub_result.data or []
+                if cast(Dict[str, Any], r).get("id") is not None
+            ]
+            if sub_ids:
+                # Pull events that touch the [start, end] window.
+                ev_result = (
+                    self.supabase.table("calendar_events")
+                    .select("subscription_id, description, start_at, end_at, all_day")
+                    .in_("subscription_id", sub_ids)
+                    .lte("start_at", f"{end}T23:59:59+00:00")
+                    .gte("end_at", f"{start}T00:00:00+00:00")
+                    .execute()
+                )
+                fam_re = _re.compile(r"\bFAM\b", _re.IGNORECASE)
+                deep_re = _re.compile(r"\bDEEP\b", _re.IGNORECASE)
+                meet_re = _re.compile(r"\bMEET\b", _re.IGNORECASE)
+                for raw in ev_result.data or []:
+                    row = cast(Dict[str, Any], raw)
+                    if row.get("all_day"):
+                        continue
+                    start_at = row.get("start_at")
+                    end_at = row.get("end_at")
+                    if not isinstance(start_at, str) or not isinstance(end_at, str):
+                        continue
+                    try:
+                        sdt = datetime.fromisoformat(start_at.replace("Z", "+00:00"))
+                        edt = datetime.fromisoformat(end_at.replace("Z", "+00:00"))
+                    except ValueError:
+                        continue
+                    delta_min = int((edt - sdt).total_seconds() // 60)
+                    if delta_min <= 0:
+                        continue
+                    date = start_at[:10]
+                    desc = (row.get("description") or "") or ""
+                    if deep_re.search(desc):
+                        btype = "focus"
+                    elif fam_re.search(desc):
+                        btype = "family"
+                    elif meet_re.search(desc):
+                        btype = "meeting"
+                    else:
+                        btype = "meeting"
+                    _add(date, btype, delta_min)
+        except Exception as exc:
+            self.logger.exception("capacity calendar_events failed: %s", exc)
+
+        return [
+            {"date": k, **bucket[k]} for k in sorted(bucket.keys()) if start <= k <= end
+        ]
+
     # ── Timer: active sessions, time entries, pomodoro settings ─────────────
 
     def get_active_session(self, user_id: str) -> Optional[Dict[str, Any]]:

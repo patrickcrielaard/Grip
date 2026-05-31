@@ -297,6 +297,20 @@ class TodoApp {
         this.statsCapPct = document.getElementById("statsCapPct");
         this.statsCapSub = document.getElementById("statsCapSub");
         this.statsCapChart = document.getElementById("statsCapChart");
+        this.statsCapWeekends = document.getElementById("statsCapWeekends");
+        this.statsCapIncludeWeekends =
+            localStorage.getItem("gripStatsCapWeekends") === "1";
+        if (this.statsCapWeekends) {
+            this.statsCapWeekends.checked = this.statsCapIncludeWeekends;
+            this.statsCapWeekends.addEventListener("change", () => {
+                this.statsCapIncludeWeekends = !!this.statsCapWeekends.checked;
+                localStorage.setItem(
+                    "gripStatsCapWeekends",
+                    this.statsCapIncludeWeekends ? "1" : "0"
+                );
+                this.renderStats();
+            });
+        }
         this.openPomodoroSettings = document.getElementById("openPomodoroSettings");
         // Pomodoro settings modal
         this.pomodoroSettingsModal = document.getElementById("pomodoroSettingsModal");
@@ -4022,17 +4036,16 @@ class TodoApp {
     }
 
     async _renderPlanCharts(start, end) {
-        let rows = [];
-        try {
-            const data = await this.request(
-                `/api/day-plan-events/summary?from=${start}&to=${end}`
-            );
-            rows = data.rows || [];
-        } catch (_) {
-            rows = [];
-        }
-        this._renderPlanningConsistency(start, end, rows);
-        this._renderCapacityUtilization(start, end, rows);
+        const [planRows, capRows] = await Promise.all([
+            this.request(`/api/day-plan-events/summary?from=${start}&to=${end}`)
+                .then((d) => d.rows || [])
+                .catch(() => []),
+            this.request(`/api/insights/capacity?from=${start}&to=${end}`)
+                .then((d) => d.rows || [])
+                .catch(() => []),
+        ]);
+        this._renderPlanningConsistency(start, end, planRows);
+        this._renderCapacityUtilization(start, end, capRows);
     }
 
     _renderPlanningConsistency(start, end, rows) {
@@ -4090,12 +4103,9 @@ class TodoApp {
     _renderCapacityUtilization(start, end, rows) {
         if (!this.statsCapChart && !this.statsCapPct) return;
         const CAP_MIN_PER_DAY = 10 * 60; // 08:00 – 18:00 = 10h
+        const includeWeekends = this.statsCapIncludeWeekends === true;
 
-        const minutesByDay = new Map(
-            (rows || []).map((r) => [r.planned_for, Number(r.total_minutes || 0)])
-        );
-
-        // Same local-date helper as the consistency chart.
+        const byDay = new Map((rows || []).map((r) => [r.date, r]));
         const fmtLocal = (d) => {
             const y = d.getFullYear();
             const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -4108,20 +4118,30 @@ class TodoApp {
         const todayKey = fmtLocal(new Date());
         while (cursor <= endDate) {
             const key = fmtLocal(cursor);
+            const row = byDay.get(key) || {};
+            const focus = Number(row.focus || 0);
+            const meeting = Number(row.meeting || 0);
+            const family = Number(row.family || 0);
+            const rust = Number(row.rust || 0);
+            const dow = cursor.getDay(); // 0=Sun, 6=Sat
             days.push({
                 key,
-                minutes: minutesByDay.get(key) || 0,
-                future: key > todayKey,
+                focus, meeting, family, rust,
+                total: focus + meeting + family + rust,
                 weekday: cursor.toLocaleDateString("nl-NL", { weekday: "short" }),
                 day: cursor.getDate(),
+                future: key > todayKey,
+                isWeekend: dow === 0 || dow === 6,
             });
             cursor.setDate(cursor.getDate() + 1);
         }
 
-        // Aggregate percentage uses only past + today.
-        const past = days.filter((d) => !d.future);
-        const totalMin = past.reduce((s, d) => s + d.minutes, 0);
-        const totalCap = past.length * CAP_MIN_PER_DAY;
+        // Percentage aggregate: only past + today, respect weekend toggle.
+        const counted = days.filter((d) =>
+            !d.future && (includeWeekends || !d.isWeekend)
+        );
+        const totalMin = counted.reduce((s, d) => s + d.total, 0);
+        const totalCap = counted.length * CAP_MIN_PER_DAY;
         const pct = totalCap === 0 ? 0 : Math.round((totalMin / totalCap) * 100);
 
         if (this.statsCapPct) this.statsCapPct.textContent = `${pct}%`;
@@ -4131,7 +4151,6 @@ class TodoApp {
         }
 
         if (!this.statsCapChart) return;
-        // SVG bar chart: one bar per day, height capped at 100% of 10h.
         const W = 700, H = 200;
         const paddingLeft = 36, paddingRight = 8, paddingBottom = 24, paddingTop = 8;
         const innerW = W - paddingLeft - paddingRight;
@@ -4141,28 +4160,53 @@ class TodoApp {
         const baseY = paddingTop + innerH;
 
         let svg = "";
-        // Y-axis: 0 / 50% / 100%
         for (let i = 0; i <= 2; i++) {
             const y = paddingTop + innerH * (1 - i / 2);
             svg += `<line x1="${paddingLeft}" y1="${y}" x2="${W - paddingRight}" y2="${y}" class="stats-grid-line"/>`;
             svg += `<text x="${paddingLeft - 6}" y="${y + 3}" class="stats-axis-label" text-anchor="end">${i * 50}%</text>`;
         }
 
+        const segs = [
+            { key: "focus",   cls: "stats-bar-focus"   },
+            { key: "meeting", cls: "stats-bar-meet"    },
+            { key: "family",  cls: "stats-bar-family"  },
+            { key: "rust",    cls: "stats-bar-rust"    },
+        ];
+
         days.forEach((d, i) => {
             const x = paddingLeft + slot * i + (slot - barWidth) / 2;
-            const rawPct = CAP_MIN_PER_DAY > 0 ? (d.minutes / CAP_MIN_PER_DAY) : 0;
-            const cappedPct = Math.min(1, rawPct);
-            const h = innerH * cappedPct;
-            const y = baseY - h;
-            const cls = d.future ? "stats-bar future" : "stats-bar";
-            const tooltipPct = Math.round(rawPct * 100);
-            const tooltipMin = this._formatPlanMinutes(d.minutes);
-            svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${Math.max(2, h)}" rx="3" class="${cls}"><title>${d.key}: ${tooltipMin} (${tooltipPct}%)</title></rect>`;
-            // Only label every other day on month view to avoid clutter.
+            const weekendDimmed = d.isWeekend && !includeWeekends;
+            const tooltipPct = CAP_MIN_PER_DAY > 0
+                ? Math.round((d.total / CAP_MIN_PER_DAY) * 100)
+                : 0;
+            const tooltip = `${d.key}: ${this._formatPlanMinutes(d.total)} (${tooltipPct}%) — D ${this._formatPlanMinutes(d.focus)} · M ${this._formatPlanMinutes(d.meeting)} · F ${this._formatPlanMinutes(d.family)} · R ${this._formatPlanMinutes(d.rust)}`;
+            const wrap = weekendDimmed ? ` opacity="0.35"` : "";
+
+            // Stack from bottom up; cap total at 100% visually.
+            const totalPct = Math.min(1, d.total / CAP_MIN_PER_DAY);
+            const totalH = innerH * totalPct;
+            // Per-segment proportional height of the total bar height.
+            let yCursor = baseY;
+            const segPieces = [];
+            segs.forEach((seg) => {
+                const mins = d[seg.key];
+                if (mins <= 0 || d.total <= 0) return;
+                const segH = (mins / d.total) * totalH;
+                if (segH <= 0) return;
+                yCursor -= segH;
+                segPieces.push(
+                    `<rect x="${x}" y="${yCursor}" width="${barWidth}" height="${segH}" class="stats-bar-seg ${seg.cls}"></rect>`
+                );
+            });
+            const bar = segPieces.length === 0
+                ? `<rect x="${x}" y="${baseY - 2}" width="${barWidth}" height="2" class="stats-bar-empty"></rect>`
+                : segPieces.join("");
+            svg += `<g${wrap}>${bar}<rect x="${x - 2}" y="${baseY - totalH - 2}" width="${barWidth + 4}" height="${totalH + 4}" fill="transparent"><title>${tooltip}</title></rect></g>`;
+
             const showLabel = days.length <= 16 || i % 3 === 0;
             if (showLabel) {
                 const labelText = days.length <= 8 ? d.weekday : String(d.day);
-                svg += `<text x="${x + barWidth / 2}" y="${baseY + 16}" class="stats-axis-label" text-anchor="middle">${labelText}</text>`;
+                svg += `<text x="${x + barWidth / 2}" y="${baseY + 16}" class="stats-axis-label"${weekendDimmed ? ` opacity="0.45"` : ""} text-anchor="middle">${labelText}</text>`;
             }
         });
         this.statsCapChart.innerHTML = svg;
