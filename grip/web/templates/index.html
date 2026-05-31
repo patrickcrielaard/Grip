@@ -339,13 +339,6 @@
                         <div class="panel today-tasks-panel">
                             <div class="panel-head">
                                 <div class="panel-title">Vandaag <span class="num" id="vandaagPanelCount"></span></div>
-                                <div class="panel-tools">
-                                    <div class="tab-pill" role="tablist" aria-label="Weergave">
-                                        <button type="button" class="on" data-today-tab="list">Lijst</button>
-                                        <button type="button" data-today-tab="timeline">Tijdslijn</button>
-                                        <button type="button" data-today-tab="area">Per gebied</button>
-                                    </div>
-                                </div>
                             </div>
                             <div class="tasks" id="todayTasks">
                                 <!-- rendered by JS -->
@@ -408,20 +401,21 @@
                     </div>
 
                     <div class="td-mode td-mode-list" id="todayListRail" hidden>
-                        <section class="panel streak-panel" aria-labelledby="streakPanelTitle">
-                            <div class="panel-title streak-head" id="streakPanelTitle">
-                                Reeksen
-                                <span class="panel-title-meta">deze week</span>
+                        <section class="panel overdue-panel" aria-labelledby="overduePanelTitle">
+                            <div class="panel-title overdue-head" id="overduePanelTitle">
+                                Verlopen deadlines
+                                <span class="panel-title-meta" id="overdueCount">0</span>
                             </div>
-                            <div class="streak-row">
-                                <div class="streak-num" id="streakDaysNum">0<small>DAGEN</small></div>
-                                <div class="streak-aside">
-                                    voltooid vandaag
-                                    <b id="streakTodayCount">0 taken</b>
-                                </div>
-                            </div>
-                            <div class="streak-week" id="streakWeek" aria-label="Voltooide dagen deze week"></div>
+                            <ul class="overdue-list" id="overdueList">
+                                <!-- rendered by JS -->
+                            </ul>
                         </section>
+                        <!-- Hidden legacy streak elements so existing renderers don't error -->
+                        <div hidden>
+                            <span id="streakDaysNum"></span>
+                            <span id="streakTodayCount"></span>
+                            <div id="streakWeek"></div>
+                        </div>
                     </div>
 
                     <div class="td-mode td-mode-list" id="todayListFocus" hidden>
@@ -1403,5 +1397,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=54"></script>
+<script src="/static/js/app.js?v=55"></script>
 {% endblock %}

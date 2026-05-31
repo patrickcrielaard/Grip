@@ -7058,3 +7058,88 @@ body.tb-dragging .tb-timeline-card {
     outline-offset: -2px;
     border-radius: 12px;
 }
+
+/* Overdue deadlines card (Today list mode) */
+.overdue-panel { display: flex; flex-direction: column; gap: 10px; }
+.overdue-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.overdue-head .panel-title-meta {
+    background: var(--surface);
+    color: var(--ink-secondary);
+    border-radius: 999px;
+    padding: 2px 9px;
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.overdue-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.overdue-empty {
+    list-style: none;
+    color: var(--ink-tertiary);
+    font-size: 12.5px;
+    padding: 6px 2px;
+}
+.overdue-item {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--content-bg);
+    cursor: pointer;
+    transition: border-color 120ms ease, background 120ms ease;
+}
+.overdue-item:hover {
+    border-color: var(--ink);
+    background: var(--surface);
+}
+.overdue-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+.overdue-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.overdue-area {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--ink-tertiary);
+    font-weight: 500;
+}
+.overdue-area-swatch {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.overdue-when {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 8%, transparent);
+    border-radius: 999px;
+    padding: 3px 9px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}

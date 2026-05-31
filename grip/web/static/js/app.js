@@ -5183,10 +5183,64 @@ class TodoApp {
             if (typeof this._renderTodayTasksList === "function") {
                 this._renderTodayTasksList(todays);
             }
-            if (typeof this._renderStreaks === "function") this._renderStreaks();
+            this._renderOverdueCard();
         } else {
             this.renderTodaySchema();
         }
+    }
+
+    _renderOverdueCard() {
+        const list = document.getElementById("overdueList");
+        const count = document.getElementById("overdueCount");
+        if (!list) return;
+        const today = this.getToday();
+        const overdue = (this.todos || [])
+            .filter((t) =>
+                !t.completed && t.deadline && t.deadline < today
+            )
+            .sort((a, b) => a.deadline.localeCompare(b.deadline));
+        if (count) count.textContent = String(overdue.length);
+        if (overdue.length === 0) {
+            list.innerHTML = `<li class="overdue-empty">Geen verlopen deadlines. Sterk.</li>`;
+            return;
+        }
+        const fmt = (dateStr) => {
+            const days = Math.round(
+                (Date.parse(today) - Date.parse(dateStr)) / 86400000
+            );
+            if (days === 1) return "1 dag geleden";
+            return `${days} dagen geleden`;
+        };
+        list.innerHTML = overdue
+            .map((t) => {
+                const areaId = this.resolveTaskAreaId
+                    ? this.resolveTaskAreaId(t)
+                    : t.area_id;
+                const area = (this.areas || []).find((a) => a.id === areaId);
+                const meta = area
+                    ? `<span class="overdue-area"><span class="overdue-area-swatch" style="background:${this.escapeHtml(area.color || "#888")}"></span>${this.escapeHtml(area.name)}</span>`
+                    : "";
+                return `
+                    <li class="overdue-item" data-task-id="${t.id}" role="button" tabindex="0">
+                        <div class="overdue-info">
+                            <span class="overdue-title">${this.escapeHtml(t.title || "(naamloos)")}</span>
+                            ${meta}
+                        </div>
+                        <span class="overdue-when">${this.escapeHtml(fmt(t.deadline))}</span>
+                    </li>
+                `;
+            })
+            .join("");
+        list.querySelectorAll(".overdue-item").forEach((row) => {
+            const open = () => this.openModal(Number(row.dataset.taskId));
+            row.addEventListener("click", open);
+            row.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    open();
+                }
+            });
+        });
     }
 
     _applyTodayMode() {
@@ -5271,14 +5325,17 @@ class TodoApp {
         this.todayGoals.innerHTML = top.map((p, idx) => {
             const pct = this._projectProgress(p);
             const area = this.areas.find((a) => a.id === p.area_id);
-            const areaName = area ? area.name.toUpperCase() : "PROJECT";
+            const areaName = area ? area.name.toUpperCase() : "";
             const due = this._formatGoalDue(p.end_date);
             const featuredCls = idx === 0 ? " is-featured" : "";
+            const areaMarkup = areaName
+                ? `<span class="area">${this.escapeHtml(areaName)}</span>`
+                : "";
             return `
                 <div class="goal-card${featuredCls}" data-project-id="${p.id}" role="button" tabindex="0">
                     <div class="ring" style="--p: ${pct};"><span>${pct}%</span></div>
                     <div class="goal-meta">
-                        <span class="area">${this.escapeHtml(areaName)}</span>
+                        ${areaMarkup}
                         <span class="name">${this.escapeHtml(p.name || "(naamloos)")}</span>
                         <span class="due">${due}</span>
                     </div>
