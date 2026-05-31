@@ -257,8 +257,10 @@ button.sidebar-section-label {
     text-align: right;
 }
 
+/* Keep an empty count in flow so margin-left:auto still pushes the
+   trailing "+" affordance to the right edge of the item. */
 .sidebar-count:empty {
-    display: none;
+    min-width: 0;
 }
 
 /* ===== Area Tree (Areas → Goals → Projects) ===== */
@@ -3049,7 +3051,7 @@ button.sidebar-section-label {
 
 /* ----- Task list panel ----- */
 .task-list {
-    margin: 18px 24px 24px;
+    margin: 24px 32px 48px;
     padding: 0;
     background: var(--content-bg);
     border: 1px solid var(--border);
@@ -3059,11 +3061,10 @@ button.sidebar-section-label {
 
 .todo-item {
     padding: 12px 20px;
-    border-top: 1px solid var(--border);
+    border-top: none;
     border-bottom: none;
     gap: 12px;
 }
-.todo-item:first-child { border-top: none; }
 .todo-item:hover { background: var(--surface); }
 
 .todo-checkbox {
@@ -4343,7 +4344,7 @@ body.auth-page {
     display: grid;
     grid-template-columns: 1fr 360px;
     gap: 24px;
-    padding: 24px;
+    padding: 24px 32px 48px;
 }
 .today-left { min-width: 0; }
 .today-right-col {

@@ -2880,10 +2880,15 @@ class TodoApp {
 
         // Project tasks have list=null by invariant — skip the chip
         // instead of rendering a misleading "Inbox" label.
-        const listLabel =
-            this.currentView.type !== "list" && todo.list
-                ? `<span class="todo-meta-chip">${this.escapeHtml(this.getListLabel(todo.list))}</span>`
-                : "";
+        // Tasks that already have an area_id are categorised, so the
+        // "Inbox" chip becomes contradictory — hide it in that case too.
+        const showListChip =
+            this.currentView.type !== "list" &&
+            todo.list &&
+            !(todo.list === "inbox" && todo.area_id);
+        const listLabel = showListChip
+            ? `<span class="todo-meta-chip">${this.escapeHtml(this.getListLabel(todo.list))}</span>`
+            : "";
 
         const startDateMarkup = todo.start_date
             ? `<span class="todo-meta-chip todo-start-date">Start: ${this.escapeHtml(todo.start_date)}</span>`
