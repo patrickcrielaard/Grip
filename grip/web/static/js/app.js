@@ -4136,10 +4136,9 @@ class TodoApp {
             cursor.setDate(cursor.getDate() + 1);
         }
 
-        // Percentage aggregate: only past + today, respect weekend toggle.
-        const counted = days.filter((d) =>
-            !d.future && (includeWeekends || !d.isWeekend)
-        );
+        // Percentage aggregate: every day in the displayed range counts so
+        // future planning is reflected too. The weekend toggle still filters.
+        const counted = days.filter((d) => includeWeekends || !d.isWeekend);
         const totalMin = counted.reduce((s, d) => s + d.total, 0);
         const totalCap = counted.length * CAP_MIN_PER_DAY;
         const pct = totalCap === 0 ? 0 : Math.round((totalMin / totalCap) * 100);
