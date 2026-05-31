@@ -6808,10 +6808,6 @@ body.auth-page {
     font-variant-numeric: tabular-nums;
 }
 
-/* Highlight the timeline area while a draggable is held */
-body.tb-dragging .tb-timeline-card {
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 18%, transparent);
-}
 
 /* Pool item: planned chip + dimmed state */
 .tb-pool-item.is-planned {

@@ -5906,9 +5906,10 @@ class TodoApp {
 
     _tbTemplates() {
         return [
-            { id: "tplD", letter: "D", name: "Diep werk",   desc: "25 min focus + 5 min pauze", dur: 30,  type: "focus", dark: true,  area: 2 },
-            { id: "tplP", letter: "P", name: "Pauze",       desc: "Korte ademruimte",           dur: 15,  type: "rust",  dark: false, area: 5 },
-            { id: "tplB", letter: "B", name: "Boek lezen",  desc: "Bescherm tegen vergader",    dur: 45,  type: "rust",  dark: false, area: 5 },
+            { id: "tplD", letter: "D", name: "Diep werk",   desc: "25 min focus + 5 min pauze", dur: 30,  type: "focus",   dark: true,  area: 2 },
+            { id: "tplP", letter: "P", name: "Pauze",       desc: "Korte ademruimte",           dur: 15,  type: "rust",    dark: false, area: 5 },
+            { id: "tplB", letter: "B", name: "Boek lezen",  desc: "Bescherm tegen vergader",    dur: 45,  type: "rust",    dark: false, area: 5 },
+            { id: "tplR", letter: "R", name: "Reistijd",    desc: "Onderweg van A naar B",      dur: 60,  type: "meeting", dark: false, area: 5 },
         ];
     }
 
@@ -6710,16 +6711,20 @@ class TodoApp {
     _tbLogPlanEvent(opts) {
         // Persist a single planning event and, once the server returns the
         // row id, attach it to the local block so subsequent move/delete
-        // operations can patch/delete the same row.
+        // operations can patch/delete the same row. If the user already
+        // moved / edited / removed the block while the POST was in flight,
+        // a catch-up call is fired so the server matches local state.
         const startMin = Math.max(0, Math.min(24 * 60 - 1, Math.round(opts.start_min)));
+        const postedStart = this._tbFormatTime(startMin);
+        const postedDuration = Math.max(1, Math.round(opts.dur_min));
         const payload = {
             source_kind: opts.source_kind,
             source_id: String(opts.source_id),
             title: opts.title,
             block_type: opts.block_type,
             planned_for: this._tbActiveDateKey(),
-            start_time: this._tbFormatTime(startMin),
-            duration_minutes: Math.max(1, Math.round(opts.dur_min)),
+            start_time: postedStart,
+            duration_minutes: postedDuration,
         };
         const localId = opts.blockId;
         fetch("/api/day-plan-events", {
@@ -6735,7 +6740,27 @@ class TodoApp {
                 const extra = this._tbExtraBlocks.find(
                     (b) => String(b.id) === String(localId)
                 );
-                if (extra) extra.dbId = dbId;
+                if (!extra) {
+                    // Block was deleted while POST was in flight → remove
+                    // the server row too.
+                    this._tbPersistDelete(dbId);
+                    return;
+                }
+                extra.dbId = dbId;
+                // Did the user move / resize / retitle while we waited?
+                const currentDur =
+                    this._tbParseTime(extra.end) - this._tbParseTime(extra.start);
+                const moved = extra.start !== postedStart || currentDur !== postedDuration;
+                const retitled = extra.title !== opts.title;
+                const retyped = extra.type !== opts.block_type;
+                if (moved || retitled || retyped) {
+                    this._tbPersistPatch(dbId, {
+                        start_time: extra.start,
+                        duration_minutes: Math.max(1, currentDur),
+                        title: extra.title,
+                        block_type: extra.type,
+                    });
+                }
             })
             .catch((err) => {
                 console.warn("day-plan-event log failed", err);
@@ -6843,6 +6868,14 @@ class TodoApp {
         const extra = this._tbExtraBlocks.find((b) => String(b.id) === id);
         if (extra) {
             Object.assign(extra, patch);
+            if (extra.dbId != null) {
+                this._tbPersistPatch(extra.dbId, {
+                    start_time: patch.start,
+                    duration_minutes: snappedDur,
+                    title: patch.title,
+                    block_type: patch.type,
+                });
+            }
         } else {
             this._tbBlocksOverrides.set(id, { ...(this._tbBlocksOverrides.get(id) || {}), ...patch });
         }
@@ -6912,14 +6945,26 @@ class TodoApp {
     }
 
     _tbPersistMove(dbId, startTime, durationMin) {
+        this._tbPersistPatch(dbId, {
+            start_time: startTime,
+            duration_minutes: Math.max(1, Math.round(durationMin)),
+        });
+    }
+
+    _tbPersistPatch(dbId, fields) {
+        const body = {};
+        if (fields.start_time != null) body.start_time = fields.start_time;
+        if (fields.duration_minutes != null) {
+            body.duration_minutes = Math.max(1, Math.round(fields.duration_minutes));
+        }
+        if (fields.title != null) body.title = fields.title;
+        if (fields.block_type != null) body.block_type = fields.block_type;
+        if (Object.keys(body).length === 0) return;
         fetch(`/api/day-plan-events/${dbId}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             credentials: "same-origin",
-            body: JSON.stringify({
-                start_time: startTime,
-                duration_minutes: Math.max(1, Math.round(durationMin)),
-            }),
+            body: JSON.stringify(body),
         }).catch((err) => {
             console.warn("day-plan-event patch failed", err);
         });
