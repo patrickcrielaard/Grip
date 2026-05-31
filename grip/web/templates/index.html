@@ -59,27 +59,16 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     </span>
                 </button>
-                <button class="sidebar-item" type="button" data-view="week" aria-pressed="false">
+                <button class="sidebar-item" type="button" data-view="next-week" aria-pressed="false">
                     <svg class="sidebar-icon" viewBox="0 0 24 24">
                         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
                         <line x1="16" y1="2" x2="16" y2="6"/>
                         <line x1="8" y1="2" x2="8" y2="6"/>
                         <line x1="3" y1="10" x2="21" y2="10"/>
                     </svg>
-                    <span class="sidebar-label">Deze week</span>
-                    <span class="sidebar-count" data-count-view="week"></span>
-                    <span class="sidebar-item-add" role="button" tabindex="-1" aria-label="Nieuwe taak voor deze week" data-add-view="week">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    </span>
-                </button>
-                <button class="sidebar-item" type="button" data-view="next-week" aria-pressed="false">
-                    <svg class="sidebar-icon" viewBox="0 0 24 24">
-                        <polyline points="13 17 18 12 13 7"/>
-                        <polyline points="6 17 11 12 6 7"/>
-                    </svg>
-                    <span class="sidebar-label">Volgende week</span>
+                    <span class="sidebar-label">Weekplanning</span>
                     <span class="sidebar-count" data-count-view="next-week"></span>
-                    <span class="sidebar-item-add" role="button" tabindex="-1" aria-label="Nieuwe taak voor volgende week" data-add-view="next-week">
+                    <span class="sidebar-item-add" role="button" tabindex="-1" aria-label="Nieuwe taak voor weekplanning" data-add-view="next-week">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     </span>
                 </button>
@@ -222,6 +211,7 @@
                     <span class="nw-step-label">Wk <span id="nextWeekLabel">22</span></span>
                     <button type="button" class="btn-ghost nw-step-next" id="nextWeekNextBtn" aria-label="Volgende week">›</button>
                 </div>
+                <button type="button" class="btn-ghost" id="nextWeekNowBtn" title="Naar huidige week">Nu</button>
                 <div class="tab-pill nw-tab-pill" role="tablist" aria-label="Weergave">
                     <button type="button" data-nw-tab="agenda">Agenda</button>
                     <button type="button" class="on" data-nw-tab="list">Lijst</button>
@@ -490,36 +480,11 @@
                         <div class="budget-legend" id="nextWeekBudgetLegend"></div>
                     </div>
 
-                    <!-- Weekend prep -->
-                    <div class="rail-card dark">
-                        <h4>Dit weekend voorbereiden</h4>
-                        <p class="rail-sub">Kleine dingen die volgende week soepel maken.</p>
-                        <div class="prep-row">
-                            <div class="prep-check"></div>
-                            <div class="t">Treinkaart Utrecht boeken voor di</div>
-                            <div class="est">2 min</div>
-                        </div>
-                        <div class="prep-row">
-                            <div class="prep-check"></div>
-                            <div class="t">Demo-deck deelen met Marieke (concept)</div>
-                            <div class="est">10 min</div>
-                        </div>
-                        <div class="prep-row">
-                            <div class="prep-check"></div>
-                            <div class="t">Taart bestellen · bij Patisserie van der Berg</div>
-                            <div class="est">5 min</div>
-                        </div>
-                        <div class="prep-row">
-                            <div class="prep-check"></div>
-                            <div class="t">Outfit klaarleggen voor klantdag</div>
-                            <div class="est">5 min</div>
-                        </div>
-                        <div class="prep-row">
-                            <div class="prep-check"></div>
-                            <div class="t">Gels + zoutpilletjes klaarleggen long run</div>
-                            <div class="est">3 min</div>
-                        </div>
-                        <button type="button" class="nw-add-prep">+ Voeg prep-item toe</button>
+                    <!-- Untimed tasks for this week -->
+                    <div class="rail-card dark" id="nextWeekUntimedCard">
+                        <h4>Nog te plannen <span id="nextWeekUntimedCount" class="nw-untimed-count">0</span></h4>
+                        <p class="rail-sub">Taken die deze week ingepland staan maar nog geen tijd hebben.</p>
+                        <div id="nextWeekUntimedList"></div>
                     </div>
 
                     <!-- Goals momentum -->
@@ -562,51 +527,11 @@
                         </div>
                     </div>
 
-                    <!-- Slipping from this week -->
-                    <div class="rail-card">
-                        <h4>Schuift door uit deze week</h4>
-                        <div class="rail-sub">Drie taken halen vrijdag waarschijnlijk niet.</div>
-                        <div class="slip-row">
-                            <div class="arr">↪</div>
-                            <div class="t">PR review · feature/admin-panel</div>
-                            <div class="to">→ ma 18</div>
-                        </div>
-                        <div class="slip-row">
-                            <div class="arr">↪</div>
-                            <div class="t">Belasting-aangifte voorbereiden</div>
-                            <div class="to">→ za 23</div>
-                        </div>
-                        <div class="slip-row">
-                            <div class="arr">↪</div>
-                            <div class="t">Bijwerken portfolio-site</div>
-                            <div class="to">→ wk 22</div>
-                        </div>
-                    </div>
-
                     <div class="tip-card">
                         <div class="tip-h">Plan-ritueel</div>
                         <b>Zondagavond, 20:00 — 20:25.</b> Loop deze week even door. Verschuif waar nodig, kies één <i>sleutel-doel</i> per dag. Daarna telefoon op vliegtuigmodus.
                     </div>
 
-                    <!-- Time budget (kopie) -->
-                    <div class="rail-card">
-                        <h4>Tijdsbudget · 45u (kopie)</h4>
-                        <div class="budget">
-                            <i class="focus"  style="width:50%;"></i>
-                            <i class="meet"   style="width:20%;"></i>
-                            <i class="health" style="width:10%;"></i>
-                            <i class="life"   style="width:8%;"></i>
-                            <i class="free"   style="width:12%;"></i>
-                        </div>
-                        <div class="budget-legend">
-                            <span><i style="background:var(--ink);"></i>Diep werk <b>22u 30m</b></span>
-                            <span><i style="background:var(--ink-tertiary);"></i>Meetings <b>9u 00m</b></span>
-                            <span><i style="background:var(--area-1);"></i>Gezondheid <b>4u 30m</b></span>
-                            <span><i style="background:var(--area-3);"></i>Familie <b>3u 30m</b></span>
-                            <span><i style="background:var(--border-strong);"></i>Vrij <b>5u 30m</b></span>
-                        </div>
-                        <div class="rail-foot-note">Budget kopie — statisch voorbeeld, niet gekoppeld aan agenda.</div>
-                    </div>
                 </aside>
             </div>
         </div>
@@ -1397,5 +1322,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=55"></script>
+<script src="/static/js/app.js?v=56"></script>
 {% endblock %}

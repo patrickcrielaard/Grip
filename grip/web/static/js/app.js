@@ -204,7 +204,7 @@ class TodoApp {
         this.planWeekTotal = document.getElementById("planWeekTotal");
         this.planWeekSave = document.getElementById("planWeekSave");
         this.planWeekClose = document.getElementById("planWeekClose");
-        this.nextWeekOffset = 1;
+        this.nextWeekOffset = 0;
         // Categories drive the dynamic Tijdsbudget block. The keyword is
         // matched (case-insensitive) against the ICS DESCRIPTION field. Add
         // more categories here as they become defined.
@@ -809,7 +809,6 @@ class TodoApp {
         // Next-week header week stepper
         if (this.nextWeekPrevBtn) {
             this.nextWeekPrevBtn.addEventListener("click", () => {
-                if (this.nextWeekOffset <= 0) return;
                 this.nextWeekOffset -= 1;
                 this.renderNextWeekView();
             });
@@ -817,6 +816,13 @@ class TodoApp {
         if (this.nextWeekNextBtn) {
             this.nextWeekNextBtn.addEventListener("click", () => {
                 this.nextWeekOffset += 1;
+                this.renderNextWeekView();
+            });
+        }
+        const nwNowBtn = document.getElementById("nextWeekNowBtn");
+        if (nwNowBtn) {
+            nwNowBtn.addEventListener("click", () => {
+                this.nextWeekOffset = 0;
                 this.renderNextWeekView();
             });
         }
@@ -1461,12 +1467,6 @@ class TodoApp {
         }
 
         this.renderTodos();
-        if (view.type === "view" && view.value === "week") {
-            const range = this.getWeekRange(0);
-            this.loadCalendarEvents(range.start, range.end).then(() =>
-                this.renderTodos()
-            );
-        }
     }
 
     _isTodayView() {
@@ -1565,8 +1565,7 @@ class TodoApp {
                     : "Vandaag";
             case "view":
                 if (this.currentView.value === "all") return "Alle taken";
-                if (this.currentView.value === "week") return "Deze week";
-                if (this.currentView.value === "next-week") return "Volgende week";
+                if (this.currentView.value === "next-week") return "Weekplanning";
                 if (this.currentView.value === "waiting") return "Wachten op";
                 if (this.currentView.value === "stats") return "Inzichten";
                 return "Voltooid";
@@ -2742,9 +2741,8 @@ class TodoApp {
                 if (view.value === "all") {
                     return this.todos.filter((todo) => !todo.completed);
                 }
-                if (view.value === "week" || view.value === "next-week") {
-                    const offset = view.value === "next-week" ? 1 : 0;
-                    const { start, end } = this.getWeekRange(offset);
+                if (view.value === "next-week") {
+                    const { start, end } = this.getWeekRange(this.nextWeekOffset || 0);
                     return this.todos.filter(
                         (t) =>
                             !t.completed &&
@@ -3144,9 +3142,9 @@ class TodoApp {
             if (view === "all") {
                 el.textContent =
                     activeTodos.length > 0 ? String(activeTodos.length) : "";
-            } else if (view === "week" || view === "next-week") {
-                const offset = view === "next-week" ? 1 : 0;
-                const { start, end } = this.getWeekRange(offset);
+            } else if (view === "next-week") {
+                // The "Weekplanning" badge always reflects the current week.
+                const { start, end } = this.getWeekRange(0);
                 const count = activeTodos.filter(
                     (t) =>
                         (t.planned_date && t.planned_date >= start && t.planned_date <= end) ||
@@ -4395,6 +4393,55 @@ class TodoApp {
         this.agendaNowLabel.textContent = `Nu · ${this._fmtHm(d.getTime())}`;
     }
 
+    _renderNextWeekUntimed(start, end) {
+        const list = document.getElementById("nextWeekUntimedList");
+        const countEl = document.getElementById("nextWeekUntimedCount");
+        if (!list) return;
+        const untimed = (this.todos || [])
+            .filter((t) =>
+                !t.completed &&
+                t.planned_date &&
+                t.planned_date >= start &&
+                t.planned_date <= end &&
+                !t.planned_time
+            )
+            .sort((a, b) =>
+                (a.planned_date || "").localeCompare(b.planned_date || "")
+            );
+        if (countEl) countEl.textContent = String(untimed.length);
+        if (untimed.length === 0) {
+            list.innerHTML = `<p class="rail-sub" style="margin:6px 0 0;">Niets meer te plannen — alles heeft een tijd.</p>`;
+            return;
+        }
+        const DAYS = ["zo", "ma", "di", "wo", "do", "vr", "za"];
+        list.innerHTML = untimed
+            .map((t) => {
+                const d = new Date(`${t.planned_date}T00:00:00`);
+                const when = `${DAYS[d.getDay()]} ${d.getDate()}`;
+                const est = t.duration
+                    ? `${t.duration} min`
+                    : (t.duration_minutes ? `${t.duration_minutes} min` : "");
+                return `
+                    <div class="prep-row" data-task-id="${t.id}" role="button" tabindex="0">
+                        <div class="prep-check"></div>
+                        <div class="t">${this.escapeHtml(t.title || "(naamloos)")}</div>
+                        <div class="est">${this.escapeHtml(when)}${est ? " · " + this.escapeHtml(est) : ""}</div>
+                    </div>
+                `;
+            })
+            .join("");
+        list.querySelectorAll(".prep-row[data-task-id]").forEach((row) => {
+            const open = () => this.openModal(Number(row.dataset.taskId));
+            row.addEventListener("click", open);
+            row.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    open();
+                }
+            });
+        });
+    }
+
     // ── Next week view ──────────────────────────────────────────────────
     async renderNextWeekView() {
         if (!this.nextWeekView) return;
@@ -4407,9 +4454,12 @@ class TodoApp {
         if (this.nextWeekLabel) {
             this.nextWeekLabel.textContent = String(weekNo);
         }
-        if (this.nextWeekPrevBtn) {
-            this.nextWeekPrevBtn.disabled = this.nextWeekOffset <= 0;
-        }
+        // Prev/Next/Now buttons stay enabled in every direction.
+        if (this.nextWeekPrevBtn) this.nextWeekPrevBtn.disabled = false;
+        const nwNowBtn = document.getElementById("nextWeekNowBtn");
+        if (nwNowBtn) nwNowBtn.disabled = this.nextWeekOffset === 0;
+
+        this._renderNextWeekUntimed(range.start, range.end);
 
         // Load real calendar events and week availability in parallel.
         const [events, availabilityData] = await Promise.all([
