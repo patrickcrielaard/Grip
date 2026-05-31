@@ -6051,6 +6051,7 @@ class TodoApp {
     }
 
     renderTodaySchema() {
+        // Initial paint with whatever local state we have.
         this._tbEnsureData();
         this._tbRenderDayStep();
         this._tbRenderTimeline();
@@ -6059,6 +6060,66 @@ class TodoApp {
         this._tbRenderPool();
         this._tbRenderTemplates();
         this._tbStartNuTicker();
+        // Hydrate persisted events for the active date; repaint once they
+        // arrive. Skips the network roundtrip if the active date hasn't
+        // changed since the last successful hydration.
+        const targetDate = this._tbActiveDateKey();
+        if (this._tbHydratedDate === targetDate) return;
+        this._tbHydrateDayEvents(targetDate);
+    }
+
+    async _tbHydrateDayEvents(date) {
+        this._tbHydratingDate = date;
+        let rows = [];
+        try {
+            const data = await this.request(
+                `/api/day-plan-events?date=${date}`
+            );
+            rows = data.events || [];
+        } catch (_) {
+            return; // Leave local state alone on failure.
+        }
+        // Bail if the user switched days while we were waiting.
+        if (this._tbActiveDateKey() !== date) return;
+
+        // Replace the persistent extras with what the server says.
+        this._tbExtraBlocks = [];
+        this._tbScheduledTaskIds = new Set();
+        for (const row of rows) {
+            const startStr = String(row.start_time || "").slice(0, 5);
+            const parts = startStr.split(":").map(Number);
+            const startMin = (parts[0] || 0) * 60 + (parts[1] || 0);
+            const dur = Math.max(15, Number(row.duration_minutes) || 30);
+            this._tbExtraSeq = (this._tbExtraSeq || 0) + 1;
+            const localId = `extra-${this._tbExtraSeq}`;
+            const fromTaskId =
+                row.source_kind === "task" && row.source_id
+                    ? Number(row.source_id)
+                    : null;
+            const block = {
+                id: localId,
+                kind: "extra",
+                dbId: row.id,
+                start: this._tbFormatTime(startMin),
+                end: this._tbFormatTime(startMin + dur),
+                title: row.title || "Blok",
+                type: row.block_type || "focus",
+                area: this._tbFallbackAreaId(),
+                chip: row.title || "Blok",
+                pomos:
+                    row.block_type === "focus"
+                        ? Math.max(1, Math.round(dur / 30))
+                        : 0,
+                pomosDone: 0,
+                fromTaskId: Number.isFinite(fromTaskId) ? fromTaskId : null,
+            };
+            this._tbExtraBlocks.push(block);
+            if (block.fromTaskId != null) {
+                this._tbScheduledTaskIds.add(block.fromTaskId);
+            }
+        }
+        this._tbHydratedDate = date;
+        this._tbRender();
     }
 
     async _tbOffsetDays(delta) {
@@ -6068,10 +6129,12 @@ class TodoApp {
         today.setHours(0, 0, 0, 0);
         if (next.getTime() < today.getTime()) return; // floor at today
         this._tbDate = next;
-        // Switching days invalidates per-day state.
+        // Switching days invalidates per-day state, including the hydration
+        // cache so the new day re-fetches its persisted blocks.
         this._tbBlocksOverrides = new Map();
         this._tbExtraBlocks = [];
         this._tbScheduledTaskIds = new Set();
+        this._tbHydratedDate = null;
         // Immediate render so the schema reflects the new active date even
         // before the calendar fetch completes (empty calendar events shown).
         this.renderTodaySchema();
@@ -6467,7 +6530,7 @@ class TodoApp {
             } else if (payload.kind === "pool") {
                 const item = this._tbPool.find((p) => p.id === payload.id);
                 if (!item) return;
-                this._tbInsertBlock({
+                const newId = this._tbInsertBlock({
                     title: item.title,
                     type: "focus",
                     area: item.area,
@@ -6478,6 +6541,7 @@ class TodoApp {
                 });
                 if (item.taskId != null) this._tbScheduledTaskIds.add(item.taskId);
                 this._tbLogPlanEvent({
+                    blockId: newId,
                     source_kind: "task",
                     source_id: item.taskId != null ? String(item.taskId) : String(item.id),
                     title: item.title,
@@ -6488,7 +6552,7 @@ class TodoApp {
             } else if (payload.kind === "tpl") {
                 const tpl = this._tbTemplates().find((t) => t.id === payload.id);
                 if (!tpl) return;
-                this._tbInsertBlock({
+                const newId = this._tbInsertBlock({
                     title: tpl.name,
                     type: tpl.type,
                     area: tpl.area,
@@ -6497,6 +6561,7 @@ class TodoApp {
                     chip: tpl.name,
                 });
                 this._tbLogPlanEvent({
+                    blockId: newId,
                     source_kind: "template",
                     source_id: tpl.id,
                     title: tpl.name,
@@ -6510,8 +6575,9 @@ class TodoApp {
     }
 
     _tbLogPlanEvent(opts) {
-        // Persist a single planning event. Fire-and-forget: any backend issue
-        // is logged but never blocks the UI update.
+        // Persist a single planning event and, once the server returns the
+        // row id, attach it to the local block so subsequent move/delete
+        // operations can patch/delete the same row.
         const startMin = Math.max(0, Math.min(24 * 60 - 1, Math.round(opts.start_min)));
         const payload = {
             source_kind: opts.source_kind,
@@ -6522,14 +6588,25 @@ class TodoApp {
             start_time: this._tbFormatTime(startMin),
             duration_minutes: Math.max(1, Math.round(opts.dur_min)),
         };
+        const localId = opts.blockId;
         fetch("/api/day-plan-events", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "same-origin",
             body: JSON.stringify(payload),
-        }).catch((err) => {
-            console.warn("day-plan-event log failed", err);
-        });
+        })
+            .then((res) => (res.ok ? res.json() : Promise.reject(res.statusText)))
+            .then((data) => {
+                const dbId = data && data.event && data.event.id;
+                if (dbId == null || localId == null) return;
+                const extra = this._tbExtraBlocks.find(
+                    (b) => String(b.id) === String(localId)
+                );
+                if (extra) extra.dbId = dbId;
+            })
+            .catch((err) => {
+                console.warn("day-plan-event log failed", err);
+            });
     }
 
     _tbInsertBlock(opts) {
@@ -6649,13 +6726,18 @@ class TodoApp {
         const dayStart = startHour * 60;
         const dayEnd = Math.floor((endHour + 0.5) * 60);
         const newStart = Math.max(dayStart, Math.min(dayEnd - dur, newStartMin));
+        const newStartStr = this._tbFormatTime(newStart);
         const patch = {
-            start: this._tbFormatTime(newStart),
+            start: newStartStr,
             end: this._tbFormatTime(newStart + dur),
         };
         const extra = this._tbExtraBlocks.find((b) => String(b.id) === String(id));
         if (extra) {
             Object.assign(extra, patch);
+            // Persist if this extra is backed by a server row.
+            if (extra.dbId != null) {
+                this._tbPersistMove(extra.dbId, newStartStr, dur);
+            }
         } else {
             this._tbBlocksOverrides.set(String(id), {
                 ...(this._tbBlocksOverrides.get(String(id)) || {}),
@@ -6669,12 +6751,15 @@ class TodoApp {
         // Find block by id across the rendered set to know its kind.
         const block = this._tbBlocks.find((b) => String(b.id) === String(id));
         if (!block) return;
-        // Extras: drop from the in-memory list.
+        // Extras: drop from the in-memory list and from the DB if known.
         const extraIdx = this._tbExtraBlocks.findIndex((b) => String(b.id) === String(id));
         if (extraIdx >= 0) {
             const removed = this._tbExtraBlocks.splice(extraIdx, 1)[0];
             if (removed && removed.fromTaskId != null) {
                 this._tbScheduledTaskIds.delete(removed.fromTaskId);
+            }
+            if (removed && removed.dbId != null) {
+                this._tbPersistDelete(removed.dbId);
             }
         } else if (block.kind === "task" && block.taskId != null) {
             // Task block dropped onto the pool → unschedule (becomes pool item again).
@@ -6691,6 +6776,29 @@ class TodoApp {
             });
         }
         this._tbRender();
+    }
+
+    _tbPersistMove(dbId, startTime, durationMin) {
+        fetch(`/api/day-plan-events/${dbId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({
+                start_time: startTime,
+                duration_minutes: Math.max(1, Math.round(durationMin)),
+            }),
+        }).catch((err) => {
+            console.warn("day-plan-event patch failed", err);
+        });
+    }
+
+    _tbPersistDelete(dbId) {
+        fetch(`/api/day-plan-events/${dbId}`, {
+            method: "DELETE",
+            credentials: "same-origin",
+        }).catch((err) => {
+            console.warn("day-plan-event delete failed", err);
+        });
     }
 
     _tbDeleteSheet() {

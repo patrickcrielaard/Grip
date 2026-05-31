@@ -925,6 +925,78 @@ class SupabaseService:
             self.logger.exception("create_day_plan_event failed: %s", exc)
             return None
 
+    def list_day_plan_events_for_date(
+        self, user_id: str, date: str
+    ) -> List[Dict[str, Any]]:
+        """Return all planning events for the user on a specific date."""
+        try:
+            result = (
+                self.supabase.table("day_plan_events")
+                .select(
+                    "id, source_kind, source_id, title, block_type, "
+                    "planned_for, start_time, duration_minutes, created_at"
+                )
+                .eq("user_id", user_id)
+                .eq("planned_for", date)
+                .order("start_time", desc=False)
+                .execute()
+            )
+            return [cast(Dict[str, Any], r) for r in (result.data or [])]
+        except Exception as exc:
+            self.logger.exception("list_day_plan_events_for_date failed: %s", exc)
+            return []
+
+    def update_day_plan_event(
+        self,
+        user_id: str,
+        event_id: int,
+        *,
+        start_time: str | None = None,
+        duration_minutes: int | None = None,
+        title: str | None = None,
+        block_type: str | None = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Patch a planning event; user_id is verified to scope the update."""
+        try:
+            updates: Dict[str, Any] = {}
+            if start_time is not None:
+                updates["start_time"] = start_time
+            if duration_minutes is not None:
+                updates["duration_minutes"] = int(duration_minutes)
+            if title is not None:
+                updates["title"] = title
+            if block_type is not None:
+                updates["block_type"] = block_type
+            if not updates:
+                return None
+            result = (
+                self.supabase.table("day_plan_events")
+                .update(updates)
+                .eq("id", event_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if not result.data:
+                return None
+            data = result.data
+            if isinstance(data, list):
+                return cast(Dict[str, Any], data[0])
+            return cast(Dict[str, Any], data)
+        except Exception as exc:
+            self.logger.exception("update_day_plan_event failed: %s", exc)
+            return None
+
+    def delete_day_plan_event(self, user_id: str, event_id: int) -> bool:
+        """Remove a planning event; scoped by user_id. Returns True on success."""
+        try:
+            self.supabase.table("day_plan_events").delete().eq("id", event_id).eq(
+                "user_id", user_id
+            ).execute()
+            return True
+        except Exception as exc:
+            self.logger.exception("delete_day_plan_event failed: %s", exc)
+            return False
+
     def list_day_plan_event_summary(
         self, user_id: str, start: str, end: str
     ) -> List[Dict[str, Any]]:

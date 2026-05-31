@@ -36,6 +36,15 @@ class DayPlanEventCreate(BaseModel):
     duration_minutes: int = Field(..., gt=0, le=24 * 60)
 
 
+class DayPlanEventUpdate(BaseModel):
+    """Patch payload for repositioning / resizing / retitling an event."""
+
+    start_time: str | None = Field(default=None, min_length=4, max_length=8)
+    duration_minutes: int | None = Field(default=None, gt=0, le=24 * 60)
+    title: str | None = Field(default=None, min_length=1, max_length=280)
+    block_type: str | None = Field(default=None, min_length=1, max_length=32)
+
+
 @router.post("/api/day-plan-events")
 async def create_day_plan_event(
     request: Request, payload: DayPlanEventCreate
@@ -63,6 +72,50 @@ async def create_day_plan_event(
     if not row:
         raise HTTPException(status_code=500, detail="Unable to record event")
     return {"event": row}
+
+
+@router.get("/api/day-plan-events")
+async def list_day_plan_events(
+    request: Request,
+    date: str = Query(..., min_length=10, max_length=10),
+) -> Dict[str, Any]:
+    """Return all planning events for the user on a specific date."""
+    user = _require_user(request)
+    if not _DATE_RE.match(date):
+        raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
+    events = supabase_service.list_day_plan_events_for_date(user["id"], date)
+    return {"events": events}
+
+
+@router.patch("/api/day-plan-events/{event_id}")
+async def update_day_plan_event(
+    request: Request, event_id: int, payload: DayPlanEventUpdate
+) -> Dict[str, Any]:
+    """Patch a planning event (move / resize / retitle)."""
+    user = _require_user(request)
+    if payload.start_time is not None and not _TIME_RE.match(payload.start_time):
+        raise HTTPException(status_code=400, detail="start_time must be HH:MM")
+    row = supabase_service.update_day_plan_event(
+        user["id"],
+        event_id,
+        start_time=payload.start_time,
+        duration_minutes=payload.duration_minutes,
+        title=payload.title.strip() if payload.title else None,
+        block_type=payload.block_type.strip() if payload.block_type else None,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return {"event": row}
+
+
+@router.delete("/api/day-plan-events/{event_id}")
+async def delete_day_plan_event(request: Request, event_id: int) -> Dict[str, Any]:
+    """Delete a planning event."""
+    user = _require_user(request)
+    ok = supabase_service.delete_day_plan_event(user["id"], event_id)
+    if not ok:
+        raise HTTPException(status_code=500, detail="Unable to delete event")
+    return {"ok": True}
 
 
 @router.get("/api/day-plan-events/summary")
