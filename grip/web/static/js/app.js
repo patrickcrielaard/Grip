@@ -339,10 +339,13 @@ class TodoApp {
     }
 
     bindEvents() {
-        // Add task toggle
-        this.addTaskToggle.addEventListener("click", () =>
-            this.toggleAddTask()
-        );
+        // Add task toggle (the legacy floating button; the inline "Nieuwe taak"
+        // placeholder row in the list is wired separately).
+        if (this.addTaskToggle) {
+            this.addTaskToggle.addEventListener("click", () =>
+                this.toggleAddTask()
+            );
+        }
 
         // Add task modal close / cancel / overlay click
         if (this.addTaskModalClose) {
@@ -551,6 +554,13 @@ class TodoApp {
         });
 
         this.todoList.addEventListener("click", (event) => {
+            const newTaskRow = event.target.closest("[data-add-task]");
+            if (newTaskRow) {
+                event.preventDefault();
+                if (!this.addTaskVisible) this.toggleAddTask();
+                return;
+            }
+
             const dayHeader = event.target.closest(".week-day-header");
             if (dayHeader) {
                 const day = dayHeader.dataset.day;
@@ -642,6 +652,12 @@ class TodoApp {
         });
 
         this.todoList.addEventListener("keydown", (event) => {
+            const newTaskRow = event.target.closest("[data-add-task]");
+            if (newTaskRow && (event.key === "Enter" || event.key === " ")) {
+                event.preventDefault();
+                if (!this.addTaskVisible) this.toggleAddTask();
+                return;
+            }
             const addInput = event.target.closest(".week-day-add-input");
             if (!addInput) return;
             if (event.key === "Enter") {
@@ -2791,15 +2807,6 @@ class TodoApp {
         }
 
         const todos = this.getFilteredTodos();
-
-        if (todos.length === 0) {
-            const label = this.getViewLabel();
-            this.todoList.innerHTML = `<li class="empty-state">Geen taken in ${this.escapeHtml(label)}.</li>`;
-            this.updateItemCount();
-            this.updateSidebarCounts();
-            return;
-        }
-
         const view = this.currentView;
         const isWeekView = view.type === "view" && (view.value === "week" || view.value === "next-week");
 
@@ -2807,9 +2814,10 @@ class TodoApp {
             this.todoList.innerHTML = this._renderWeekGroupedHtml(todos, view.value);
             this._focusWeekAddInputIfPending();
         } else {
-            this.todoList.innerHTML = todos
+            const itemsHtml = todos
                 .map((todo, index) => this._renderTodoItemHtml(todo, index))
                 .join("");
+            this.todoList.innerHTML = itemsHtml + this._renderNewTaskPlaceholderHtml();
         }
 
         this.updateItemCount();
@@ -2826,6 +2834,20 @@ class TodoApp {
             const len = input.value.length;
             input.setSelectionRange(len, len);
         }
+    }
+
+    _renderNewTaskPlaceholderHtml() {
+        // A lightweight, light-grey row at the bottom of the list. Clicking
+        // it opens the existing "Nieuwe taak" modal (which pre-selects the
+        // active list).
+        return `
+            <li class="todo-item is-new-task-placeholder" data-add-task role="button" tabindex="0" aria-label="Nieuwe taak toevoegen">
+                <span class="todo-checkbox is-placeholder" aria-hidden="true"></span>
+                <div class="todo-content">
+                    <span class="todo-text new-task-label">Nieuwe taak</span>
+                </div>
+            </li>
+        `;
     }
 
     _renderTodoItemHtml(todo, index) {

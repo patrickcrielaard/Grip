@@ -2941,10 +2941,10 @@ button.sidebar-section-label {
     gap: 14px;
 }
 .content-title {
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-size: 32px;
-    font-weight: 400;
+    font-family: var(--font-body);
+    font-style: normal;
+    font-size: 22px;
+    font-weight: 600;
     letter-spacing: -0.01em;
     line-height: 1.1;
     color: var(--ink);
@@ -7023,4 +7023,37 @@ body.tb-dragging .tb-timeline-card {
 /* Responsive collapse */
 @media (max-width: 880px) {
     .stats-plan-row { grid-template-columns: 1fr; }
+}
+
+/* "Nieuwe taak" placeholder at the bottom of any non-week task list */
+.todo-item.is-new-task-placeholder {
+    cursor: pointer;
+    border-top: 0;
+    color: var(--ink-tertiary);
+}
+.todo-item.is-new-task-placeholder:hover {
+    background: var(--surface);
+    color: var(--ink-secondary);
+}
+.todo-item.is-new-task-placeholder .todo-checkbox.is-placeholder {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 1.5px dashed var(--border-strong);
+    border-radius: 6px;
+    background: transparent;
+    margin-top: 1px;
+    pointer-events: none;
+}
+.todo-item.is-new-task-placeholder .new-task-label {
+    color: var(--ink-tertiary);
+    font-weight: 500;
+}
+.todo-item.is-new-task-placeholder:hover .new-task-label {
+    color: var(--ink-secondary);
+}
+.todo-item.is-new-task-placeholder:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: -2px;
+    border-radius: 12px;
 }
