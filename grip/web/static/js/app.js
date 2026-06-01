@@ -1562,7 +1562,7 @@ class TodoApp {
             case "list":
                 return this.currentView.value === "inbox"
                     ? "Inbox"
-                    : "Vandaag";
+                    : "Dagplanning";
             case "view":
                 if (this.currentView.value === "all") return "Alle taken";
                 if (this.currentView.value === "next-week") return "Weekplanning";
@@ -5218,7 +5218,21 @@ class TodoApp {
 
     renderTodayView() {
         if (!this.todayView) return;
-        const todays = this.todos.filter((t) => this._isTodoForToday(t));
+        // List + agenda mode both follow the active date driven by the stepper.
+        const activeDate = this._tbActiveDateKey
+            ? this._tbActiveDateKey()
+            : this.getToday();
+        const isActuallyToday = activeDate === this.getToday();
+        const todays = this.todos.filter((t) => {
+            if (t.project_id) return false;
+            if (t.planned_date !== activeDate) return false;
+            if (t.completed) {
+                // Only surface completed entries on the real "today" view,
+                // and only while they still count in the daily streak.
+                return isActuallyToday && this._completedTodayIds.has(t.id);
+            }
+            return true;
+        });
 
         const panelCount = document.getElementById("vandaagPanelCount");
         if (panelCount) {
@@ -5302,8 +5316,9 @@ class TodoApp {
         document.querySelectorAll("[data-td-mode]").forEach((btn) => {
             btn.classList.toggle("on", btn.dataset.tdMode === mode);
         });
+        // Stepper drives both agenda and list mode, so it stays visible.
         const stepper = document.getElementById("tbDayStepperWrap");
-        if (stepper) stepper.hidden = mode !== "agenda";
+        if (stepper) stepper.hidden = false;
     }
 
     setTodayMode(mode) {
@@ -6269,18 +6284,16 @@ class TodoApp {
         this._tbExtraBlocks = [];
         this._tbScheduledTaskIds = new Set();
         this._tbHydratedDate = null;
-        // Immediate render so the schema reflects the new active date even
+        // Immediate render so both modes reflect the new active date even
         // before the calendar fetch completes (empty calendar events shown).
-        this.renderTodaySchema();
+        this.renderTodayView();
         // Fetch the new day's calendar events; the function calls
         // renderTodaySchema again after the events land.
         if (typeof this.refreshTodayAgenda === "function") {
             await this.refreshTodayAgenda(true);
-            // Defensive: ensure the schema (and balance) reflect the freshly
-            // loaded events. refreshTodayAgenda only re-renders when in the
-            // today view, but we call it again here unconditionally because
-            // we know we are on Today (the stepper isn't shown otherwise).
-            this.renderTodaySchema();
+            // Defensive: ensure both the schema and the list reflect the
+            // freshly loaded events.
+            this.renderTodayView();
         }
     }
 
