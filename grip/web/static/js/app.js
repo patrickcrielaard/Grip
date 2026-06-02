@@ -746,6 +746,24 @@ class TodoApp {
             });
         });
 
+        // Keep a data-empty flag on every <input type="time"> so the CSS can
+        // hide the browser's native placeholder ("12:30" in Chrome NL) and
+        // show our own "—" instead.
+        const syncTimeEmpty = (input) => {
+            if (!input) return;
+            input.dataset.empty = input.value ? "0" : "1";
+        };
+        document.querySelectorAll('input[type="time"]').forEach((el) => {
+            syncTimeEmpty(el);
+            el.addEventListener("input", () => syncTimeEmpty(el));
+            el.addEventListener("change", () => syncTimeEmpty(el));
+        });
+        // Re-sync after programmatic value assignments anywhere.
+        this._syncTimeEmptyState = () =>
+            document
+                .querySelectorAll('input[type="time"]')
+                .forEach((el) => syncTimeEmpty(el));
+
         // Calendar subscription modal
         if (this.addCalendarBtn) {
             this.addCalendarBtn.addEventListener("click", () => this.openCalendarModal());
@@ -2317,6 +2335,7 @@ class TodoApp {
                 if (this.startDateInput) this.startDateInput.value = "";
                 if (this.plannedDateInput) this.plannedDateInput.value = "";
                 if (this.plannedTimeInput) this.plannedTimeInput.value = "";
+                if (typeof this._syncTimeEmptyState === "function") this._syncTimeEmptyState();
                 if (this.deadlineInput) this.deadlineInput.value = "";
                 if (this.durationInput) this.durationInput.value = "";
                 if (this.recurrenceUnit) {
@@ -2614,6 +2633,7 @@ class TodoApp {
         this._setModalDateField(this.modalStartDate, todo.start_date || "");
         if (this.modalPlannedTime) {
             this.modalPlannedTime.value = this._formatTimeValue(todo.planned_time);
+            if (typeof this._syncTimeEmptyState === "function") this._syncTimeEmptyState();
         }
         this.modalDuration.value = todo.duration || "";
         this._setModalDateField(this.modalDeadline, todo.deadline || "");
@@ -6683,7 +6703,16 @@ class TodoApp {
                     chip: "Diep werk",
                     fromTaskId: item.taskId,
                 });
-                if (item.taskId != null) this._tbScheduledTaskIds.add(item.taskId);
+                if (item.taskId != null) {
+                    this._tbScheduledTaskIds.add(item.taskId);
+                    // Sync the underlying task so the Lijst view shows it at
+                    // the right time instead of "Hele dag".
+                    this._tbSyncTaskTime(
+                        item.taskId,
+                        this._tbActiveDateKey(),
+                        this._tbFormatTime(mins)
+                    );
+                }
                 this._tbLogPlanEvent({
                     blockId: newId,
                     source_kind: "task",
@@ -6914,6 +6943,10 @@ class TodoApp {
             if (extra.dbId != null) {
                 this._tbPersistMove(extra.dbId, newStartStr, dur);
             }
+            // Keep the underlying task's planned_time in sync.
+            if (extra.fromTaskId != null) {
+                this._tbSyncTaskTime(extra.fromTaskId, undefined, newStartStr);
+            }
         } else {
             this._tbBlocksOverrides.set(String(id), {
                 ...(this._tbBlocksOverrides.get(String(id)) || {}),
@@ -6933,6 +6966,8 @@ class TodoApp {
             const removed = this._tbExtraBlocks.splice(extraIdx, 1)[0];
             if (removed && removed.fromTaskId != null) {
                 this._tbScheduledTaskIds.delete(removed.fromTaskId);
+                // Clear the task's planned_time so it returns to "Hele dag".
+                this._tbSyncTaskTime(removed.fromTaskId, undefined, null);
             }
             if (removed && removed.dbId != null) {
                 this._tbPersistDelete(removed.dbId);
@@ -6940,6 +6975,7 @@ class TodoApp {
         } else if (block.kind === "task" && block.taskId != null) {
             // Task block dropped onto the pool → unschedule (becomes pool item again).
             this._tbScheduledTaskIds.delete(block.taskId);
+            this._tbSyncTaskTime(block.taskId, undefined, null);
             this._tbBlocksOverrides.set(String(id), {
                 ...(this._tbBlocksOverrides.get(String(id)) || {}),
                 _hidden: true,
@@ -6958,6 +6994,32 @@ class TodoApp {
         this._tbPersistPatch(dbId, {
             start_time: startTime,
             duration_minutes: Math.max(1, Math.round(durationMin)),
+        });
+    }
+
+    _tbSyncTaskTime(taskId, plannedDate, plannedTime) {
+        // Keep the underlying task's planned_date / planned_time in sync with
+        // its position on the schedule, so the Lijst view (which buckets by
+        // planned_time) shows it at the right moment instead of "Hele dag".
+        if (taskId == null) return;
+        const numericId = Number(taskId);
+        if (!Number.isFinite(numericId)) return;
+        const todo = (this.todos || []).find((t) => t.id === numericId);
+        if (todo) {
+            if (plannedDate !== undefined) todo.planned_date = plannedDate;
+            if (plannedTime !== undefined) todo.planned_time = plannedTime;
+        }
+        const body = {};
+        if (plannedDate !== undefined) body.planned_date = plannedDate;
+        if (plannedTime !== undefined) body.planned_time = plannedTime;
+        if (Object.keys(body).length === 0) return;
+        fetch(`/api/todos/${numericId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify(body),
+        }).catch((err) => {
+            console.warn("task planned_time sync failed", err);
         });
     }
 
