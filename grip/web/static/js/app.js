@@ -4532,14 +4532,17 @@ class TodoApp {
             totalItems += itemCount;
             perDayMinutes.push(dayMinutes);
 
-            // Combine + sort lines by start time.
+            // Combine + sort lines by start time. Tasks need to live on the
+            // same epoch as the events so they slot in at the right moment.
             const lines = [
                 ...dayEvents.map((ev) => ({ kind: "event", start: Date.parse(ev.start_at), payload: ev })),
-                ...dayTodos.map((t) => ({
-                    kind: "task",
-                    start: this._timeToMinutes(t.planned_time) * 60000,
-                    payload: t,
-                })),
+                ...dayTodos.map((t) => {
+                    const minutes = this._timeToMinutes(t.planned_time);
+                    const taskMs = t.planned_time
+                        ? Date.parse(`${key}T${t.planned_time}`)
+                        : Date.parse(`${key}T00:00:00`) + minutes * 60000;
+                    return { kind: "task", start: taskMs, payload: t };
+                }),
             ].sort((a, b) => a.start - b.start);
 
             const lineHtmls = lines.map((line) => this._renderNextWeekLine(line, key)).join("");
@@ -5222,16 +5225,9 @@ class TodoApp {
         const activeDate = this._tbActiveDateKey
             ? this._tbActiveDateKey()
             : this.getToday();
-        const isActuallyToday = activeDate === this.getToday();
         const todays = this.todos.filter((t) => {
             if (t.project_id) return false;
-            if (t.planned_date !== activeDate) return false;
-            if (t.completed) {
-                // Only surface completed entries on the real "today" view,
-                // and only while they still count in the daily streak.
-                return isActuallyToday && this._completedTodayIds.has(t.id);
-            }
-            return true;
+            return t.planned_date === activeDate;
         });
 
         const panelCount = document.getElementById("vandaagPanelCount");
@@ -6630,10 +6626,11 @@ class TodoApp {
 
         wrap.addEventListener("dragover", (event) => {
             event.preventDefault();
-            // "move" so a successful timeline drop is distinguishable from a
-            // cancelled drag (dropEffect="none") in the dragend handler.
-            event.dataTransfer.dropEffect = "move";
             const meta = getDragMeta();
+            // Match the kind that was advertised in dragstart so the browser
+            // accepts the drop. Pool/template = copy, existing block = move.
+            event.dataTransfer.dropEffect =
+                meta && meta.kind === "block" ? "move" : "copy";
             if (!meta) return;
             const mins = computeDropMins(event.clientY);
             if (mins == null) return;
@@ -7032,9 +7029,11 @@ class TodoApp {
             if (pool) {
                 pool.classList.add("dragging");
                 event.dataTransfer.setData("text/plain", JSON.stringify({ kind: "pool", id: pool.dataset.tbPoolId }));
-                event.dataTransfer.effectAllowed = "copy";
+                // copyMove keeps the browser happy regardless of whether the
+                // drop target advertises copy or move.
+                event.dataTransfer.effectAllowed = "copyMove";
                 const item = this._tbPool.find((p) => p.id === pool.dataset.tbPoolId);
-                this._tbDragMeta = item ? { dur: item.est, title: item.title } : null;
+                this._tbDragMeta = item ? { dur: item.est, title: item.title, kind: "pool" } : null;
                 this._tbDropHandled = false;
                 document.body.classList.add("tb-dragging");
                 return;
@@ -7043,9 +7042,9 @@ class TodoApp {
             if (tpl) {
                 tpl.classList.add("dragging");
                 event.dataTransfer.setData("text/plain", JSON.stringify({ kind: "tpl", id: tpl.dataset.tbTplId }));
-                event.dataTransfer.effectAllowed = "copy";
+                event.dataTransfer.effectAllowed = "copyMove";
                 const t = this._tbTemplates().find((x) => x.id === tpl.dataset.tbTplId);
-                this._tbDragMeta = t ? { dur: t.dur, title: t.name } : null;
+                this._tbDragMeta = t ? { dur: t.dur, title: t.name, kind: "tpl" } : null;
                 this._tbDropHandled = false;
                 document.body.classList.add("tb-dragging");
                 return;
@@ -7064,8 +7063,8 @@ class TodoApp {
                     ? this._tbParseTime(data.end) - this._tbParseTime(data.start)
                     : 30;
                 event.dataTransfer.setData("text/plain", JSON.stringify({ kind: "block", id, blockKind }));
-                event.dataTransfer.effectAllowed = "move";
-                this._tbDragMeta = { dur, title: data ? data.title : "" };
+                event.dataTransfer.effectAllowed = "copyMove";
+                this._tbDragMeta = { dur, title: data ? data.title : "", kind: "block" };
                 this._tbDropHandled = false;
                 document.body.classList.add("tb-dragging");
             }

@@ -30,6 +30,17 @@
                 </svg>
             </button>
             <nav class="sidebar-nav" id="todoNav" aria-label="Primary">
+                <button class="sidebar-item" type="button" data-list="inbox" aria-pressed="false">
+                    <svg class="sidebar-icon" viewBox="0 0 24 24">
+                        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
+                        <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+                    </svg>
+                    <span class="sidebar-label">Inbox</span>
+                    <span class="sidebar-count" data-count-list="inbox"></span>
+                    <span class="sidebar-item-add" role="button" tabindex="-1" aria-label="Nieuwe taak in Inbox" data-add-list="inbox">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    </span>
+                </button>
                 <button class="sidebar-item active" type="button" data-list="today" aria-pressed="true">
                     <svg class="sidebar-icon" viewBox="0 0 24 24">
                         <circle cx="12" cy="12" r="4"/>
@@ -45,17 +56,6 @@
                     <span class="sidebar-label">Dagplanning</span>
                     <span class="sidebar-count" data-count-list="today"></span>
                     <span class="sidebar-item-add" role="button" tabindex="-1" aria-label="Nieuwe taak in Dagplanning" data-add-list="today">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    </span>
-                </button>
-                <button class="sidebar-item" type="button" data-list="inbox" aria-pressed="false">
-                    <svg class="sidebar-icon" viewBox="0 0 24 24">
-                        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
-                        <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
-                    </svg>
-                    <span class="sidebar-label">Inbox</span>
-                    <span class="sidebar-count" data-count-list="inbox"></span>
-                    <span class="sidebar-item-add" role="button" tabindex="-1" aria-label="Nieuwe taak in Inbox" data-add-list="inbox">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     </span>
                 </button>
@@ -1321,5 +1321,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=60"></script>
+<script src="/static/js/app.js?v=61"></script>
 {% endblock %}
