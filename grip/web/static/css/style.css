@@ -7189,3 +7189,17 @@ input[type="time"][data-empty="1"]:not(:focus)::-webkit-datetime-edit-text {
     font-size: 13px;
     pointer-events: none;
 }
+
+/* Goals sidebar section */
+#goalNav .sidebar-empty {
+    font-size: 12px;
+    color: var(--ink-tertiary);
+    margin: 4px 12px;
+}
+.sidebar-goal-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: inline-block;
+}

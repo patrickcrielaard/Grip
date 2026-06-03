@@ -7,6 +7,7 @@ class TodoApp {
         this.completedProjects = [];
         this.areas = [];
         this.goals = [];
+        this.userLists = [];
         this.currentView = { type: "list", value: "today" };
         this.availableLists = ["inbox", "today"];
         this.availablePriorities = ["not_set", "low", "medium", "high"];
@@ -49,8 +50,14 @@ class TodoApp {
         // with the correct data before todos/projects trigger re-renders.
         await Promise.all([this.loadAreas(), this.loadGoals()]);
         this.renderAreaTree();
+        this.renderGoalsSidebar();
         this._populateAreaSelects();
-        await Promise.all([this.loadProjects(), this.loadCompletedProjects(), this.loadTodos()]);
+        await Promise.all([
+            this.loadProjects(),
+            this.loadCompletedProjects(),
+            this.loadTodos(),
+            this.loadUserLists(),
+        ]);
         // Apply the initial view now that data is loaded so the right panel
         // becomes visible (panels are `hidden` in HTML by default).
         this.setView(this.currentView);
@@ -1129,6 +1136,16 @@ class TodoApp {
         if (this.addAreaBtn) {
             this.addAreaBtn.addEventListener("click", () => this.openAreaModal());
         }
+        // Goal add button (header +) — opens the existing goal modal in "new" mode.
+        const addGoalBtn = document.getElementById("addGoalBtn");
+        if (addGoalBtn) {
+            addGoalBtn.addEventListener("click", () => this.openGoalModal());
+        }
+        // User-list add button (header +)
+        const addUserListBtn = document.getElementById("addUserListBtn");
+        if (addUserListBtn) {
+            addUserListBtn.addEventListener("click", () => this.createUserList());
+        }
 
         // Area modal bindings
         if (this.areaModal) {
@@ -1577,10 +1594,17 @@ class TodoApp {
 
     getViewLabel() {
         switch (this.currentView.type) {
-            case "list":
-                return this.currentView.value === "inbox"
-                    ? "Inbox"
-                    : "Dagplanning";
+            case "list": {
+                if (this.currentView.value === "inbox") return "Inbox";
+                if (this.currentView.value === "today") return "Dagplanning";
+                if (typeof this.currentView.value === "string" &&
+                    this.currentView.value.startsWith("ul-")) {
+                    const id = Number(this.currentView.value.slice(3));
+                    const ul = (this.userLists || []).find((l) => l.id === id);
+                    return ul ? ul.name : "Lijst";
+                }
+                return "Lijst";
+            }
             case "view":
                 if (this.currentView.value === "all") return "Alle taken";
                 if (this.currentView.value === "next-week") return "Weekplanning";
@@ -1825,9 +1849,138 @@ class TodoApp {
         try {
             const data = await this.request("/api/goals");
             this.goals = data.goals || [];
+            this.renderGoalsSidebar();
         } catch (_) {
             // Goals failing shouldn't block the app
         }
+    }
+
+    async loadUserLists() {
+        try {
+            const data = await this.request("/api/user-lists");
+            this.userLists = data.lists || [];
+            this.renderUserListsSidebar();
+        } catch (_) {
+            /* non-fatal */
+        }
+    }
+
+    renderUserListsSidebar() {
+        const todoNav = document.getElementById("todoNav");
+        if (!todoNav) return;
+        // Drop any previously-rendered user list nodes — they always live at
+        // the bottom of the Te doen nav, after the static items.
+        todoNav.querySelectorAll("[data-user-list-id]").forEach((el) => el.remove());
+        for (const ul of this.userLists || []) {
+            const token = `ul-${ul.id}`;
+            const btn = document.createElement("button");
+            btn.className = "sidebar-item";
+            btn.type = "button";
+            btn.dataset.list = token;
+            btn.dataset.userListId = String(ul.id);
+            btn.setAttribute("aria-pressed", "false");
+            btn.innerHTML = `
+                <svg class="sidebar-icon" viewBox="0 0 24 24">
+                    <line x1="8" y1="6" x2="21" y2="6"/>
+                    <line x1="8" y1="12" x2="21" y2="12"/>
+                    <line x1="8" y1="18" x2="21" y2="18"/>
+                    <circle cx="3.5" cy="6" r="0.7" fill="currentColor"/>
+                    <circle cx="3.5" cy="12" r="0.7" fill="currentColor"/>
+                    <circle cx="3.5" cy="18" r="0.7" fill="currentColor"/>
+                </svg>
+                <span class="sidebar-label">${this.escapeHtml(ul.name || "(naamloos)")}</span>
+                <span class="sidebar-count" data-count-list="${token}"></span>
+                <span class="sidebar-item-add" role="button" tabindex="-1" aria-label="Nieuwe taak in ${this.escapeHtml(ul.name)}" data-add-list="${token}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </span>
+            `;
+            todoNav.appendChild(btn);
+            btn.addEventListener("click", (event) => {
+                const addBtn = event.target.closest(".sidebar-item-add");
+                if (addBtn) {
+                    event.stopPropagation();
+                    event.preventDefault();
+                    this.setView({ type: "list", value: token });
+                    if (!this.addTaskVisible) this.toggleAddTask();
+                    return;
+                }
+                this.setView({ type: "list", value: token });
+            });
+        }
+        // Refresh sidebar item cache + counts so the new items are accounted for.
+        this.sidebarItems = Array.from(document.querySelectorAll(".sidebar-item"));
+        if (typeof this.updateSidebarCounts === "function") this.updateSidebarCounts();
+        // Keep the active-state highlight in sync if currently viewing a list.
+        if (this.currentView && this.currentView.type === "list") {
+            this.setView(this.currentView);
+        }
+        this._populateModalListSelect();
+    }
+
+    _populateModalListSelect() {
+        if (!this.modalList) return;
+        // Preserve the current value so the modal doesn't reset on re-render.
+        const previous = this.modalList.value;
+        const builtins = `
+            <option value="">—</option>
+            <option value="inbox">Inbox</option>
+            <option value="today">Dagplanning</option>
+        `;
+        const customs = (this.userLists || [])
+            .map((ul) =>
+                `<option value="ul-${ul.id}">${this.escapeHtml(ul.name || "(naamloos)")}</option>`
+            )
+            .join("");
+        this.modalList.innerHTML = builtins + customs;
+        if (previous) this.modalList.value = previous;
+    }
+
+    async createUserList() {
+        const name = window.prompt("Naam van de nieuwe lijst:");
+        if (!name || !name.trim()) return;
+        try {
+            const data = await this.request("/api/user-lists", {
+                method: "POST",
+                body: JSON.stringify({ name: name.trim() }),
+            });
+            if (data.list) {
+                this.userLists.push(data.list);
+                this.renderUserListsSidebar();
+            }
+        } catch (error) {
+            this.setStatus(error.message);
+        }
+    }
+
+    renderGoalsSidebar() {
+        const nav = document.getElementById("goalNav");
+        if (!nav) return;
+        const active = (this.goals || []).filter(
+            (g) => g.status !== "archived"
+        );
+        active.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        if (active.length === 0) {
+            nav.innerHTML = `<p class="sidebar-empty">Geen doelen.</p>`;
+            return;
+        }
+        nav.innerHTML = active
+            .map((g) => {
+                const area = (this.areas || []).find((a) => a.id === g.area_id);
+                const color = area ? area.color || "var(--ink-tertiary)" : "var(--ink-tertiary)";
+                return `
+                    <button class="sidebar-item" type="button" data-goal-id="${g.id}" aria-pressed="false">
+                        <span class="sidebar-goal-dot" style="background:${this.escapeHtml(color)}"></span>
+                        <span class="sidebar-label">${this.escapeHtml(g.name || "(naamloos)")}</span>
+                    </button>
+                `;
+            })
+            .join("");
+        nav.querySelectorAll("[data-goal-id]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const id = Number(btn.dataset.goalId);
+                this.setView({ type: "goal", value: id });
+            });
+        });
     }
 
     // --- Area tree rendering ---
@@ -2116,6 +2269,7 @@ class TodoApp {
             }
             this.closeGoalModal();
             this.renderAreaTree();
+            this.renderGoalsSidebar();
         } catch (error) {
             this.setStatus(error.message);
         }

@@ -81,12 +81,20 @@ class TodoUpdate(BaseModel):
 def _normalize_list_name(value: str | None) -> str | None:
     if value is None:
         return None
-    normalized = value.strip().lower()
+    normalized = value.strip()
     if not normalized:
         raise HTTPException(status_code=400, detail="List is required")
-    if normalized not in ALLOWED_LISTS:
-        raise HTTPException(status_code=400, detail="List must be Inbox or Today")
-    return normalized
+    # Built-in lists are case-insensitive. User-defined lists are stored as
+    # "ul-<id>" — the frontend posts that token verbatim.
+    lower = normalized.lower()
+    if lower in ALLOWED_LISTS:
+        return lower
+    if normalized.startswith("ul-") and normalized[3:].isdigit():
+        return normalized
+    raise HTTPException(
+        status_code=400,
+        detail="List must be Inbox, Today, or a user-defined list",
+    )
 
 
 def _resolve_area_id(user_id: str, area_id: int | None) -> int | None:

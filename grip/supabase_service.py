@@ -445,6 +445,52 @@ class SupabaseService:
 
     # ── Areas ───────────────────────────────────────────────────────────────
 
+    # ── User lists ───────────────────────────────────────────────────────
+
+    def list_user_lists(self, user_id: str) -> List[Dict[str, Any]]:
+        """Return user-defined task lists."""
+        try:
+            result = (
+                self.supabase.table("user_lists")
+                .select("id, name, created_at")
+                .eq("user_id", user_id)
+                .order("created_at", desc=False)
+                .execute()
+            )
+            return [cast(Dict[str, Any], r) for r in (result.data or [])]
+        except Exception as exc:
+            self.logger.exception("list_user_lists failed: %s", exc)
+            return []
+
+    def create_user_list(self, user_id: str, name: str) -> Optional[Dict[str, Any]]:
+        """Create a new user-defined list."""
+        try:
+            result = (
+                self.supabase.table("user_lists")
+                .insert({"user_id": user_id, "name": name})
+                .execute()
+            )
+            if not result.data:
+                return None
+            data = result.data
+            if isinstance(data, list):
+                return cast(Dict[str, Any], data[0])
+            return cast(Dict[str, Any], data)
+        except Exception as exc:
+            self.logger.exception("create_user_list failed: %s", exc)
+            return None
+
+    def delete_user_list(self, user_id: str, list_id: int) -> bool:
+        """Hard-delete a user-defined list."""
+        try:
+            self.supabase.table("user_lists").delete().eq("id", list_id).eq(
+                "user_id", user_id
+            ).execute()
+            return True
+        except Exception as exc:
+            self.logger.exception("delete_user_list failed: %s", exc)
+            return False
+
     def list_areas(self, user_id: str) -> List[Dict[str, Any]]:
         """Return all areas for a user (both active and archived), newest first."""
         try:

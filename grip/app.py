@@ -34,6 +34,7 @@ from grip.routes.goals import router as goal_router
 from grip.routes.projects import router as project_router
 from grip.routes.timer import router as timer_router
 from grip.routes.todos import router as todo_router
+from grip.routes.user_lists import router as user_list_router
 from grip.supabase_service import supabase_service
 
 
@@ -128,6 +129,7 @@ app.include_router(area_router)
 app.include_router(goal_router)
 app.include_router(calendar_router)
 app.include_router(day_plan_event_router)
+app.include_router(user_list_router)
 app.include_router(timer_router)
 
 app.mount("/mcp", _mcp_sub_app)
