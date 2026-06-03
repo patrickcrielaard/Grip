@@ -626,6 +626,37 @@
             </div>
         </div>
 
+        <!-- Area detail tile: header + goals + tasks -->
+        <div class="area-view" id="areaView" hidden>
+            <div class="area-page">
+                <div class="area-detail-card" id="areaDetailHead"></div>
+                <section class="area-detail-section">
+                    <header class="area-detail-section-head">
+                        <h2 class="area-detail-section-title">Doelen</h2>
+                        <button type="button" class="btn-ghost" id="areaAddGoalBtn">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                            Nieuw doel
+                        </button>
+                    </header>
+                    <div class="area-detail-goals" id="areaDetailGoals"></div>
+                </section>
+                <section class="area-detail-section">
+                    <header class="area-detail-section-head">
+                        <h2 class="area-detail-section-title">Taken</h2>
+                        <button type="button" class="btn-ghost" id="areaAddTaskBtn">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                            Nieuwe taak
+                        </button>
+                    </header>
+                    <ul class="area-detail-tasks" id="areaDetailTasks"></ul>
+                </section>
+            </div>
+        </div>
+
         <ul id="todoList" class="task-list">
             <!-- Todo items injected by JS (non-today, non-project views) -->
         </ul>
@@ -1350,5 +1381,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=64"></script>
+<script src="/static/js/app.js?v=65"></script>
 {% endblock %}

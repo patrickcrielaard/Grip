@@ -177,6 +177,10 @@ class TodoApp {
         this.agendaNowLabel = document.getElementById("agendaNowLabel");
         // Project view (kanban)
         this.projectView = document.getElementById("projectView");
+        this.areaView = document.getElementById("areaView");
+        this.areaDetailHead = document.getElementById("areaDetailHead");
+        this.areaDetailGoals = document.getElementById("areaDetailGoals");
+        this.areaDetailTasks = document.getElementById("areaDetailTasks");
         this.projHead = document.getElementById("projHead");
         this.projCols = document.getElementById("projCols");
         this.projectBackBtn = document.getElementById("projectBackBtn");
@@ -1441,14 +1445,16 @@ class TodoApp {
         const isStats = view.type === "view" && view.value === "stats";
         const isProject = this._isProjectView();
         const isNextWeek = view.type === "view" && view.value === "next-week";
+        const isArea = view.type === "area";
 
         // Toggle between today view, stats view, project view, next-week view,
-        // and regular task list.
+        // area detail view, and regular task list.
         if (this.statsView) this.statsView.hidden = !isStats;
         if (this.todayView) this.todayView.hidden = !isToday;
         if (this.projectView) this.projectView.hidden = !isProject;
         if (this.nextWeekView) this.nextWeekView.hidden = !isNextWeek;
-        if (this.todoList) this.todoList.hidden = isStats || isToday || isProject || isNextWeek;
+        if (this.areaView) this.areaView.hidden = !isArea;
+        if (this.todoList) this.todoList.hidden = isStats || isToday || isProject || isNextWeek || isArea;
 
         // Project view shows the back button in the top-left and moves the
         // project name into the project header card body.
@@ -1497,6 +1503,16 @@ class TodoApp {
                 this.hideAddTask();
             }
             this.renderNextWeekView();
+            this.updateSidebarCounts();
+            return;
+        }
+
+        if (isArea) {
+            if (this.addTaskToggle) {
+                this.addTaskToggle.hidden = true;
+                this.hideAddTask();
+            }
+            this.renderAreaView();
             this.updateSidebarCounts();
             return;
         }
@@ -5590,6 +5606,123 @@ class TodoApp {
         if (tasks.length === 0) return 0;
         const done = tasks.filter((t) => t.completed).length;
         return Math.round((done / tasks.length) * 100);
+    }
+
+    _areaProgress(areaId) {
+        const tasks = (this.todos || []).filter(
+            (t) => this.resolveTaskAreaId(t) === areaId
+        );
+        if (tasks.length === 0) return 0;
+        const done = tasks.filter((t) => t.completed).length;
+        return Math.round((done / tasks.length) * 100);
+    }
+
+    _goalProgress(goal) {
+        // Average of progress across projects in this goal.
+        const projects = (this.projects || []).filter(
+            (p) => p.goal_id === goal.id && (!p.status || p.status === "active")
+        );
+        if (projects.length === 0) return 0;
+        const sum = projects.reduce((s, p) => s + this._projectProgress(p), 0);
+        return Math.round(sum / projects.length);
+    }
+
+    renderAreaView() {
+        if (!this.areaView) return;
+        const area = this.getAreaById(this.currentView.value);
+        if (!area) return;
+        const goals = (this.goals || []).filter(
+            (g) => g.area_id === area.id && g.status !== "archived"
+        );
+        const tasks = (this.todos || []).filter(
+            (t) =>
+                !t.completed &&
+                !t.project_id &&
+                this.resolveTaskAreaId(t) === area.id
+        );
+        const pct = this._areaProgress(area.id);
+        const accent = area.color || "var(--ink-tertiary)";
+
+        // --- Header card ---
+        if (this.areaDetailHead) {
+            this.areaDetailHead.style.setProperty("--accent", accent);
+            const description = area.description
+                ? `<p class="area-detail-desc">${this.escapeHtml(area.description)}</p>`
+                : "";
+            this.areaDetailHead.innerHTML = `
+                <div class="area-detail-card-top">
+                    <div class="area-detail-icon" style="background:color-mix(in srgb, ${this.escapeHtml(accent)} 14%, white);color:${this.escapeHtml(accent)};">
+                        <span>${this.escapeHtml((area.name || "?").slice(0, 1).toUpperCase())}</span>
+                    </div>
+                    <div class="area-detail-name-block">
+                        <h1 class="area-detail-name">${this.escapeHtml(area.name || "(naamloos)")}</h1>
+                        ${description}
+                    </div>
+                    <div class="area-detail-pct">
+                        <span class="num">${pct}</span><small>%</small>
+                    </div>
+                </div>
+                <div class="area-detail-bar"><i style="width:${pct}%;background:${this.escapeHtml(accent)};"></i></div>
+                <div class="area-detail-stats">
+                    <div class="area-detail-stat"><b>${goals.length}</b><span>${goals.length === 1 ? "Doel" : "Doelen"}</span></div>
+                    <div class="area-detail-stat"><b>${tasks.length}</b><span>Open taken</span></div>
+                </div>
+            `;
+        }
+
+        // --- Goals tile ---
+        if (this.areaDetailGoals) {
+            if (goals.length === 0) {
+                this.areaDetailGoals.innerHTML = `<p class="area-detail-empty">Nog geen doelen voor dit gebied.</p>`;
+            } else {
+                this.areaDetailGoals.innerHTML = goals
+                    .map((g) => {
+                        const gp = this._goalProgress(g);
+                        const due = g.end_date
+                            ? `<span class="area-goal-due">${this.escapeHtml(g.end_date)}</span>`
+                            : "";
+                        return `
+                            <button type="button" class="area-goal-row" data-goal-id="${g.id}">
+                                <span class="area-mini-ring" style="--p:${gp};--c:${this.escapeHtml(accent)};"><span>${gp}%</span></span>
+                                <span class="area-goal-body">
+                                    <span class="area-goal-name">${this.escapeHtml(g.name || "(naamloos)")}</span>
+                                </span>
+                                ${due}
+                            </button>
+                        `;
+                    })
+                    .join("");
+                this.areaDetailGoals.querySelectorAll("[data-goal-id]").forEach((row) => {
+                    row.addEventListener("click", () => {
+                        this.setView({ type: "goal", value: Number(row.dataset.goalId) });
+                    });
+                });
+            }
+        }
+
+        // --- Tasks list ---
+        if (this.areaDetailTasks) {
+            if (tasks.length === 0) {
+                this.areaDetailTasks.innerHTML = `<li class="area-detail-empty">Geen open taken in dit gebied.</li>`;
+            } else {
+                this.areaDetailTasks.innerHTML = tasks
+                    .map((t, i) => this._renderTodoItemHtml(t, i))
+                    .join("");
+            }
+        }
+
+        // --- Section buttons ---
+        const newGoalBtn = document.getElementById("areaAddGoalBtn");
+        if (newGoalBtn) {
+            newGoalBtn.onclick = () => this.openGoalModal({ area_id: area.id });
+        }
+        const newTaskBtn = document.getElementById("areaAddTaskBtn");
+        if (newTaskBtn) {
+            newTaskBtn.onclick = () => {
+                if (!this.addTaskVisible) this.toggleAddTask();
+                if (this.areaSelect) this.areaSelect.value = String(area.id);
+            };
+        }
     }
 
     get todayProjectIds() {
