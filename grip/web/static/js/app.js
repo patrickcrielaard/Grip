@@ -541,8 +541,10 @@ class TodoApp {
             });
         }
 
-        // Task list event delegation
-        this.todoList.addEventListener("change", (event) => {
+        // Task list event delegation — change handler is reused for any
+        // container that renders task items (the area-detail view binds it
+        // separately to its own task list).
+        this._taskListChangeHandler = (event) => {
             if (event.target.classList.contains("todo-checkbox")) {
                 const id = Number(event.target.dataset.id);
                 this.toggleTodo(id);
@@ -562,9 +564,10 @@ class TodoApp {
                 this.closeAllMenus();
                 this.setDuration(id, value);
             }
-        });
+        };
+        this.todoList.addEventListener("change", this._taskListChangeHandler);
 
-        this.todoList.addEventListener("click", (event) => {
+        this._taskListClickHandler = (event) => {
             const newTaskRow = event.target.closest("[data-add-task]");
             if (newTaskRow) {
                 event.preventDefault();
@@ -660,7 +663,8 @@ class TodoApp {
                     this.openModal(id);
                 }
             }
-        });
+        };
+        this.todoList.addEventListener("click", this._taskListClickHandler);
 
         this.todoList.addEventListener("keydown", (event) => {
             const newTaskRow = event.target.closest("[data-add-task]");
@@ -1940,7 +1944,6 @@ class TodoApp {
         const builtins = `
             <option value="">—</option>
             <option value="inbox">Inbox</option>
-            <option value="today">Dagplanning</option>
         `;
         const customs = (this.userLists || [])
             .map((ul) =>
@@ -2573,9 +2576,24 @@ class TodoApp {
                     this.todos.unshift(this.normalizeTodo(data.spawned_todo));
                 }
                 this.renderTodos();
+                this._rerenderActiveSpecializedView();
             }
         } catch (error) {
             this.setStatus(error.message);
+        }
+    }
+
+    _rerenderActiveSpecializedView() {
+        // renderTodos only refreshes the generic #todoList. Pages with their
+        // own renderer (area detail, project, today) need an explicit repaint
+        // so completing / editing a task is reflected immediately.
+        const view = this.currentView || {};
+        if (view.type === "area" && typeof this.renderAreaView === "function") {
+            this.renderAreaView();
+        } else if (view.type === "project" && typeof this.renderProjectView === "function") {
+            this.renderProjectView();
+        } else if (this._isTodayView?.() && typeof this.renderTodayView === "function") {
+            this.renderTodayView();
         }
     }
 
@@ -5708,6 +5726,23 @@ class TodoApp {
                 this.areaDetailTasks.innerHTML = tasks
                     .map((t, i) => this._renderTodoItemHtml(t, i))
                     .join("");
+            }
+            // Bind the shared task-list handlers once, so checkbox toggles,
+            // the three-dot menu, and click-to-open-modal all work here too.
+            if (!this.areaDetailTasks.dataset.handlersBound) {
+                this.areaDetailTasks.dataset.handlersBound = "1";
+                if (this._taskListChangeHandler) {
+                    this.areaDetailTasks.addEventListener(
+                        "change",
+                        this._taskListChangeHandler
+                    );
+                }
+                if (this._taskListClickHandler) {
+                    this.areaDetailTasks.addEventListener(
+                        "click",
+                        this._taskListClickHandler
+                    );
+                }
             }
         }
 

@@ -4,6 +4,21 @@ Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-s
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
+## 0. Domain model
+
+The app is structured around the user's personal organisation of attention:
+
+- A person has **attention areas** (aandachtsgebieden) — e.g. work, personal, health, family & friends.
+- Each area can have **goals** that the user wants to make progress on within that area.
+- To reach a goal there can be **projects and/or tasks**:
+  - A **task** is a single actionable item.
+  - A **project** is what you get when a task naturally splits into multiple sub-tasks. The defining difference between a task and a project is multiplicity of sub-tasks.
+- **Tasks and projects may exist without a goal**, but they always belong to an **area**. Area is the mandatory parent; goal is optional.
+
+When designing features, filtering, or UI, respect this hierarchy:
+`Area → (optional) Goal → Project / Task`.
+"Dagplanning" and "Inbox" are *views/states* on tasks (derived from the planning date / list field), not nodes in this hierarchy.
+
 ## 1. Think Before Coding
 
 **Don't assume. Don't hide confusion. Surface tradeoffs.**
