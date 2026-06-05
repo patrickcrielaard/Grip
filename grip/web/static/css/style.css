@@ -3558,7 +3558,7 @@ body.auth-page {
     min-height: 100vh;
 }
 .login-left {
-    background: var(--ink);
+    background: #8a2c54;
     color: #fff;
     padding: 40px;
     display: flex;
