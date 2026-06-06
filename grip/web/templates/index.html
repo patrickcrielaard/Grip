@@ -106,6 +106,14 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     </span>
                 </button>
+                <button class="sidebar-item" type="button" data-view="assigned" aria-pressed="false">
+                    <svg class="sidebar-icon" viewBox="0 0 24 24">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    <span class="sidebar-label">Aan mij toegewezen</span>
+                    <span class="sidebar-count" data-count-view="assigned"></span>
+                </button>
             </nav>
         </div>
 
@@ -971,6 +979,18 @@
                                     <option value="">Geen gebied</option>
                                 </select>
                             </span>
+                        </div>
+                    </div>
+                    <div class="modal-field">
+                        <svg class="modal-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                            <circle cx="12" cy="7" r="4"/>
+                        </svg>
+                        <div class="modal-field-body">
+                            <span class="modal-field-label">Toegewezen aan</span>
+                            <select id="modal-assignee" class="modal-field-input">
+                                <option value="">Niemand</option>
+                            </select>
                         </div>
                     </div>
                     <div class="modal-field" id="modal-project-field">

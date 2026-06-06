@@ -48,10 +48,11 @@ class TodoApp {
     async boot() {
         // Load areas & goals first so the sidebar tree and selects can render
         // with the correct data before todos/projects trigger re-renders.
-        await Promise.all([this.loadAreas(), this.loadGoals()]);
+        await Promise.all([this.loadAreas(), this.loadGoals(), this.loadUsers()]);
         this.renderAreaTree();
         this.renderGoalsSidebar();
         this._populateAreaSelects();
+        this._populateAssigneeSelect();
         await Promise.all([
             this.loadProjects(),
             this.loadCompletedProjects(),
@@ -108,6 +109,7 @@ class TodoApp {
         this.modalDeadline = document.getElementById("modal-deadline");
         this.modalPriority = document.getElementById("modal-priority");
         this.modalArea = document.getElementById("modal-area");
+        this.modalAssignee = document.getElementById("modal-assignee");
         this.modalRecurrenceUnit = document.getElementById("modal-recurrence-unit");
         this.modalRecurrenceInterval = document.getElementById("modal-recurrence-interval");
         this.modalRecurrenceEnd = document.getElementById("modal-recurrence-end");
@@ -745,6 +747,7 @@ class TodoApp {
             { el: this.modalPriority,    field: "priority" },
             { el: this.modalArea,        field: "area" },
             { el: this.modalProject,     field: "project" },
+            { el: this.modalAssignee,    field: "assignee" },
         ].forEach(({ el, field }) => {
             if (!el) return;
             el.addEventListener("change", () => {
@@ -1629,6 +1632,7 @@ class TodoApp {
                 if (this.currentView.value === "all") return "Alle taken";
                 if (this.currentView.value === "next-week") return "Weekplanning";
                 if (this.currentView.value === "waiting") return "Wachten op";
+                if (this.currentView.value === "assigned") return "Aan mij toegewezen";
                 if (this.currentView.value === "stats") return "Inzichten";
                 return "Voltooid";
             case "area": {
@@ -1872,6 +1876,16 @@ class TodoApp {
             this.renderGoalsSidebar();
         } catch (_) {
             // Goals failing shouldn't block the app
+        }
+    }
+
+    async loadUsers() {
+        try {
+            const data = await this.request("/api/users");
+            this.users = data.users || [];
+        } catch (_) {
+            // Users failing shouldn't block the app
+            this.users = [];
         }
     }
 
@@ -2151,6 +2165,21 @@ class TodoApp {
                 .join("");
             this.goalAreaSelect.value = current;
         }
+    }
+
+    _populateAssigneeSelect() {
+        if (!this.modalAssignee) return;
+        const users = this.users || [];
+        const current = this.modalAssignee.value;
+        this.modalAssignee.innerHTML =
+            `<option value="">Niemand</option>` +
+            users
+                .map(
+                    (u) =>
+                        `<option value="${u.id}">${this.escapeHtml(u.username)}</option>`
+                )
+                .join("");
+        this.modalAssignee.value = current;
     }
 
     // --- Area modal ---
@@ -2828,6 +2857,9 @@ class TodoApp {
         this.modalPriority.value = this.normalizePriority(todo.priority);
         this.modalArea.value = todo.area_id ? String(todo.area_id) : "";
         this._syncModalAreaSwatch();
+        if (this.modalAssignee) {
+            this.modalAssignee.value = todo.assignee_id ? String(todo.assignee_id) : "";
+        }
         if (this.modalProject) this.modalProject.value = todo.project_id ? String(todo.project_id) : "";
         if (this.modalRecurrenceUnit) {
             this.modalRecurrenceUnit.value = todo.recurrence_unit || "";
@@ -2851,6 +2883,7 @@ class TodoApp {
             { el: this.modalPriority,    isSet: () => this.modalPriority.value !== "not_set" },
             { el: this.modalArea,        isSet: () => !!this.modalArea.value },
             { el: this.modalProject,     isSet: () => !!this.modalProject?.value },
+            { el: this.modalAssignee,    isSet: () => !!this.modalAssignee?.value },
         ].forEach(({ el, isSet }) => {
             if (!el) return;
             const field = el.closest(".modal-field");
@@ -2907,6 +2940,8 @@ class TodoApp {
             payload = { project_id: value ? Number(value) : null };
         } else if (field === "area") {
             payload = { area_id: value ? Number(value) : null };
+        } else if (field === "assignee") {
+            payload = { assignee_id: value || null };
         } else {
             payload = { [field]: value || null };
         }
@@ -2960,6 +2995,11 @@ class TodoApp {
                 }
                 if (view.value === "waiting") {
                     return this.todos.filter((todo) => todo.state === "waiting");
+                }
+                if (view.value === "assigned") {
+                    return this.todos.filter(
+                        (todo) => todo.assigned_to_me && !todo.completed
+                    );
                 }
                 if (view.value === "completed") {
                     return this.todos.filter((todo) => todo.completed);
@@ -3116,6 +3156,15 @@ class TodoApp {
             ? `<span class="todo-meta-chip todo-duration">${this.escapeHtml(String(todo.duration))}m</span>`
             : "";
 
+        // Assignment chip: "van X" when someone assigned it to me, otherwise
+        // "→ X" when I delegated it to someone else.
+        let assigneeMarkup = "";
+        if (todo.assigned_to_me && todo.owner_username) {
+            assigneeMarkup = `<span class="todo-meta-chip todo-assignee">van ${this.escapeHtml(todo.owner_username)}</span>`;
+        } else if (todo.assignee_username) {
+            assigneeMarkup = `<span class="todo-meta-chip todo-assignee">→ ${this.escapeHtml(todo.assignee_username)}</span>`;
+        }
+
         const recurrenceMarkup = todo.recurrence_interval && todo.recurrence_unit
             ? `<span class="todo-meta-chip chip-recurrence" title="Herhaalt elke ${todo.recurrence_interval} ${todo.recurrence_unit}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>`
             : "";
@@ -3129,9 +3178,10 @@ class TodoApp {
             todo.deadline ||
             todo.duration ||
             todo.recurrence_interval ||
+            assigneeMarkup ||
             (todo.state && todo.state !== "to_do");
         const metadataMarkup = hasMeta
-            ? `<div class="todo-meta">${listLabel}${stateMarkup}${startDateMarkup}${plannedDateMarkup}${deadlineMarkup}${durationMarkup}${areaMarkup}${projectMarkup}${recurrenceMarkup}</div>`
+            ? `<div class="todo-meta">${listLabel}${stateMarkup}${startDateMarkup}${plannedDateMarkup}${deadlineMarkup}${durationMarkup}${areaMarkup}${projectMarkup}${assigneeMarkup}${recurrenceMarkup}</div>`
             : "";
 
         const activeAreas = this.areas.filter((a) => a.status === "active");
@@ -3361,6 +3411,9 @@ class TodoApp {
                 el.textContent = count > 0 ? String(count) : "";
             } else if (view === "waiting") {
                 const count = this.todos.filter((t) => t.state === "waiting").length;
+                el.textContent = count > 0 ? String(count) : "";
+            } else if (view === "assigned") {
+                const count = activeTodos.filter((t) => t.assigned_to_me).length;
                 el.textContent = count > 0 ? String(count) : "";
             } else if (view === "completed") {
                 el.textContent =

@@ -16,7 +16,7 @@ TASK_PRIORITIES = {"not_set", "low", "medium", "high"}
 TASK_SELECT_COLUMNS = (
     "id, title, completed, created_at, list, area_id, priority, deadline, "
     "planned_date, planned_time, start_date, duration, recurrence_interval, "
-    "recurrence_unit, recurrence_end, state, project_id"
+    "recurrence_unit, recurrence_end, state, project_id, user_id, assignee_id"
 )
 PROJECT_SELECT_COLUMNS = "id, name, start_date, end_date, created_at, status, area_id, goal_id, show_on_today"
 AREA_SELECT_COLUMNS = "id, name, color, description, status, created_at"
@@ -132,6 +132,68 @@ class SupabaseService:
             self.logger.exception("get_user_by_mcp_token failed: %s", exc)
             return None
 
+    def list_assignable_users(
+        self, exclude_user_id: str | None = None
+    ) -> List[Dict[str, Any]]:
+        """Return active users (id + username) that a task can be assigned to."""
+        try:
+            query = (
+                self.supabase.table("app_users")
+                .select("id, username")
+                .eq("is_active", True)
+            )
+            if exclude_user_id is not None:
+                query = query.neq("id", exclude_user_id)
+            result = query.order("username").execute()
+            return [cast(Dict[str, Any], row) for row in (result.data or [])]
+        except Exception as exc:
+            self.logger.exception("list_assignable_users failed: %s", exc)
+            return []
+
+    def _username_map(self, user_ids: set[str]) -> Dict[str, str]:
+        """Return {user_id: username} for the given ids (one query)."""
+        ids = [uid for uid in user_ids if uid]
+        if not ids:
+            return {}
+        try:
+            result = (
+                self.supabase.table("app_users")
+                .select("id, username")
+                .in_("id", ids)
+                .execute()
+            )
+            rows = [cast(Dict[str, Any], row) for row in (result.data or [])]
+            return {str(row["id"]): str(row["username"]) for row in rows}
+        except Exception as exc:
+            self.logger.exception("_username_map failed: %s", exc)
+            return {}
+
+    def _enrich_task_rows(
+        self, rows: List[Dict[str, Any]], requesting_user_id: str
+    ) -> List[Dict[str, Any]]:
+        """Annotate task rows with owner/assignee usernames and ownership flags.
+
+        Adds, relative to ``requesting_user_id``:
+          • owner_username / assignee_username (display)
+          • mine (the requester owns the task)
+          • assigned_to_me (the task is assigned to the requester)
+        """
+        ids: set[str] = set()
+        for row in rows:
+            if row.get("user_id"):
+                ids.add(str(row["user_id"]))
+            if row.get("assignee_id"):
+                ids.add(str(row["assignee_id"]))
+        names = self._username_map(ids)
+        for row in rows:
+            owner_id = str(row["user_id"]) if row.get("user_id") else None
+            assignee_id = str(row["assignee_id"]) if row.get("assignee_id") else None
+            row["owner_username"] = names.get(owner_id) if owner_id else None
+            row["assignee_username"] = names.get(assignee_id) if assignee_id else None
+            row["mine"] = owner_id == requesting_user_id
+            row["assigned_to_me"] = assignee_id == requesting_user_id
+        return rows
+
     def verify_user(self, username: str, password: str) -> Optional[Dict[str, Any]]:
         """Validate username/password credentials."""
         user = self.get_user_by_username(username)
@@ -165,37 +227,38 @@ class SupabaseService:
             self.logger.warning("touch_last_login failed: %s", exc)
 
     def list_tasks(self, user_id: str) -> List[Dict[str, Any]]:
-        """Return all tasks for a user."""
+        """Return all tasks a user owns or is assigned to."""
         try:
             result = (
                 self.supabase.table("tasks")
                 .select(TASK_SELECT_COLUMNS)
-                .eq("user_id", user_id)
+                .or_(f"user_id.eq.{user_id},assignee_id.eq.{user_id}")
                 .order("created_at", desc=True)
                 .execute()
             )
             rows = [cast(Dict[str, Any], row) for row in (result.data or [])]
             for row in rows:
                 self._normalize_task_row(row)
-            return rows
+            return self._enrich_task_rows(rows, user_id)
         except Exception as exc:
             self.logger.exception("list_tasks failed: %s", exc)
             return []
 
     def get_task(self, user_id: str, task_id: int) -> Optional[Dict[str, Any]]:
-        """Return a single task by id for a user."""
+        """Return a single task by id the user owns or is assigned to."""
         try:
             result = (
                 self.supabase.table("tasks")
                 .select(TASK_SELECT_COLUMNS)
                 .eq("id", task_id)
-                .eq("user_id", user_id)
+                .or_(f"user_id.eq.{user_id},assignee_id.eq.{user_id}")
                 .execute()
             )
             if not result.data:
                 return None
             row = cast(Dict[str, Any], result.data[0])
-            return self._normalize_task_row(row)
+            self._normalize_task_row(row)
+            return self._enrich_task_rows([row], user_id)[0]
         except Exception as exc:
             self.logger.exception("get_task failed: %s", exc)
             return None
@@ -217,6 +280,7 @@ class SupabaseService:
         recurrence_end: str | None = None,
         state: str | None = None,
         project_id: int | None = None,
+        assignee_id: str | None = None,
     ) -> Optional[Dict[str, Any]]:
         """Create a new task."""
         try:
@@ -228,6 +292,8 @@ class SupabaseService:
                 "priority": priority,
                 "state": state or "to_do",
             }
+            if assignee_id is not None:
+                payload["assignee_id"] = assignee_id
             if deadline is not None:
                 payload["deadline"] = deadline
             if planned_date is not None:
@@ -253,7 +319,8 @@ class SupabaseService:
                 row = cast(Dict[str, Any], result.data[0])
             else:
                 row = cast(Dict[str, Any], result.data)
-            return self._normalize_task_row(row)
+            self._normalize_task_row(row)
+            return self._enrich_task_rows([row], user_id)[0]
         except Exception as exc:
             self.logger.exception("create_task failed: %s", exc)
             return None
@@ -261,13 +328,13 @@ class SupabaseService:
     def update_task(
         self, user_id: str, task_id: int, updates: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
-        """Update a task for a user."""
+        """Update a task the user owns or is assigned to."""
         try:
             result = (
                 self.supabase.table("tasks")
                 .update(updates)
                 .eq("id", task_id)
-                .eq("user_id", user_id)
+                .or_(f"user_id.eq.{user_id},assignee_id.eq.{user_id}")
                 .execute()
             )
             if not result.data:
@@ -276,13 +343,14 @@ class SupabaseService:
                 row = cast(Dict[str, Any], result.data[0])
             else:
                 row = cast(Dict[str, Any], result.data)
-            return self._normalize_task_row(row)
+            self._normalize_task_row(row)
+            return self._enrich_task_rows([row], user_id)[0]
         except Exception as exc:
             self.logger.exception("update_task failed: %s", exc)
             return None
 
     def delete_task(self, user_id: str, task_id: int) -> bool:
-        """Delete a task for a user."""
+        """Delete a task. Owner only — assignees cannot delete a shared task."""
         try:
             result = (
                 self.supabase.table("tasks")

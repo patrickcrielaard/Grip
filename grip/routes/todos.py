@@ -55,6 +55,7 @@ class TodoCreate(BaseModel):
     recurrence_end: str | None = None
     state: str | None = None
     project_id: int | None = None
+    assignee_id: str | None = None
 
 
 class TodoUpdate(BaseModel):
@@ -76,6 +77,7 @@ class TodoUpdate(BaseModel):
     recurrence_end: str | None = None
     state: str | None = None
     project_id: int | None = None
+    assignee_id: str | None = None
 
 
 def _normalize_list_name(value: str | None) -> str | None:
@@ -198,6 +200,18 @@ def _validate_project_id(user_id: str, project_id: int | None) -> int | None:
     return project_id
 
 
+def _validate_assignee_id(user_id: str, assignee_id: str | None) -> str | None:
+    """Validate that assignee_id is an active user other than the owner."""
+    if assignee_id is None or assignee_id == "":
+        return None
+    valid_ids = {
+        u["id"] for u in supabase_service.list_assignable_users(exclude_user_id=user_id)
+    }
+    if assignee_id not in valid_ids:
+        raise HTTPException(status_code=400, detail="Assignee not found")
+    return assignee_id
+
+
 def _advance_planned_date(date_str: str, interval: int, unit: str) -> str:
     d = date.fromisoformat(date_str)
     if unit == "day":
@@ -277,6 +291,7 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
     )
     recurrence_end = _normalize_date(payload.recurrence_end, "Recurrence end")
     state = _normalize_state(payload.state)
+    assignee_id = _validate_assignee_id(user["id"], payload.assignee_id)
     todo = supabase_service.create_task(
         user["id"],
         title,
@@ -293,6 +308,7 @@ async def create_todo(request: Request, payload: TodoCreate) -> Dict[str, Any]:
         recurrence_end=recurrence_end,
         state=state,
         project_id=project_id,
+        assignee_id=assignee_id,
     )
     if not todo:
         logger.error("create_todo failed for user_id=%s", user["id"])
@@ -337,6 +353,17 @@ async def update_todo(
             _validate_project_id(user["id"], payload.project_id)
         updates["project_id"] = payload.project_id
 
+    if "assignee_id" in payload.model_fields_set:
+        # Only the owner may (re)assign a task. Assignees can edit fields but
+        # not hand the task off to someone else.
+        current = supabase_service.get_task(user["id"], todo_id)
+        if not current:
+            raise HTTPException(status_code=404, detail="Todo not found")
+        if not current.get("mine"):
+            raise HTTPException(
+                status_code=403, detail="Only the owner can change the assignee"
+            )
+        updates["assignee_id"] = _validate_assignee_id(user["id"], payload.assignee_id)
     if "area_id" in payload.model_fields_set:
         updates["area_id"] = _resolve_area_id(user["id"], payload.area_id)
     if "priority" in payload.model_fields_set:
@@ -424,6 +451,7 @@ async def update_todo(
                     recurrence_unit=current["recurrence_unit"],
                     recurrence_end=recurrence_end,
                     project_id=parent_project_id,
+                    assignee_id=current.get("assignee_id"),
                 )
 
     todo = supabase_service.update_task(user["id"], todo_id, updates)
@@ -436,6 +464,14 @@ async def update_todo(
     if spawned_todo:
         result["spawned_todo"] = spawned_todo
     return result
+
+
+@router.get("/api/users")
+async def list_users(request: Request) -> Dict[str, Any]:
+    """Return users a task can be assigned to (everyone but the caller)."""
+    user = _require_user(request)
+    users = supabase_service.list_assignable_users(exclude_user_id=user["id"])
+    return {"users": users}
 
 
 @router.get("/api/mcp-token")
