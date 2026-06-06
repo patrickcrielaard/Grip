@@ -1541,6 +1541,11 @@ input.modal-field-input {
     color: var(--accent);
 }
 
+.todo-meta-chip.todo-assignee {
+    color: var(--accent);
+    font-weight: 600;
+}
+
 /* ===== Custom Date Picker ===== */
 .date-picker {
     position: fixed;
